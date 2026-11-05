@@ -18,6 +18,7 @@ using Dalamud.Hooking;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
@@ -34,8 +35,8 @@ using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
+using AgentRecipeNoteEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentRecipeNote;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -123,6 +124,8 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         config = Config.Load(this) ?? new();
 
+        RestoreSearchHistory();
+
         SimpleCraftGetAmountUpperLimitHook =
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
@@ -140,6 +143,9 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (config.IsMorePraticeQuality)
             RecipeNotePraticeSettingSetupHook.Enable();
 
+        IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreShow, AgentId.RecipeNote, OnRecipeNoteShow);
+
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,           "RecipeNote", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,            "RecipeNote", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "RecipeNote", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "RecipeNote", OnAddon);
@@ -147,9 +153,12 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     protected override void Uninit()
     {
+        SaveSearchHistory();
+
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
         IAddonLifecycle.Instance().UnregisterListener(OnSynthesisSimple);
         IAgentLifecycle.Instance().UnregisterListener(OnAgentRecipeNote);
+        IAgentLifecycle.Instance().UnregisterListener(OnRecipeNoteShow);
 
         RemoveAllNodes();
 
@@ -350,7 +359,13 @@ public partial class OptimizedRecipeNote : ModuleBase
     {
         switch (type)
         {
+            case AddonEvent.PostSetup:
+                RestoreSearchHistory();
+                break;
+
             case AddonEvent.PreFinalize:
+                SaveSearchHistory();
+
                 calculateRecipeButton   = null;
                 switchJobButton         = null;
                 displayOthersButton     = null;
@@ -365,6 +380,9 @@ public partial class OptimizedRecipeNote : ModuleBase
                 break;
 
             case AddonEvent.PostRequestedUpdate:
+                SaveSelectedRecipe();
+                SaveSearchHistory();
+
                 if (!AgentRecipeNote.Instance()->RecipeSearchOpen && TryGetCurrentRecipe(out var recipeID, out _))
                     lastRecipeID = recipeID;
 
@@ -413,6 +431,116 @@ public partial class OptimizedRecipeNote : ModuleBase
 
             UpdateMaterialSourceButtons();
         }
+    }
+
+    private unsafe void OnRecipeNoteShow
+    (
+        AgentEvent type,
+        AgentArgs  args
+    )
+    {
+        var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+
+        if (agent->IsAgentActive())
+            return;
+
+        var classJob = LocalPlayerState.ClassJob;
+        var memoryJob = classJob is >= 8 and <= 15 ?
+                            classJob :
+                            0;
+
+        if (!config.SelectedRecipes.TryGetValue(memoryJob, out var recipeID))
+            return;
+
+        agent->OpenRecipeByRecipeID(recipeID);
+        args.PreventOriginal();
+    }
+
+    private unsafe void SaveSelectedRecipe()
+    {
+        var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+        if (!RecipeNoteAddon->IsAddonAndNodesReady() ||
+            !agent->IsAgentActive()                  ||
+            !agent->IsRecipeListAvailable            ||
+            agent->PendingState is 1 or 3 or 5       ||
+            !TryGetCurrentRecipe(out var recipeID, out var recipe))
+            return;
+
+        var classJob  = LocalPlayerState.ClassJob;
+        var isCrafter = classJob is >= 8 and <= 15;
+        if (isCrafter &&
+            recipe.CraftType.RowId + 8 != classJob)
+            return;
+
+        var memoryJob = isCrafter ?
+                            classJob :
+                            0;
+        if (config.SelectedRecipes.TryGetValue(memoryJob, out var selectedRecipeID) &&
+            selectedRecipeID == recipeID)
+            return;
+
+        config.SelectedRecipes[memoryJob] = recipeID;
+        config.Save(this);
+    }
+
+    private unsafe void RestoreSearchHistory()
+    {
+        var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+
+        List<string> history = [];
+        foreach (ref var term in agent->RecipeSearchHistory)
+            history.Add(term.ToString());
+
+        List<SearchHistoryEntry> entries = [];
+        foreach (ref var entry in agent->RecipeSearchHistoryEntries)
+            entries.Add(new(entry.Text.ToString(), entry.RecipeID));
+
+        if (config.SearchHistory.SequenceEqual(history) &&
+            config.SearchHistoryEntries.SequenceEqual(entries))
+            return;
+
+        history.AddRange(config.SearchHistory);
+        entries.AddRange(config.SearchHistoryEntries);
+
+        for (var index = history.Count - 1; index >= 0; index--)
+        {
+            using var text = new Utf8String(history[index]);
+            agent->PushSearchHistory(&text);
+        }
+
+        for (var index = entries.Count - 1; index >= 0; index--)
+        {
+            var       entry = entries[index];
+            using var text  = new Utf8String(entry.Text);
+            agent->PushSearchHistoryEntry(&text, (int)entry.RecipeID);
+            (&text)->Ctor();
+        }
+
+        SaveSearchHistory();
+    }
+
+    private unsafe void SaveSearchHistory()
+    {
+        var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+        if (agent->RecipeSearchHistory.Count        == 0 &&
+            agent->RecipeSearchHistoryEntries.Count == 0)
+            return;
+
+        List<string> history = [];
+        foreach (ref var term in agent->RecipeSearchHistory)
+            history.Add(term.ToString());
+
+        List<SearchHistoryEntry> entries = [];
+        foreach (ref var entry in agent->RecipeSearchHistoryEntries)
+            entries.Add(new(entry.Text.ToString(), entry.RecipeID));
+
+        if (config.SearchHistory.SequenceEqual(history) &&
+            config.SearchHistoryEntries.SequenceEqual(entries))
+            return;
+
+        config.SearchHistory        = history;
+        config.SearchHistoryEntries = entries;
+        config.Save(this);
     }
 
     #region 原生界面元素插入
@@ -838,8 +966,8 @@ public partial class OptimizedRecipeNote : ModuleBase
             var sourceState = ItemSourceInfo.Query(item.RowId).State;
             var hasNPCShop  = sourceState == ItemSourceQueryState.Ready;
 
-            var button     = materialSourceButtons[d];
-            var sourceText = string.Empty;
+            var    button = materialSourceButtons[d];
+            string sourceText;
 
             button.X = -6 +
                        (maxIngredientAmount >= 10 ?
@@ -1324,8 +1452,20 @@ public partial class OptimizedRecipeNote : ModuleBase
             LuminaGetter.GetRowOrDefault<ClassJob>(GetRecipe().CraftType.RowId + 8);
     }
 
+    private record SearchHistoryEntry
+    (
+        string Text,
+        uint   RecipeID
+    );
+
     private class Config : ModuleConfig
     {
+        public Dictionary<uint, uint> SelectedRecipes = [];
+
+        public List<string> SearchHistory = [];
+
+        public List<SearchHistoryEntry> SearchHistoryEntries = [];
+
         // 搜索清除
         public bool IsSearchClearButton = true;
 
