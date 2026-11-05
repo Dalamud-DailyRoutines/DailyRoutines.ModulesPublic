@@ -12,6 +12,8 @@ internal partial class UnifiedGlamourManager
 
     private sealed class Config : ModuleConfig
     {
+        public string GlamaholicImportPath = string.Empty;
+
         public bool            UseGridView = true;
         public List<SavedItem> Favorites   = [];
 
