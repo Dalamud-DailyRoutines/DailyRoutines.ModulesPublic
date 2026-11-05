@@ -1145,6 +1145,8 @@ public unsafe partial class UnifiedGlamourManager
                     if (ImGui.Selectable($"{itemLabel}##Item", presetEditor.SlotIndex == slot && presetEditor.StainIndex == -1))
                         presetEditor.SelectSlot(slot, -1);
 
+                    HandlePresetItemContextMenu(entry.ItemID);
+
                     for (var channel = 0; channel < 2; channel++)
                     {
                         ImGui.TableNextColumn();
@@ -1232,6 +1234,8 @@ public unsafe partial class UnifiedGlamourManager
                             var item = presetEditor.Items[index];
                             if (ImGui.Selectable($"{item.Name}##{item.ItemID}"))
                                 presetEditor.SetItem(item.ItemID);
+
+                            HandlePresetItemContextMenu(item.ItemID);
                         }
                     }
 
@@ -1286,10 +1290,11 @@ public unsafe partial class UnifiedGlamourManager
             presetEditor.QueuePreview();
         }
 
+        DrawPresetItemSearchMenu();
         presetEditor.UpdateLivePreview();
     }
 
-    private static void DrawPresetItemIcon
+    private void DrawPresetItemIcon
     (
         uint          iconID,
         uint          itemID,
@@ -1298,6 +1303,7 @@ public unsafe partial class UnifiedGlamourManager
     )
     {
         DrawItemIcon(iconID, ImGui.GetFrameHeight());
+        HandlePresetItemContextMenu(itemID);
         if (owned.Contains(ItemUtil.GetBaseId(itemID).ItemId))
             return;
 
@@ -1343,6 +1349,46 @@ public unsafe partial class UnifiedGlamourManager
                         "UnifiedGlamourManager-Editor-OwnershipUnknownHint"
                 )
             );
+        }
+    }
+
+    private void HandlePresetItemContextMenu
+    (
+        uint itemID
+    )
+    {
+        if (itemID != 0 && ImGui.IsItemClicked(ImGuiMouseButton.Right))
+        {
+            presetEditor.ContextMenuItemID  = ItemUtil.GetBaseId(itemID).ItemId;
+            presetEditor.OpenItemSearchMenu = true;
+        }
+    }
+
+    private void DrawPresetItemSearchMenu()
+    {
+        const string popupID = "##EditorItemContextMenu";
+        if (presetEditor.OpenItemSearchMenu)
+        {
+            presetEditor.OpenItemSearchMenu = false;
+            presetEditor.ItemSearchOptions  = GetItemSearchOptionsIPC.TryInvokeFunc(presetEditor.ContextMenuItemID) ?? [];
+
+            ImGui.OpenPopup(popupID);
+        }
+
+        using var popup = ImRaii.Popup(popupID);
+        if (!popup)
+        {
+            presetEditor.ItemSearchOptions = [];
+            return;
+        }
+
+        if (presetEditor.ItemSearchOptions.Count == 0)
+            ImGui.TextDisabled(Lang.Get("UnifiedGlamourManager-Editor-EnableSearchMenu"));
+
+        foreach (var (key, label) in presetEditor.ItemSearchOptions)
+        {
+            if (ImGui.MenuItem(label) && !SearchItemIPC.TryInvokeFunc(presetEditor.ContextMenuItemID, key))
+                NotifyHelper.Instance().NotificationError(Lang.Get("UnifiedGlamourManager-Editor-EnableSearchMenu"));
         }
     }
 

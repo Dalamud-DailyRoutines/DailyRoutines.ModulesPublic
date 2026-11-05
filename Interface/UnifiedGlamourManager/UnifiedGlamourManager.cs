@@ -5,6 +5,8 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Abstractions;
+using OmenTools.Dalamud.Attributes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -124,4 +126,14 @@ public partial class UnifiedGlamourManager : ModuleBase
         uint              slotIndex
     ) =>
         slotIndex < PlateSlotDefinitions.Length && PlateSlotDefinitions[slotIndex].CanUse(category);
+
+    #region IPC
+
+    [IPCSubscriber("DailyRoutines.Modules.ExpandItemMenuSearch.GetItemSearchOptions")]
+    private IPCSubscriber<uint, Dictionary<string, string>> GetItemSearchOptionsIPC;
+
+    [IPCSubscriber("DailyRoutines.Modules.ExpandItemMenuSearch.SearchItem")]
+    private IPCSubscriber<uint, string, bool> SearchItemIPC;
+
+    #endregion
 }

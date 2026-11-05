@@ -27,6 +27,10 @@ public unsafe partial class UnifiedGlamourManager
         public bool   ItemsDirty;
         public bool   FocusTitle;
 
+        public uint                       ContextMenuItemID;
+        public bool                       OpenItemSearchMenu;
+        public Dictionary<string, string> ItemSearchOptions = [];
+
         public bool EnableLivePreview;
         public bool IsPreviewPending;
 
@@ -65,6 +69,8 @@ public unsafe partial class UnifiedGlamourManager
             Baseline           = null;
             OriginalPreset     = null;
             FocusTitle         = false;
+            OpenItemSearchMenu = false;
+            ItemSearchOptions  = [];
         }
 
         public void SelectSlot
