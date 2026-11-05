@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
@@ -36,6 +37,7 @@ using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.Utils.FuzzyMatcher;
 using RecipeSearchContextEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.RecipeSearchContext;
 using AgentId = Dalamud.Game.Agent.AgentId;
@@ -88,9 +90,15 @@ public partial class OptimizedRecipeNote : ModuleBase
     private Hook<RecipeNotePraticeSettingSetupDelegate>? RecipeNotePraticeSettingSetupHook;
 
     private Hook<RecipeSearchContextEx.Delegates.ScanRecipeRows>? ScanRecipeRowsHook;
+    private Hook<AgentRecipeNoteEx.Delegates.RefreshRecipeList>?  RefreshRecipeListHook;
 
-    private FuzzyMatcher<RecipeSearchEntry>    recipeMatcher      = null!;
-    private FrozenDictionary<string, Recipe[]> exactRecipeMatches = null!;
+    private FuzzyMatcher<RecipeSearchEntry>                recipeMatcher          = null!;
+    private FrozenDictionary<string, Recipe[]>             exactRecipeMatches     = null!;
+    private FrozenDictionary<ushort, RecipeSearchCategory> recipeSearchCategories = null!;
+
+    private readonly Dictionary<ushort, int> originalSearchRecipeOrder = [];
+    private          ushort[]                sortedSearchRecipeIDs     = [];
+    private          bool                    isSearchViewSwitchPending;
 
     private Config config = null!;
 
@@ -99,6 +107,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     private TextButtonNode?    calculateRecipeButton;
     private TextButtonNode?    switchJobButton;
     private TextureButtonNode? clearSearchButton;
+    private CircleButtonNode?  searchViewButton;
 
     private TextButtonNode?      displayOthersButton;
     private HorizontalListNode?  displayOthersJobsLayout;
@@ -157,6 +166,24 @@ public partial class OptimizedRecipeNote : ModuleBase
                                               StringComparer.Ordinal
                                           );
 
+        recipeSearchCategories = searchEntries.SelectMany(static entry => entry.Recipes)
+                                              .ToDictionary(static recipe => (ushort)recipe.RowId, GetRecipeSearchCategory)
+                                              .OrderBy(static entry => entry.Value.GroupID)
+                                              .ThenBy(static entry => entry.Value.WeaponJob)
+                                              .ThenBy(static entry => entry.Value.Slot)
+                                              .ThenBy(static entry => entry.Value.DisplayPriority)
+                                              .ThenBy(static entry => entry.Key)
+                                              .Select(static (entry, index) => KeyValuePair.Create(entry.Key, entry.Value with { Order = index }))
+                                              .ToFrozenDictionary();
+
+        RefreshRecipeListHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentRecipeNoteEx.MemberFunctionPointers),
+            nameof(AgentRecipeNoteEx.MemberFunctionPointers.RefreshRecipeList),
+            (AgentRecipeNoteEx.Delegates.RefreshRecipeList)RefreshRecipeListDetour
+        );
+        RefreshRecipeListHook.Enable();
+
         ScanRecipeRowsHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(RecipeSearchContextEx.MemberFunctionPointers),
@@ -193,8 +220,14 @@ public partial class OptimizedRecipeNote : ModuleBase
     protected override void Uninit()
     {
         SaveSearchHistory();
+        RefreshRecipeListHook.Disable();
+        if (config.IsEquipmentSearchView)
+            RestoreCraftTypeSearchView();
+
+        isSearchViewSwitchPending = false;
         recipeMatcher.Dispose();
-        exactRecipeMatches = null!;
+        exactRecipeMatches     = null!;
+        recipeSearchCategories = null!;
 
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
         IAddonLifecycle.Instance().UnregisterListener(OnSynthesisSimple);
@@ -299,6 +332,7 @@ public partial class OptimizedRecipeNote : ModuleBase
         var     query   = context->SearchText.ToString();
         ref var results = ref *context->SearchResults;
         results.Clear();
+        sortedSearchRecipeIDs = [];
 
         if (context->IsExactMatch)
         {
@@ -320,6 +354,206 @@ public partial class OptimizedRecipeNote : ModuleBase
         context->RowStartIndex = context->RowEndIndex;
         context->CanIterate    = false;
         context->IsComplete    = true;
+    }
+
+    private static RecipeSearchCategory GetRecipeSearchCategory(Recipe recipe)
+    {
+        var item  = recipe.ItemResult.Value;
+        var slots = item.EquipSlotCategory.Value;
+        var isWeapon = slots.MainHand > 0 ||
+                       slots.OffHand  > 0;
+        var slot = slots switch
+        {
+            { MainHand: > 0 }                    => 0,
+            { OffHand: > 0 }                     => 1,
+            { Head: > 0 }                        => 2,
+            { Body: > 0 }                        => 3,
+            { Legs: > 0 }                        => 4,
+            { Gloves: > 0 }                      => 5,
+            { Feet: > 0 }                        => 6,
+            { Ears: > 0 }                        => 7,
+            { Neck: > 0 }                        => 8,
+            { Wrists: > 0 }                      => 9,
+            { FingerL: > 0 } or { FingerR: > 0 } => 10,
+            _                                    => 11
+        };
+
+        if (isWeapon)
+            return new
+            (
+                0,
+                item.ClassJobCategory.RowId,
+                slot,
+                recipe.DisplayPriority,
+                item.ItemUICategory.RowId,
+                Lang.Get("OptimizedRecipeNote-SearchView-Weapons")
+            );
+
+        if (item.EquipSlotCategory.RowId != 0)
+            return new
+            (
+                item.ClassJobCategory.RowId + 1,
+                0,
+                slot,
+                recipe.DisplayPriority,
+                item.ItemUICategory.RowId,
+                item.ClassJobCategory.Value.Name.ExtractText()
+            );
+
+        return new
+        (
+            NON_EQUIPMENT_GROUP_OFFSET + recipe.CraftType.RowId,
+            0,
+            slot,
+            recipe.DisplayPriority,
+            item.ItemUICategory.RowId,
+            recipe.CraftType.Value.Name.ExtractText()
+        );
+    }
+
+    private unsafe int RefreshRecipeListDetour(AgentRecipeNoteEx* agent)
+    {
+        var recipeNote = RecipeNote.Instance();
+        var recipeList = recipeNote->RecipeList;
+
+        if (!config.IsEquipmentSearchView   ||
+            agent->RecipeSearchOpen != 2    ||
+            !recipeNote->IsRecipeListReady  ||
+            recipeList              == null ||
+            recipeList->RecipeCount == 0)
+        {
+            return RefreshRecipeListHook.Original(agent);
+        }
+
+        var recipes  = recipeList->RecipesSpan;
+        var isSorted = recipes.Length == sortedSearchRecipeIDs.Length;
+
+        if (isSorted)
+        {
+            for (var index = 0; index < recipes.Length; index++)
+            {
+                if (recipes[index].RecipeId == sortedSearchRecipeIDs[index])
+                    continue;
+
+                isSorted = false;
+                break;
+            }
+        }
+
+        if (!isSorted)
+        {
+            originalSearchRecipeOrder.Clear();
+            for (var index = 0; index < recipes.Length; index++)
+                originalSearchRecipeOrder.Add(recipes[index].RecipeId, index);
+
+            SortSearchRecipes(agent, (left, right) => recipeSearchCategories[left.RecipeId].Order.CompareTo(recipeSearchCategories[right.RecipeId].Order));
+            sortedSearchRecipeIDs = new ushort[recipes.Length];
+            for (var index = 0; index < recipes.Length; index++)
+                sortedSearchRecipeIDs[index] = recipes[index].RecipeId;
+        }
+
+        var refreshFlags = RefreshRecipeListHook.Original(agent);
+        if (refreshFlags == 0)
+            return refreshFlags;
+
+        var strings          = AtkStage.Instance()->GetStringArrayData()[RECIPE_STRING_ARRAY_INDEX];
+        var filter           = agent->ItemCategoryFilters[agent->SelectedItemCategoryFilter];
+        var visibleIndex     = 0;
+        var pageStart        = agent->PageIndex * SEARCH_PAGE_SIZE;
+        var groupID          = uint.MaxValue;
+        var groupStringIndex = 0;
+
+        foreach (ref var recipe in recipes)
+        {
+            var category = recipeSearchCategories[recipe.RecipeId];
+            if (filter                != 0 &&
+                category.ItemCategory != filter)
+                continue;
+
+            var indexInPage = visibleIndex++ - pageStart;
+            if (indexInPage < 0)
+                continue;
+
+            if (indexInPage >= SEARCH_PAGE_SIZE)
+                break;
+
+            var stringIndex = SEARCH_GROUP_STRING_OFFSET + (indexInPage * SEARCH_ENTRY_STRING_COUNT);
+
+            if (category.GroupID != groupID)
+            {
+                groupID          = category.GroupID;
+                groupStringIndex = stringIndex;
+                strings->SetValue(stringIndex, category.Name);
+            }
+            else
+                strings->SetValue(stringIndex, strings->StringArray[groupStringIndex], managed: false);
+        }
+
+        return refreshFlags;
+    }
+
+    private unsafe void SortSearchRecipes(AgentRecipeNoteEx* agent, Comparison<RecipeNote.RecipeEntry> comparison)
+    {
+        var recipeNote = RecipeNote.Instance();
+        var recipeList = recipeNote->RecipeList;
+        var recipes    = recipeList->RecipesSpan;
+        recipes.Sort(comparison);
+
+        foreach (ref var recipe in recipes)
+        {
+            RebindInlineString(ref recipe.ItemName);
+            foreach (ref var ingredient in recipe.Ingredients)
+                RebindInlineString(ref ingredient.Name);
+        }
+
+        isSearchViewSwitchPending = true;
+        agent->PageIndex          = 0;
+        var firstRecipeIndex = agent->FindRecipeIndexInPage(0, 0);
+        recipeList->SelectedIndex          = (ushort)firstRecipeIndex;
+        agent->SelectedRecipeIndex         = firstRecipeIndex;
+        agent->SelectedRecipeIndexInSearch = (ushort)firstRecipeIndex;
+
+        if (recipes[firstRecipeIndex].RecipeId != recipeNote->CraftingRecipeId)
+            recipeNote->CraftingRecipeId = 0;
+
+        return;
+
+        static void RebindInlineString(ref Utf8String text)
+        {
+            if (text.IsUsingInlineBuffer)
+                text.StringPtr = (byte*)Unsafe.AsPointer(ref text.InlineBuffer[0]);
+        }
+    }
+
+    private unsafe void RestoreCraftTypeSearchView()
+    {
+        var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+        if (agent->RecipeSearchOpen != 2 ||
+            !agent->IsAgentActive())
+            return;
+
+        var recipeNote = RecipeNote.Instance();
+        var recipeList = recipeNote->RecipeList;
+
+        if (recipeNote->IsRecipeListReady                                &&
+            recipeList                   != null                         &&
+            recipeList->RecipeCount      == sortedSearchRecipeIDs.Length &&
+            sortedSearchRecipeIDs.Length != 0)
+        {
+            var recipes = recipeList->RecipesSpan;
+
+            for (var index = 0; index < recipes.Length; index++)
+            {
+                if (recipes[index].RecipeId != sortedSearchRecipeIDs[index])
+                    return;
+            }
+
+            SortSearchRecipes(agent, (left, right) => originalSearchRecipeOrder[left.RecipeId].CompareTo(originalSearchRecipeOrder[right.RecipeId]));
+        }
+
+        originalSearchRecipeOrder.Clear();
+        sortedSearchRecipeIDs = [];
+        agent->RefreshAddon(1);
     }
 
     public static unsafe int SimpleCraftGetAmountUpperLimitDetour
@@ -433,6 +667,7 @@ public partial class OptimizedRecipeNote : ModuleBase
                 break;
 
             case AddonEvent.PreFinalize:
+                isSearchViewSwitchPending = false;
                 SaveSearchHistory();
 
                 calculateRecipeButton   = null;
@@ -440,6 +675,7 @@ public partial class OptimizedRecipeNote : ModuleBase
                 displayOthersButton     = null;
                 displayOthersJobsLayout = null;
                 clearSearchButton       = null;
+                searchViewButton        = null;
                 levelRecipeButton       = null;
                 specialRecipeButton     = null;
                 masterRecipeButton      = null;
@@ -449,6 +685,18 @@ public partial class OptimizedRecipeNote : ModuleBase
                 break;
 
             case AddonEvent.PostRequestedUpdate:
+                if (isSearchViewSwitchPending)
+                {
+                    isSearchViewSwitchPending = false;
+                    var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+                    if (agent->RecipeSearchOpen == 2 &&
+                        agent->IsRecipeListAvailable &&
+                        RecipeNote.Instance()->IsRecipeListReady)
+                        agent->SelectRecipeByVisibleIndex(0);
+
+                    searchViewButton?.IsEnabled = true;
+                }
+
                 SaveSelectedRecipe();
                 SaveSearchHistory();
 
@@ -456,6 +704,7 @@ public partial class OptimizedRecipeNote : ModuleBase
                     lastRecipeID = recipeID;
 
                 UpdateRecipeAddonButtons();
+
                 break;
 
             case AddonEvent.PostDraw:
@@ -476,6 +725,9 @@ public partial class OptimizedRecipeNote : ModuleBase
                 // 清除搜索按钮
                 CreateClearSearchButton();
 
+                // 切换搜索视图按钮
+                CreateSearchViewButton();
+
                 // 分类按钮
                 CreateCategoryButtons();
 
@@ -495,6 +747,8 @@ public partial class OptimizedRecipeNote : ModuleBase
             UpdateSwitchJobButton();
 
             UpdateClearSearchButton();
+
+            searchViewButton?.IsVisible = ((AgentRecipeNoteEx*)AgentRecipeNote.Instance())->RecipeSearchOpen == 2;
 
             UpdateDisplayOthersButtons();
 
@@ -622,6 +876,9 @@ public partial class OptimizedRecipeNote : ModuleBase
         clearSearchButton?.Dispose();
         clearSearchButton = null;
 
+        searchViewButton?.Dispose();
+        searchViewButton = null;
+
         levelRecipeButton?.Dispose();
         levelRecipeButton = null;
 
@@ -713,6 +970,64 @@ public partial class OptimizedRecipeNote : ModuleBase
         clearSearchButton.IsVisible = addon                  != null &&
                                       addon->SearchTextInput != null &&
                                       addon->SearchTextInput->HasEvaluatedText();
+    }
+
+    private unsafe void CreateSearchViewButton()
+    {
+        if (searchViewButton != null)
+            return;
+
+        var nextCategoryButton = RecipeNoteAddon->GetComponentButtonById(44);
+        if (nextCategoryButton != null)
+            nextCategoryButton->OwnerNode->SetFixedPosition(250, nextCategoryButton->OwnerNode->Y);
+
+        var button = RecipeNoteAddon->GetNodeById(SEARCH_VIEW_ANCHOR_NODE_ID);
+        searchViewButton = new()
+        {
+            Size     = new(SEARCH_VIEW_BUTTON_SIZE),
+            Position = new(457, 82),
+            Icon = config.IsEquipmentSearchView ?
+                       CircleButtonIcon.Helmet :
+                       CircleButtonIcon.Sort,
+            TextTooltip = Lang.Get
+            (
+                config.IsEquipmentSearchView ?
+                    "OptimizedRecipeNote-SearchView-CraftType" :
+                    "OptimizedRecipeNote-SearchView-Equipment"
+            ),
+            OnClick = () =>
+            {
+                var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+                if (isSearchViewSwitchPending     ||
+                    agent->RecipeSearchOpen != 2  ||
+                    agent->RecipeSearchProcessing ||
+                    !agent->IsRecipeListAvailable ||
+                    !RecipeNote.Instance()->IsRecipeListReady)
+                    return;
+
+                isSearchViewSwitchPending    = true;
+                searchViewButton.IsEnabled   = false;
+                config.IsEquipmentSearchView = !config.IsEquipmentSearchView;
+                config.Save(this);
+                searchViewButton.Icon = config.IsEquipmentSearchView ?
+                                            CircleButtonIcon.Helmet :
+                                            CircleButtonIcon.Sort;
+                searchViewButton.TextTooltip = Lang.Get
+                (
+                    config.IsEquipmentSearchView ?
+                        "OptimizedRecipeNote-SearchView-CraftType" :
+                        "OptimizedRecipeNote-SearchView-Equipment"
+                );
+                searchViewButton.HideTooltip();
+                searchViewButton.ShowTooltip();
+
+                if (config.IsEquipmentSearchView)
+                    agent->RefreshAddon(1);
+                else
+                    RestoreCraftTypeSearchView();
+            }
+        };
+        searchViewButton.AttachNode(button->ParentNode);
     }
 
     // 切换分类按钮
@@ -1538,6 +1853,19 @@ public partial class OptimizedRecipeNote : ModuleBase
         Recipe[] Recipes
     );
 
+    private sealed record RecipeSearchCategory
+    (
+        uint   GroupID,
+        uint   WeaponJob,
+        int    Slot,
+        ushort DisplayPriority,
+        uint   ItemCategory,
+        string Name
+    )
+    {
+        public int Order { get; init; }
+    }
+
     private record SearchHistoryEntry
     (
         string Text,
@@ -1551,6 +1879,8 @@ public partial class OptimizedRecipeNote : ModuleBase
         public List<string> SearchHistory = [];
 
         public List<SearchHistoryEntry> SearchHistoryEntries = [];
+
+        public bool IsEquipmentSearchView;
 
         // 搜索清除
         public bool IsSearchClearButton = true;
@@ -1596,9 +1926,16 @@ public partial class OptimizedRecipeNote : ModuleBase
                     .Where(x => x.Key > 0 && x.Count() > 1)
                     .ToFrozenDictionary(x => x.Key, x => x.DistinctBy(d => d.CraftType.RowId).ToList());
 
-    private const int RECIPE_NAME_WEIGHT        = 1000;
-    private const int RECIPE_PINYIN_WEIGHT      = 900;
-    private const int MAX_QUICK_SYNTHESIS_COUNT = 255;
+    private const int   RECIPE_NAME_WEIGHT         = 1000;
+    private const int   RECIPE_PINYIN_WEIGHT       = 900;
+    private const int   MAX_QUICK_SYNTHESIS_COUNT  = 255;
+    private const uint  NON_EQUIPMENT_GROUP_OFFSET = 0x10000;
+    private const int   RECIPE_STRING_ARRAY_INDEX  = 26;
+    private const int   SEARCH_PAGE_SIZE           = 100;
+    private const int   SEARCH_GROUP_STRING_OFFSET = 67;
+    private const int   SEARCH_ENTRY_STRING_COUNT  = 3;
+    private const uint  SEARCH_VIEW_ANCHOR_NODE_ID = 56;
+    private const float SEARCH_VIEW_BUTTON_SIZE    = 28f;
 
     private static readonly FrozenSet<uint> CraftFailedLogMessages =
     [
