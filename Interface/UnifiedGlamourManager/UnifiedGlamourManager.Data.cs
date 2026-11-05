@@ -414,6 +414,7 @@ internal unsafe partial class UnifiedGlamourManager
     private void ResetStoredItemsSession()
     {
         presetEditor.End();
+        ClearGlamaholicImportPreview();
 
         storedItemsSession++;
         TaskHelper?.Abort();
