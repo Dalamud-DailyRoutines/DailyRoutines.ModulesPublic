@@ -196,38 +196,16 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         var button2 = addon->GetComponentButtonById(111);
         if (button0 == null || button1 == null || button2 == null) return;
 
-        SetFixedPosition(containerNode,                   35,  56);
-        SetFixedPosition((AtkResNode*)button0->OwnerNode, -50, 0);
-        SetFixedPosition((AtkResNode*)button1->OwnerNode, 250, 0);
-        SetFixedPosition((AtkResNode*)button2->OwnerNode, 400, 0);
+        containerNode->SetFixedPosition(35, 56);
+        button0->OwnerNode->SetFixedPosition(-50, 0);
+        button1->OwnerNode->SetFixedPosition(250, 0);
+        button2->OwnerNode->SetFixedPosition(400, 0);
 
         if (button != null)
         {
             button.IsEnabled = LocalPlayerState.IsInParty;
             button.IsVisible = button2->OwnerNode->IsVisible();
         }
-    }
-
-    private static void SetFixedPosition
-    (
-        AtkResNode* node,
-        float       x,
-        float       y
-    )
-    {
-        if (node->Timeline != null)
-        {
-            var resource = node->Timeline->Resource;
-
-            for (var animationIndex = 0; animationIndex < resource->AnimationCount; animationIndex++)
-            {
-                ref var positionGroup = ref resource->Animations[animationIndex].KeyGroups[0];
-                for (var keyFrameIndex = 0; keyFrameIndex < positionGroup.KeyFrameCount; keyFrameIndex++)
-                    positionGroup.KeyFrames[keyFrameIndex].Value.Float2 = new(x, y);
-            }
-        }
-
-        node->SetPositionFloat(x, y);
     }
 
     private static void Enqueue
