@@ -10,6 +10,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using FFXIVClientStructs.Interop;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Info.Game.AetheryteRecord;
@@ -279,8 +280,8 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
                     continue;
 
                 position   =  transport.EventPosition;
-                position.X += agent->SelectedOffsetX;
-                position.Z += agent->SelectedOffsetY;
+                position.X -= agent->SelectedOffsetX;
+                position.Z -= agent->SelectedOffsetY;
             }
             else if (record.ZoneID != agent->SelectedTerritoryId)
                 continue;
@@ -336,8 +337,13 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
                             }
                         }
 
-                        returnValues->SetBool(false);
-                        return returnValues;
+                        using var rented = new RentedAtkValues(1);
+                        rented[0] = new AtkValue
+                        {
+                            Type = AtkValueType.Bool,
+                            Bool = false
+                        };
+                        return rented;
                     }
                 }
             }
