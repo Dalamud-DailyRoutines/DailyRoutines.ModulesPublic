@@ -19,6 +19,7 @@ using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
@@ -35,6 +36,8 @@ using OmenTools.Info.Game.ItemSource.Enums;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
+using OmenTools.Utils.FuzzyMatcher;
+using RecipeSearchContextEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.RecipeSearchContext;
 using AgentId = Dalamud.Game.Agent.AgentId;
 using AgentRecipeNoteEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentRecipeNote;
 
@@ -84,6 +87,11 @@ public partial class OptimizedRecipeNote : ModuleBase
     );
     private Hook<RecipeNotePraticeSettingSetupDelegate>? RecipeNotePraticeSettingSetupHook;
 
+    private Hook<RecipeSearchContextEx.Delegates.ScanRecipeRows>? ScanRecipeRowsHook;
+
+    private FuzzyMatcher<RecipeSearchEntry>    recipeMatcher      = null!;
+    private FrozenDictionary<string, Recipe[]> exactRecipeMatches = null!;
+
     private Config config = null!;
 
     private readonly Dictionary<uint, CalculationResult> calculationResults = [];
@@ -126,6 +134,37 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         RestoreSearchHistory();
 
+        var searchEntries = LuminaGetter.Get<Recipe>()
+                                        .Where(static recipe => recipe is { AmountResult: > 0, ItemResult.RowId: > 0 })
+                                        .GroupBy(static recipe => recipe.ItemResult.RowId)
+                                        .Select
+                                        (static group => new RecipeSearchEntry
+                                         (
+                                             group.First().ItemResult.Value.Name.ExtractText(),
+                                             [.. group.OrderBy(static recipe => recipe.DisplayPriority).ThenBy(static recipe => recipe.RowId)]
+                                         )
+                                        )
+                                        .ToArray();
+        recipeMatcher = new(searchEntries, static entry => [new(entry.Name, RECIPE_NAME_WEIGHT, RECIPE_PINYIN_WEIGHT)]);
+        exactRecipeMatches = searchEntries.GroupBy(static entry => entry.Name, StringComparer.Ordinal)
+                                          .ToFrozenDictionary
+                                          (
+                                              static group => group.Key,
+                                              static group => group.SelectMany(static entry => entry.Recipes)
+                                                                   .OrderBy(static recipe => recipe.DisplayPriority)
+                                                                   .ThenBy(static recipe => recipe.RowId)
+                                                                   .ToArray(),
+                                              StringComparer.Ordinal
+                                          );
+
+        ScanRecipeRowsHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(RecipeSearchContextEx.MemberFunctionPointers),
+            nameof(RecipeSearchContextEx.MemberFunctionPointers.ScanRecipeRows),
+            (RecipeSearchContextEx.Delegates.ScanRecipeRows)ScanRecipeRowsDetour
+        );
+        ScanRecipeRowsHook.Enable();
+
         SimpleCraftGetAmountUpperLimitHook =
             SimpleCraftGetAmountUpperLimitSig.GetHook<SimpleCraftGetAmountUpperLimitDelegate>(SimpleCraftGetAmountUpperLimitDetour);
 
@@ -154,6 +193,8 @@ public partial class OptimizedRecipeNote : ModuleBase
     protected override void Uninit()
     {
         SaveSearchHistory();
+        recipeMatcher.Dispose();
+        exactRecipeMatches = null!;
 
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
         IAddonLifecycle.Instance().UnregisterListener(OnSynthesisSimple);
@@ -251,6 +292,34 @@ public partial class OptimizedRecipeNote : ModuleBase
             config.Save(this);
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish-Help"));
+    }
+
+    private unsafe void ScanRecipeRowsDetour(RecipeSearchContextEx* context, uint rowIndex, uint rowCount)
+    {
+        var     query   = context->SearchText.ToString();
+        ref var results = ref *context->SearchResults;
+        results.Clear();
+
+        if (context->IsExactMatch)
+        {
+            if (exactRecipeMatches.TryGetValue(query, out var recipes))
+            {
+                foreach (var recipe in recipes)
+                    results.AddCopy(recipe.RowId);
+            }
+        }
+        else
+        {
+            foreach (var entry in recipeMatcher.Search(query))
+            {
+                foreach (var recipe in entry.Recipes)
+                    results.AddCopy(recipe.RowId);
+            }
+        }
+
+        context->RowStartIndex = context->RowEndIndex;
+        context->CanIterate    = false;
+        context->IsComplete    = true;
     }
 
     public static unsafe int SimpleCraftGetAmountUpperLimitDetour
@@ -615,12 +684,20 @@ public partial class OptimizedRecipeNote : ModuleBase
             TextureSize        = new(28),
             OnClick = () =>
             {
-                if (lastRecipeID == 0) return;
+                var addon = (AddonRecipeNote*)RecipeNoteAddon;
+                if (addon                  == null ||
+                    addon->SearchTextInput == null)
+                    return;
 
-                var agent = AgentRecipeNote.Instance();
-                if (!agent->RecipeSearchOpen) return;
+                addon->SearchTextInput->SetText(string.Empty);
 
-                agent->OpenRecipeByRecipeId(lastRecipeID);
+                var agent = (AgentRecipeNoteEx*)AgentRecipeNote.Instance();
+                agent->RecipeSearch.Clear();
+                clearSearchButton.IsVisible = false;
+
+                if (lastRecipeID            != 0 &&
+                    agent->RecipeSearchOpen != 0)
+                    agent->OpenRecipeByRecipeID(lastRecipeID);
             }
         };
 
@@ -632,7 +709,10 @@ public partial class OptimizedRecipeNote : ModuleBase
         if (!config.IsSearchClearButton || clearSearchButton == null)
             return;
 
-        clearSearchButton.IsVisible = AgentRecipeNote.Instance()->RecipeSearchOpen && lastRecipeID != 0;
+        var addon = (AddonRecipeNote*)RecipeNoteAddon;
+        clearSearchButton.IsVisible = addon                  != null &&
+                                      addon->SearchTextInput != null &&
+                                      addon->SearchTextInput->HasEvaluatedText();
     }
 
     // 切换分类按钮
@@ -1452,6 +1532,12 @@ public partial class OptimizedRecipeNote : ModuleBase
             LuminaGetter.GetRowOrDefault<ClassJob>(GetRecipe().CraftType.RowId + 8);
     }
 
+    private sealed record RecipeSearchEntry
+    (
+        string   Name,
+        Recipe[] Recipes
+    );
+
     private record SearchHistoryEntry
     (
         string Text,
@@ -1510,6 +1596,8 @@ public partial class OptimizedRecipeNote : ModuleBase
                     .Where(x => x.Key > 0 && x.Count() > 1)
                     .ToFrozenDictionary(x => x.Key, x => x.DistinctBy(d => d.CraftType.RowId).ToList());
 
+    private const int RECIPE_NAME_WEIGHT        = 1000;
+    private const int RECIPE_PINYIN_WEIGHT      = 900;
     private const int MAX_QUICK_SYNTHESIS_COUNT = 255;
 
     private static readonly FrozenSet<uint> CraftFailedLogMessages =
