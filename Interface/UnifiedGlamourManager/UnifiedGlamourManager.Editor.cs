@@ -1,11 +1,12 @@
 using DailyRoutines.Extensions;
 using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager
+public unsafe partial class UnifiedGlamourManager
 {
     private PresetEditor presetEditor;
 
@@ -26,12 +27,18 @@ public partial class UnifiedGlamourManager
         public bool   ItemsDirty;
         public bool   FocusTitle;
 
+        public bool EnableLivePreview;
+        public bool IsPreviewPending;
+
         public readonly List<(Stain Stain, string Name)>           Stains    = [];
         public readonly List<PresetItemCandidate>                  Items     = [];
         public readonly Dictionary<int, List<PresetItemCandidate>> SlotItems = [];
 
         private          IEnumerator<Item>?                           itemRows;
         private readonly List<(PresetItemCandidate Item, uint Slots)> itemIndex = [];
+
+        private long nextPreviewAt;
+        private bool wasTryOnVisible;
 
         public void Begin
         (
@@ -47,15 +54,17 @@ public partial class UnifiedGlamourManager
             StainIndex = -1;
             SearchText = string.Empty;
             ItemsDirty = true;
+            QueuePreview();
         }
 
         public void End()
         {
-            IsOpen         = false;
-            Draft          = null;
-            Baseline       = null;
-            OriginalPreset = null;
-            FocusTitle     = false;
+            IsPreviewPending   = false;
+            IsOpen             = false;
+            Draft              = null;
+            Baseline           = null;
+            OriginalPreset     = null;
+            FocusTitle         = false;
         }
 
         public void SelectSlot
@@ -100,7 +109,10 @@ public partial class UnifiedGlamourManager
             var previous = Draft.Items.FirstOrDefault(x => x.SlotIndex == (uint)SlotIndex);
             Draft.Items.RemoveAll(x => x.SlotIndex == (uint)SlotIndex);
             if (itemID == 0)
+            {
+                QueuePreview();
                 return;
+            }
 
             var row     = LuminaGetter.GetRow<Item>(itemID).GetValueOrDefault();
             var blocked = owner.GetBlockedEquipmentSlots(itemID);
@@ -124,6 +136,7 @@ public partial class UnifiedGlamourManager
                         (byte)0
                 )
             );
+            QueuePreview();
         }
 
         public void SetDye
@@ -146,6 +159,7 @@ public partial class UnifiedGlamourManager
                     entry with { Stain0ID = dye } :
                     entry with { Stain1ID = dye }
             );
+            QueuePreview();
         }
 
         public void LoadStains()
@@ -267,8 +281,68 @@ public partial class UnifiedGlamourManager
             End();
         }
 
+        public void QueuePreview()
+        {
+            IsPreviewPending = EnableLivePreview && IsOpen && Draft != null && OriginalPreset == owner.selectedPreset;
+            nextPreviewAt    = Environment.TickCount64 + 300;
+        }
+
+        public void UpdateLivePreview()
+        {
+            if (!IsOpen || Draft == null || !EnableLivePreview || OriginalPreset != owner.selectedPreset)
+                return;
+
+            if (IsPreviewPending                         &&
+                Environment.TickCount64 >= nextPreviewAt &&
+                !owner.TaskHelper.IsBusy                 &&
+                !ICondition.Instance().IsOccupiedInEvent)
+            {
+                IsPreviewPending = false;
+                owner.StartTryOnPreset(Draft);
+            }
+
+            var addon = Tryon;
+            if (addon == null || !addon->IsVisible)
+            {
+                wasTryOnVisible = false;
+                return;
+            }
+
+            if (wasTryOnVisible)
+                return;
+
+            wasTryOnVisible = true;
+            var position    = ImGui.GetWindowPos();
+            var size        = ImGui.GetWindowSize();
+            var viewport    = ImGui.GetMainViewport();
+            var width       = addon->GetScaledWidth(true);
+            var height      = addon->GetScaledHeight(true);
+            var x           = position.X + size.X + (8 * GlobalUIScale);
+
+            if (x + width > viewport.WorkPos.X + viewport.WorkSize.X)
+                x = position.X - width - (8 * GlobalUIScale);
+
+            x = Math.Clamp
+            (
+                x,
+                viewport.WorkPos.X,
+                Math.Max(viewport.WorkPos.X, viewport.WorkPos.X + viewport.WorkSize.X - width)
+            );
+            var y = Math.Clamp
+            (
+                position.Y,
+                viewport.WorkPos.Y,
+                Math.Max(viewport.WorkPos.Y, viewport.WorkPos.Y + viewport.WorkSize.Y - height)
+            );
+
+            if (addon->X != (short)x || addon->Y != (short)y)
+                addon->SetPosition((short)x, (short)y);
+        }
+
         public void Dispose()
         {
+            EnableLivePreview = false;
+
             itemRows?.Dispose();
             itemRows = null;
 
