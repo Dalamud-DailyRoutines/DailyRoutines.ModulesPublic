@@ -104,6 +104,13 @@ public unsafe partial class UnifiedGlamourManager
         }
         else
         {
+            var importIcon = glamaholicImporter.Expanded ?
+                                 FontAwesomeIcon.CaretDown :
+                                 FontAwesomeIcon.CaretRight;
+            if (ImGuiOm.ButtonIconWithText(importIcon, Lang.Get("UnifiedGlamourManager-Editor-ImportGlamaholic")))
+                glamaholicImporter.Expanded = !glamaholicImporter.Expanded;
+
+            DrawGlamaholicImport();
             DrawPresetSearchAndFilterBar();
             ImGui.Separator();
 
@@ -971,6 +978,62 @@ public unsafe partial class UnifiedGlamourManager
         }
 
         DrawPresetEditor();
+    }
+
+    private void DrawGlamaholicImport()
+    {
+        if (!glamaholicImporter.Expanded)
+            return;
+
+        using (ImRaii.Disabled(glamaholicImporter.IsBusy))
+        {
+            if (ImGui.InputText
+                (
+                    Lang.Get("UnifiedGlamourManager-Editor-ImportPath"),
+                    ref config.GlamaholicImportPath,
+                    1024
+                ))
+            {
+                glamaholicImporter.ClearPreview();
+                SaveConfig();
+            }
+
+            if (ImGui.Button(Lang.Get("Preview")))
+                glamaholicImporter.StartPreview();
+        }
+
+        ImGui.TextWrapped(glamaholicImporter.Status);
+
+        if (glamaholicImporter.Skipped.Count > 0 &&
+            ImGui.CollapsingHeader(Lang.Get("UnifiedGlamourManager-Editor-ImportSkipped")))
+        {
+            using var skipped = ImRaii.Child("##GlamaholicSkipped", new Vector2(0, 100 * GlobalUIScale), true);
+            if (skipped)
+            {
+                foreach (var message in glamaholicImporter.Skipped)
+                    ImGui.TextUnformatted(message);
+            }
+        }
+
+        if (glamaholicImporter.Preview is { Count: > 0 })
+        {
+            using (var child = ImRaii.Child
+                   (
+                       "##GlamaholicImportPreview",
+                       new Vector2(0, 100 * GlobalUIScale),
+                       true
+                   ))
+            {
+                if (child)
+                {
+                    foreach (var preset in glamaholicImporter.Preview)
+                        ImGui.TextUnformatted(preset.Title);
+                }
+            }
+
+            if (ImGui.Button(Lang.Get("Import")))
+                glamaholicImporter.CommitImport();
+        }
     }
 
     private void DrawPresetDetailActions()
