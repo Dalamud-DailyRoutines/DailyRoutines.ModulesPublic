@@ -320,11 +320,6 @@ public partial class OptimizedRecipeNote : ModuleBase
         }
 
         ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish"), ref config.IsNotifyQuickSynthesisFinish))
-            config.Save(this);
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-NotifyQuickSynthesisFinish-Help"));
     }
 
     private unsafe void ScanRecipeRowsDetour(RecipeSearchContextEx* context, uint rowIndex, uint rowCount)
@@ -1755,15 +1750,9 @@ public partial class OptimizedRecipeNote : ModuleBase
             pendingUseHQIngredient     = false;
             pendingAllNQResult         = false;
 
-            if (config.IsNotifyQuickSynthesisFinish)
-            {
-                var message = Lang.Get("OptimizedRecipeNote-Message-QuickSynthFinish");
-                NotifyHelper.Instance().Chat(message);
-                NotifyHelper.Instance().NotificationInfo(message);
-                NotifyHelper.SystemInformation();
-                NotifyHelper.Speak(message);
-            }
-
+            var message = Lang.Get("OptimizedRecipeNote-Message-QuickSynthFinish");
+            NotifyHelper.Instance().Chat(message, false);
+            NotifyHelper.Toast(message);
             return;
         }
 
@@ -1905,9 +1894,6 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         // 突破制作练习初期品质上限
         public bool IsMorePraticeQuality = true;
-
-        // 简易制作完成提醒
-        public bool IsNotifyQuickSynthesisFinish = true;
     }
 
     #region IPC
