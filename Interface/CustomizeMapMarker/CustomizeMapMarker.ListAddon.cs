@@ -23,7 +23,6 @@ public unsafe partial class CustomizeMapMarker
         private const float HEADER_HEIGHT    = 64f;
 
         private readonly Dictionary<string, int>                            groupPages = [];
-        private          ScrollingNode<VerticalListNode>?                   scrollArea;
         private          TreeListNode<MarkerListEntry, MarkerTreeItemNode>? markerTree;
         private          LabelTextNode?                                     mapNameText;
         private          HorizontalListNode?                                paginationBar;
@@ -82,27 +81,19 @@ public unsafe partial class CustomizeMapMarker
             nextPageButton = CreatePageButton(">", () => ShowPage(currentPage + 1));
             paginationBar.AddNode(nextPageButton);
 
-            scrollArea = new ScrollingNode<VerticalListNode>
-            {
-                Position          = ContentStartPosition + new Vector2(0, HEADER_HEIGHT),
-                Size              = ContentSize          - new Vector2(0, HEADER_HEIGHT),
-                ScrollSpeed       = 100,
-                AutoHideScrollBar = true,
-                ContentNode =
-                {
-                    FitContents = true,
-                    ItemSpacing = 4
-                }
-            };
-            scrollArea.AttachNode(this);
-
             markerTree = new TreeListNode<MarkerListEntry, MarkerTreeItemNode>
             {
+                Position        = ContentStartPosition + new Vector2(0, HEADER_HEIGHT),
                 Size            = new(ContentSize.X, ContentSize.Y - HEADER_HEIGHT),
                 ItemSpacing     = 4,
-                NoResultsString = Lang.Get("CustomizeMapMarker-Empty")
+                NoResultsString = Lang.Get("CustomizeMapMarker-Empty"),
+                ScrollBarNode =
+                {
+                    HideWhenDisabled = true,
+                    ScrollSpeed      = 100
+                }
             };
-            scrollArea.ContentNode.AddNode(markerTree);
+            markerTree.AttachNode(this);
 
             BuildList();
         }
@@ -127,7 +118,6 @@ public unsafe partial class CustomizeMapMarker
         )
         {
             groupPages.Clear();
-            scrollArea         = null;
             markerTree         = null;
             mapNameText        = null;
             paginationBar      = null;
@@ -218,10 +208,8 @@ public unsafe partial class CustomizeMapMarker
                     options[[with(group.Key)]] = entries;
                 }
 
-                markerTree.Options = options;
-                scrollArea?.ScrollToTop();
-                scrollArea?.ContentNode.RecalculateLayout();
-                scrollArea?.RecalculateSizes();
+                markerTree.Options                      = options;
+                markerTree.ScrollBarNode.ScrollPosition = 0;
             }
             finally
             {
