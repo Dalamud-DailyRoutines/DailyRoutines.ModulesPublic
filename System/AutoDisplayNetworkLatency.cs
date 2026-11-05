@@ -45,7 +45,8 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
     protected override void Init()
     {
-        monitor     ??= new();
+        monitor ??= new();
+
         entry       ??= IDtrBar.Instance().Get("DailyRoutines-AutoDisplayNetworkLatency");
         entry.Shown =   false;
         entry.OnClick = _ =>
@@ -92,8 +93,14 @@ public class AutoDisplayNetworkLatency : ModuleBase
 
         if (!ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
         {
-            Overlay.IsOpen = false;
-            return;
+            var (dtrMin, dtrMax) = entry.ScreenBounds;
+            var viewportPos = ImGui.GetMainViewport().Pos;
+
+            if (!ImGui.IsMouseHoveringRect(dtrMin + viewportPos, dtrMax + viewportPos, false))
+            {
+                Overlay.IsOpen = false;
+                return;
+            }
         }
 
         var min     = monitor.Minimum;
