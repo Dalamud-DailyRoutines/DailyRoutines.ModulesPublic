@@ -43,175 +43,103 @@ public unsafe class SpecialRenderMode : ModuleBase
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-DisableWorldRenderButAddons"));
+        var enableText  = Lang.Get("Enable");
+        var disableText = Lang.Get("Disable");
+        var buttonWidth = MathF.Max(ImGui.CalcTextSize(enableText).X, ImGui.CalcTextSize(disableText).X) +
+                          (ImGui.GetStyle().FramePadding.X * 2);
 
-        using (ImRaii.PushId("DisableWorldRenderButAddons"))
-        using (ImRaii.PushIndent())
+        using var table = ImRaii.Table("RenderModes", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH);
+
+        if (table)
         {
-            var color = config.BackgroundColor;
+            ImGui.TableSetupColumn("Mode",     ImGuiTableColumnFlags.WidthStretch);
+            ImGui.TableSetupColumn("Settings", ImGuiTableColumnFlags.WidthFixed, ImGui.GetFrameHeight());
+            ImGui.TableSetupColumn("Enable",   ImGuiTableColumnFlags.WidthFixed, buttonWidth);
+            ImGui.TableSetupColumn("Disable",  ImGuiTableColumnFlags.WidthFixed, buttonWidth);
 
-            if (ImGui.Button(Lang.Get("Enable")))
-                ToggleFade(Framework.Instance()->EnvironmentManager, 1, 0.1f, &color);
+            if (DrawModeRow("DisableWorldRenderButAddons", enableText, disableText, out var worldRenderDisabled))
+            {
+                var color = config.BackgroundColor;
+                ToggleFade
+                (
+                    Framework.Instance()->EnvironmentManager,
+                    worldRenderDisabled ?
+                        1 :
+                        0,
+                    0.1f,
+                    &color
+                );
+            }
 
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Disable")))
-                ToggleFade(Framework.Instance()->EnvironmentManager, 0, 0.1f, &color);
+            if (DrawModeRow("HideTitleExtraInfos", enableText, disableText, out var titleInfosHidden))
+            {
+                if (TitleRevision != null)
+                    TitleRevision->IsVisible = !titleInfosHidden;
 
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            ImGui.TextUnformatted($"{Lang.Get("Color")}:");
+                if (TitleMenu != null)
+                    TitleMenu->IsVisible = !titleInfosHidden;
+            }
 
-            ImGui.SameLine();
+            if (DrawModeRow("HideAddonsButNameplate", enableText, disableText, out var addonsButNameplateHidden))
+            {
+                UIModule.Instance()->ToggleUi
+                (
+                    UiFlags.ActionBars | UiFlags.Chat | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
+                    !addonsButNameplateHidden
+                );
+                DTR->IsVisible = !addonsButNameplateHidden;
+            }
+
+            if (DrawModeRow("HideAddonsButChatLog", enableText, disableText, out var addonsButChatLogHidden))
+            {
+                UIModule.Instance()->ToggleUi
+                (
+                    UiFlags.ActionBars | UiFlags.Nameplates | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
+                    !addonsButChatLogHidden
+                );
+                DTR->IsVisible = !addonsButChatLogHidden;
+            }
+
+            if (DrawModeRow("HideChatLog", enableText, disableText, out var chatLogHidden))
+                UIModule.Instance()->ToggleUi(UiFlags.Chat, !chatLogHidden);
+
+            if (DrawModeRow("HideActionBars", enableText, disableText, out var actionBarsHidden))
+                UIModule.Instance()->ToggleUi(UiFlags.ActionBars, !actionBarsHidden);
+
+            if (DrawModeRow("HideTargetInfo", enableText, disableText, out var targetInfoHidden))
+                UIModule.Instance()->ToggleUi(UiFlags.TargetInfo, !targetInfoHidden);
+
+            if (DrawModeRow("HideNameplate", enableText, disableText, out var nameplateHidden))
+                UIModule.Instance()->ToggleUi(UiFlags.Nameplates, !nameplateHidden);
+        }
+
+    }
+
+    private bool DrawModeRow(string mode, string enableText, string disableText, out bool enabled)
+    {
+        using var id = ImRaii.PushId(mode);
+
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextWrapped(Lang.Get($"SpecialRenderMode-Mode-{mode}"));
+
+        ImGui.TableNextColumn();
+        if (mode == "DisableWorldRenderButAddons")
             config.BackgroundColor = ImGuiComponents.ColorPickerWithPalette(1, string.Empty, config.BackgroundColor);
-        }
-        
-        ImGui.NewLine();
-        
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideTitleExtraInfos"));
 
-        using (ImRaii.PushId("HideTitleExtraInfos"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button("启用"))
-            {
-                if (TitleRevision != null)
-                    TitleRevision->IsVisible = false;
-                if (TitleMenu != null)
-                    TitleMenu->IsVisible = false;
-            }
-            
-            ImGui.SameLine();
-            if (ImGui.Button("禁用"))
-            {
-                if (TitleRevision != null)
-                    TitleRevision->IsVisible = true;
-                if (TitleMenu != null)
-                    TitleMenu->IsVisible = true;
-            }
-        }
-        
-        ImGui.NewLine();
+        ImGui.TableNextColumn();
+        var enableClicked = ImGui.Button(enableText, new(-1, 0));
 
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideAddonsButNameplate"));
+        ImGui.TableNextColumn();
+        var disableClicked = ImGui.Button(disableText, new(-1, 0));
 
-        using (ImRaii.PushId("HideAddonsButNameplate"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button(Lang.Get("Enable")))
-            {
-                UIModule.Instance()->ToggleUi
-                (
-                    UiFlags.ActionBars | UiFlags.Chat | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
-                    false
-                );
-                DTR->IsVisible = false;
-            }
-
-            ImGui.SameLine();
-
-            if (ImGui.Button(Lang.Get("Disable")))
-            {
-                UIModule.Instance()->ToggleUi
-                (
-                    UiFlags.ActionBars | UiFlags.Chat | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
-                    true
-                );
-                DTR->IsVisible = true;
-            }
-        }
-
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideAddonsButChatLog"));
-
-        using (ImRaii.PushId("HideAddonsButChatLog"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button(Lang.Get("Enable")))
-            {
-                UIModule.Instance()->ToggleUi
-                (
-                    UiFlags.ActionBars | UiFlags.Nameplates | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
-                    false
-                );
-                DTR->IsVisible = false;
-            }
-
-            ImGui.SameLine();
-
-            if (ImGui.Button(Lang.Get("Disable")))
-            {
-                UIModule.Instance()->ToggleUi
-                (
-                    UiFlags.ActionBars | UiFlags.Nameplates | UiFlags.Hud | UiFlags.TargetInfo | UiFlags.Shortcuts,
-                    true
-                );
-                DTR->IsVisible = true;
-            }
-        }
-
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideChatLog"));
-
-        using (ImRaii.PushId("HideChatLog"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UiFlags.Chat, false);
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UiFlags.Chat, true);
-        }
-
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideActionBars"));
-
-        using (ImRaii.PushId("HideActionBars"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UiFlags.ActionBars, false);
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UiFlags.ActionBars, true);
-        }
-
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideTargetInfo"));
-
-        using (ImRaii.PushId("HideTargetInfo"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UiFlags.TargetInfo, false);
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UiFlags.TargetInfo, true);
-        }
-
-        ImGui.NewLine();
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideNameplate"));
-
-        using (ImRaii.PushId("HideNameplate"))
-        using (ImRaii.PushIndent())
-        {
-            if (ImGui.Button(Lang.Get("Enable")))
-                UIModule.Instance()->ToggleUi(UiFlags.Nameplates, false);
-
-            ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("Disable")))
-                UIModule.Instance()->ToggleUi(UiFlags.Nameplates, true);
-        }
+        enabled = enableClicked;
+        return enableClicked || disableClicked;
     }
 
     private class Config : ModuleConfig
     {
-        public Vector4 BackgroundColor = KnownColor.LightSkyBlue.ToVector4();
+        public Vector4 BackgroundColor = new(0.003f, 0.246f, 0.393f, 1f);
     }
 }
