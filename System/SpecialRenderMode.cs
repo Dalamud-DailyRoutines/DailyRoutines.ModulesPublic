@@ -63,7 +63,32 @@ public unsafe class SpecialRenderMode : ModuleBase
             ImGui.SameLine();
             config.BackgroundColor = ImGuiComponents.ColorPickerWithPalette(1, string.Empty, config.BackgroundColor);
         }
+        
+        ImGui.NewLine();
+        
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideTitleExtraInfos"));
 
+        using (ImRaii.PushId("HideTitleExtraInfos"))
+        using (ImRaii.PushIndent())
+        {
+            if (ImGui.Button("启用"))
+            {
+                if (TitleRevision != null)
+                    TitleRevision->IsVisible = false;
+                if (TitleMenu != null)
+                    TitleMenu->IsVisible = false;
+            }
+            
+            ImGui.SameLine();
+            if (ImGui.Button("禁用"))
+            {
+                if (TitleRevision != null)
+                    TitleRevision->IsVisible = true;
+                if (TitleMenu != null)
+                    TitleMenu->IsVisible = true;
+            }
+        }
+        
         ImGui.NewLine();
 
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("SpecialRenderMode-Mode-HideAddonsButNameplate"));
