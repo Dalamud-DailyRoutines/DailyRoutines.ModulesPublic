@@ -198,13 +198,10 @@ public partial class OptimizedRecipeNote : ModuleBase
         RecipeNotePraticeSettingSetupHook =
             RecipeNotePraticeSettingSetupSig.GetHook<RecipeNotePraticeSettingSetupDelegate>(RecipeNotePraticeSettingSetupDetour);
 
-        if (config.IsQuickSynthesisMore)
-        {
-            SimpleCraftAmountJudgePatch.Enable();
-            SimpleCraftGetAmountUpperLimitHook.Enable();
-            IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.RecipeNote, OnAgentRecipeNote);
-            IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "SynthesisSimple", OnSynthesisSimple);
-        }
+        SimpleCraftAmountJudgePatch.Enable();
+        SimpleCraftGetAmountUpperLimitHook.Enable();
+        IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.RecipeNote, OnAgentRecipeNote);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "SynthesisSimple", OnSynthesisSimple);
 
         if (config.IsMorePraticeQuality)
             RecipeNotePraticeSettingSetupHook.Enable();
@@ -254,63 +251,19 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-SearchClearButton"), ref config.IsSearchClearButton))
-        {
-            config.Save(this);
-            RemoveAllNodes();
-        }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SearchClearButton-Help"));
-
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons"), ref config.IsCategoryButtons))
         {
             config.Save(this);
             RemoveAllNodes();
         }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons-Help"));
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-DisplayOthersButtons"), ref config.IsDisplayOthersButtons))
-        {
-            config.Save(this);
-            RemoveAllNodes();
-        }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-DisplayOthersButtons-Help"));
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MaterialSourceButtons"), ref config.IsMaterialSourceButtons))
-        {
-            config.Save(this);
-            RemoveAllNodes();
-        }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MaterialSourceButtons-Help"));
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton"), ref config.IsSwitchJobButton))
-        {
-            config.Save(this);
-            RemoveAllNodes();
-        }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-SwitchJobButton-Help"));
+        ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons-Help"));
 
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton"), ref config.IsCaculateRecipeButton))
         {
             config.Save(this);
             RemoveAllNodes();
         }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton-Help"));
-
-        if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-QuickSynthesisMore"), ref config.IsQuickSynthesisMore))
-        {
-            config.Save(this);
-
-            SimpleCraftAmountJudgePatch.Set(config.IsQuickSynthesisMore);
-            SimpleCraftGetAmountUpperLimitHook.Toggle(config.IsQuickSynthesisMore);
-        }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-QuickSynthesisMore-Help"));
+        ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton-Help"));
 
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality"), ref config.IsMorePraticeQuality))
         {
@@ -318,8 +271,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
             RecipeNotePraticeSettingSetupHook.Toggle(config.IsMorePraticeQuality);
         }
-
-        ImGuiOm.HelpMarker(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
+        ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
     }
 
     private unsafe void ScanRecipeRowsDetour(RecipeSearchContextEx* context, uint rowIndex, uint rowCount)
@@ -923,7 +875,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     // 清除搜索按钮
     private unsafe void CreateClearSearchButton()
     {
-        if (!config.IsSearchClearButton || clearSearchButton != null)
+        if (clearSearchButton != null)
             return;
 
         clearSearchButton = new()
@@ -958,7 +910,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private unsafe void UpdateClearSearchButton()
     {
-        if (!config.IsSearchClearButton || clearSearchButton == null)
+        if (clearSearchButton == null)
             return;
 
         var addon = (AddonRecipeNote*)RecipeNoteAddon;
@@ -1116,9 +1068,8 @@ public partial class OptimizedRecipeNote : ModuleBase
     // 显示其余配方按钮
     private unsafe void CreateDisplayOthersButtons()
     {
-        if (!config.IsDisplayOthersButtons ||
-            (displayOthersButton     != null &&
-             displayOthersJobsLayout != null))
+        if (displayOthersButton     != null &&
+            displayOthersJobsLayout != null)
             return;
 
         if (displayOthersButton == null)
@@ -1207,8 +1158,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private unsafe void UpdateDisplayOthersButtons()
     {
-        if (!config.IsDisplayOthersButtons        ||
-            displayOthersButton           == null ||
+        if (displayOthersButton           == null ||
             displayOthersJobsLayout       == null ||
             displayOthersJobButtons.Count != 8)
             return;
@@ -1255,8 +1205,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     // 材料来源
     private unsafe void CreateMaterialSourceButtons()
     {
-        if (!config.IsMaterialSourceButtons ||
-            materialSourceButtons.Count != 0)
+        if (materialSourceButtons.Count != 0)
             return;
 
         for (var i = 0U; i < 6; i++)
@@ -1310,8 +1259,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private unsafe void UpdateMaterialSourceButtons()
     {
-        if (!config.IsMaterialSourceButtons ||
-            materialSourceButtons.Count != 6)
+        if (materialSourceButtons.Count != 6)
             return;
 
         if (!TryGetCurrentRecipe(out _, out var recipe))
@@ -1396,8 +1344,7 @@ public partial class OptimizedRecipeNote : ModuleBase
     // 切换职业
     private unsafe void CreateSwitchJobButton()
     {
-        if (!config.IsSwitchJobButton ||
-            switchJobButton != null)
+        if (switchJobButton != null)
             return;
 
         switchJobButton = new()
@@ -1432,8 +1379,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
     private unsafe void UpdateSwitchJobButton()
     {
-        if (!config.IsSwitchJobButton ||
-            switchJobButton == null)
+        if (switchJobButton == null)
             return;
 
         if (!TryGetCurrentRecipe(out _, out var recipe))
@@ -1725,7 +1671,14 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         atkValues[0].SetInt(MAX_QUICK_SYNTHESIS_COUNT);
 
-        var message = Lang.Get("OptimizedRecipeNote-Message-QuickSynthBatch", MathF.Ceiling((float)count / MAX_QUICK_SYNTHESIS_COUNT));
+        var message = Lang.Get
+        (
+            "OptimizedRecipeNote-Message-QuickSynthBatch",
+            new Dictionary<string, object>
+            {
+                ["batchCount"] = MathF.Ceiling((float)count / MAX_QUICK_SYNTHESIS_COUNT)
+            }
+        );
         NotifyHelper.Instance().Chat(message);
     }
 
@@ -1871,26 +1824,11 @@ public partial class OptimizedRecipeNote : ModuleBase
 
         public bool IsEquipmentSearchView;
 
-        // 搜索清除
-        public bool IsSearchClearButton = true;
-
         // 分类
         public bool IsCategoryButtons = true;
 
-        // 显示其余配方
-        public bool IsDisplayOthersButtons = true;
-
-        // 材料来源
-        public bool IsMaterialSourceButtons = true;
-
-        // 切换职业
-        public bool IsSwitchJobButton = true;
-
         // 求解配方
         public bool IsCaculateRecipeButton = true;
-
-        // 突破简易制作上限
-        public bool IsQuickSynthesisMore = true;
 
         // 突破制作练习初期品质上限
         public bool IsMorePraticeQuality = true;

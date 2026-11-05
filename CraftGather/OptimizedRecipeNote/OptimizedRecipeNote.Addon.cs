@@ -269,8 +269,15 @@ public partial class OptimizedRecipeNote
 
             ExecuteButton = new()
             {
-                Size        = new(140, EXECUTION_CONTAINER_HEIGHT),
-                String      = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", CraftableAmount),
+                Size = new(140, EXECUTION_CONTAINER_HEIGHT),
+                String = Lang.Get
+                (
+                    "OptimizedRecipeNote-Button-CraftMultiple",
+                    new Dictionary<string, object>
+                    {
+                        ["count"] = CraftableAmount
+                    }
+                ),
                 TextureType = ButtonTextureType.ButtonB,
                 OnClick = () =>
                 {
@@ -372,13 +379,21 @@ public partial class OptimizedRecipeNote
 
             CraftCountInput = new NumericInputNode
             {
-                Size          = new(140, EXECUTION_CONTAINER_HEIGHT),
-                Y             = 4,
-                Min           = 1,
-                Max           = 99999,
-                Step          = 1,
-                Value         = CraftableAmount,
-                OnValueUpdate = value => ExecuteButton.String = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", value)
+                Size  = new(140, EXECUTION_CONTAINER_HEIGHT),
+                Y     = 4,
+                Min   = 1,
+                Max   = 99999,
+                Step  = 1,
+                Value = CraftableAmount,
+                OnValueUpdate = value =>
+                    ExecuteButton.String = Lang.Get
+                    (
+                        "OptimizedRecipeNote-Button-CraftMultiple",
+                        new Dictionary<string, object>
+                        {
+                            ["count"] = value
+                        }
+                    )
             };
             ExecutionContainer.AddNode(CraftCountInput);
 
@@ -466,8 +481,11 @@ public partial class OptimizedRecipeNote
                 String = Lang.Get
                 (
                     "OptimizedRecipeNote-Text-MacroStats",
-                    Result.Actions.Count,
-                    Result.Actions.Count * 3
+                    new Dictionary<string, object>
+                    {
+                        ["steps"]   = Result.Actions.Count,
+                        ["seconds"] = Result.Actions.Count * 3
+                    }
                 ),
                 FontSize = 14,
                 X        = ActionContainer.Width - COPY_MACRO_BUTTON_SIZE - COPY_MACRO_BUTTON_SPACING
@@ -695,7 +713,14 @@ public partial class OptimizedRecipeNote
                 return;
             }
 
-            ExecuteButton.String = Lang.Get("OptimizedRecipeNote-Button-CraftMultiple", CraftCountInput.Value);
+            ExecuteButton.String = Lang.Get
+            (
+                "OptimizedRecipeNote-Button-CraftMultiple",
+                new Dictionary<string, object>
+                {
+                    ["count"] = CraftCountInput.Value
+                }
+            );
         }
 
         #endregion
@@ -760,7 +785,14 @@ public partial class OptimizedRecipeNote
                 (
                     new()
                     {
-                        Name      = Lang.Get("OptimizedRecipeNote-Button-CopyMacro", macroIndex + 1),
+                        Name = Lang.Get
+                        (
+                            "OptimizedRecipeNote-Button-CopyMacro",
+                            new Dictionary<string, object>
+                            {
+                                ["index"] = macroIndex + 1
+                            }
+                        ),
                         OnClicked = _ => CopyMacroToClipboard(macroIndex)
                     }
                 );
@@ -793,7 +825,17 @@ public partial class OptimizedRecipeNote
                 builder.AppendLine($"/ac {LuminaWrapper.GetActionName(action)} <wait.3>");
             ImGui.SetClipboardText(builder.ToString());
 
-            NotifyHelper.Toast(Lang.Get("OptimizedRecipeNote-Message-MacroCopied", macroIndex + 1));
+            NotifyHelper.Toast
+            (
+                Lang.Get
+                (
+                    "OptimizedRecipeNote-Message-MacroCopied",
+                    new Dictionary<string, object>
+                    {
+                        ["index"] = macroIndex + 1
+                    }
+                )
+            );
         }
     }
 }
