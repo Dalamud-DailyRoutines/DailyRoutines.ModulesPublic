@@ -24,7 +24,7 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         Author      = ["Mizami", "Cyf5119"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

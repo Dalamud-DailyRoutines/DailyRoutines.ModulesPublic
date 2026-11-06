@@ -32,7 +32,7 @@ public unsafe class AutoCutsceneSkip : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private static readonly CompSig CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
     private delegate byte CutsceneHandleInputDelegate

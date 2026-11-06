@@ -34,7 +34,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth = true
     };

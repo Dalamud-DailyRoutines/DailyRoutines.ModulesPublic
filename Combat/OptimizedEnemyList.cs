@@ -37,7 +37,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
         ModulesPair = ["AutoDisplayHiddenCast"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

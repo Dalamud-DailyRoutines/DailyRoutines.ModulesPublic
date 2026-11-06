@@ -28,7 +28,7 @@ public unsafe partial class BetterTeleport : ModuleBase
         ModulesPrerequisite = ["SameAethernetTeleport"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private static uint TicketUsageType
     {

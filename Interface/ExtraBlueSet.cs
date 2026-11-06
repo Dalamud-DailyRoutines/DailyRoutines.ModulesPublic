@@ -22,7 +22,7 @@ public unsafe class ExtraBlueSet : ModuleBase
         Author      = ["Marsh"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

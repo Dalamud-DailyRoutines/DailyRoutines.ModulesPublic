@@ -17,7 +17,7 @@ public class BetterNameSort : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         CNOnly           = true,
         TCOnly           = true,

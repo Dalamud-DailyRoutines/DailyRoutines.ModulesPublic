@@ -27,7 +27,7 @@ public unsafe class AutoFCWSDeliver : ModuleBase
         ModulesPrerequisite = ["AutoRequestItemSubmit", "AutoCutsceneSkip"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

@@ -28,7 +28,7 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

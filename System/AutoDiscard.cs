@@ -29,7 +29,7 @@ public unsafe class AutoDiscard : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private Config                moduleConfig = null!;
     private LuminaSearcher<Item>? itemSearcher;

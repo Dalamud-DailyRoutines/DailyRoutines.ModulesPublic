@@ -29,7 +29,7 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         Author      = ["HaKu"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

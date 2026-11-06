@@ -43,7 +43,7 @@ public partial class FastWorldTravel : ModuleBase
         ModulesPrerequisite = ["InstantLogout"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

@@ -18,7 +18,7 @@ public unsafe class BrayfloxsLongstopHelper : ModuleBase
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

@@ -27,7 +27,7 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         Author      = ["Due"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         CNOnly           = true,
         CNDefaultEnabled = true

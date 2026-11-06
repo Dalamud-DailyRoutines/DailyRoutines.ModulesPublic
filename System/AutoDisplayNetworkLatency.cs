@@ -34,7 +34,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
         ]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

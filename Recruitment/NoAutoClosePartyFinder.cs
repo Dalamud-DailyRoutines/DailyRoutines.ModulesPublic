@@ -19,7 +19,7 @@ public unsafe class NoAutoClosePartyFinder : ModuleBase
         Author      = ["Nyy", "YLCHEN"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

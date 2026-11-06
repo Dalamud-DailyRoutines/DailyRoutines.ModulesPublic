@@ -23,7 +23,7 @@ public unsafe class AutoHighlightSprint : ModuleBase
         Category = ModuleCategory.Action
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
 
     private Hook<ActionManager.Delegates.IsActionHighlighted>? IsActionHighlightedHook;
 

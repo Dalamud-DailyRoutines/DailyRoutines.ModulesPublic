@@ -18,7 +18,7 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

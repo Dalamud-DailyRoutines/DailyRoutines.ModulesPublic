@@ -24,7 +24,7 @@ public class AutoAethericMimicry : ModuleBase
         Category    = ModuleCategory.Action
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);

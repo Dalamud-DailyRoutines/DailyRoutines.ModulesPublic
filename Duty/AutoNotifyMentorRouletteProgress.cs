@@ -25,7 +25,7 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
         ]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

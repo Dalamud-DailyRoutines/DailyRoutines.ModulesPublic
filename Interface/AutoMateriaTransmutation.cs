@@ -25,7 +25,7 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
         ModulesPrerequisite = ["AutoCutsceneSkip", "AutoTalkSkip"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth          = true,
         AllDefaultEnabled = true

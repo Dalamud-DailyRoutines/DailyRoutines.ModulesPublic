@@ -14,7 +14,7 @@ public class AutoEnableDLSSSupport : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { CNOnly = true, KROnly = true, TCOnly = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { CNOnly = true, KROnly = true, TCOnly = true };
 
     protected override void Init()
     {

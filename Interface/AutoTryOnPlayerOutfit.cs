@@ -21,7 +21,7 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         Author      = ["ErxCharlotte"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

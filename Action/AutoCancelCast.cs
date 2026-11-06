@@ -23,7 +23,7 @@ public unsafe class AutoCancelCast : ModuleBase
         Category    = ModuleCategory.Action
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
 
     protected override void Init() =>
         ICondition.Instance().ConditionChange += OnConditionChanged;

@@ -19,7 +19,7 @@ public partial class AutoReplyChatBot : ModuleBase
         Author      = ["Wotou"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
 
     private RateLimiter?  rateLimiter;

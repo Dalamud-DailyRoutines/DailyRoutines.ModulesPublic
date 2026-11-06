@@ -31,7 +31,7 @@ public unsafe partial class AutoSupportKeyboundBrawlerPinyin : ModuleBase
         ]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         CNOnly           = true,
         CNDefaultEnabled = true

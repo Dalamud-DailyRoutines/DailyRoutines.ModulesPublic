@@ -31,7 +31,7 @@ public unsafe class OptimizedMacro : ModuleBase
         Author      = ["Rorinnn"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

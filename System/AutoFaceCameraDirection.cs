@@ -32,7 +32,7 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
         ModulesPair = ["DisableGroundActionAutoFace", "IgnoreActionTargetBlocked"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private static readonly CompSig cameraUpdateRotationSig = new("40 53 48 81 EC ?? ?? ?? ?? 8B 81 ?? ?? ?? ?? 48 8B D9 44 0F 29 54 24");
     private delegate void CameraUpdateRotationDelegate

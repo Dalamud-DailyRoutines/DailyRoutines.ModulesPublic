@@ -30,7 +30,7 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         Author      = ["Yarukon"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

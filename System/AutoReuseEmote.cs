@@ -32,7 +32,7 @@ public class AutoReuseEmote : ModuleBase
         Author   = ["Xww"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

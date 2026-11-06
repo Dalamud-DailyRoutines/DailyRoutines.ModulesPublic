@@ -35,7 +35,7 @@ public unsafe partial class AutoRetainerWork : ModuleBase
         ]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth = true
     };

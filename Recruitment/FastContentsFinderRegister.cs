@@ -25,7 +25,7 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         ModulesPrerequisite = ["ContentFinderCommand"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

@@ -16,7 +16,7 @@ public unsafe class IgnoreTurnAndLookAtWait : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth = true
     };

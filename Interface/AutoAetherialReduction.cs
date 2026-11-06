@@ -24,7 +24,7 @@ public unsafe class AutoAetherialReduction : ModuleBase
         Author      = ["YLCHEN"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

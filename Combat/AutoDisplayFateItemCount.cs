@@ -28,7 +28,7 @@ public unsafe class AutoDisplayFateItemCount : ModuleBase
         ]
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { AllDefaultEnabled = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
 
     private OverlayController? controller;
 

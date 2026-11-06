@@ -18,7 +18,7 @@ public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
         Category    = ModuleCategory.Action
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

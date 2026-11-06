@@ -21,7 +21,7 @@ public unsafe class FieldEntryCommand : ModuleBase
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

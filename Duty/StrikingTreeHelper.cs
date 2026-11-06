@@ -18,7 +18,7 @@ public unsafe class StrikingTreeHelper : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };

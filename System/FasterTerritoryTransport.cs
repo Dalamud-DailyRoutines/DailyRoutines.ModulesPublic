@@ -19,7 +19,7 @@ public unsafe class FasterTerritoryTransport : ModuleBase
         ModulesPair = ["NoUIFade"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth = true
     };

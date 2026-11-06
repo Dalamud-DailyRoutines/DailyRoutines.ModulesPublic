@@ -18,7 +18,7 @@ public unsafe class AutoVeryEasyQuestBattle : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
-    public override ModuleBehaviour Permission { get; } = new()
+    public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth          = true,
         AllDefaultEnabled = true

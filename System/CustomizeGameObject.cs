@@ -26,7 +26,7 @@ public unsafe class CustomizeGameObject : ModuleBase
         Author      = ["HSS"]
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private static readonly CompSig CharacterUpdateSig = 
         new("4C 8B DC 53 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 80 89");

@@ -24,7 +24,7 @@ public class CustomActionQueueTime : ModuleBase
         Category    = ModuleCategory.Action
     };
 
-    public override ModuleBehaviour Permission { get; } = new() { NeedAuth = true };
+    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private Config config = null!;
 
