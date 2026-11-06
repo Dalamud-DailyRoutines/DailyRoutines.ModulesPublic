@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Numerics;
 using DailyRoutines.Extensions;
 using Dalamud.Interface.Windowing;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
@@ -71,7 +73,11 @@ public partial class AutoMarksFinder
 
         ImGui.SameLine();
         if (DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex))
+        {
             smallCardMobIndex = 0;
+            StopAutoBroadcast();
+            selected = SelectedTrain;
+        }
 
         ImGui.SameLine();
         ImGui.TextDisabled("|");
@@ -95,7 +101,13 @@ public partial class AutoMarksFinder
 
             if (imported != null)
             {
+                foreach (var monster in imported.MonstersFound)
+                    monster.SetState(true);
+
                 config.Trains.Add(imported);
+
+                aliveMonitor?.InitializeTracks(imported);
+
                 config.Save(this);
             }
         }
@@ -220,7 +232,7 @@ public partial class AutoMarksFinder
             ImGui.SameLine();
             DrawAetheryteColumn(info);
 
-            DrawMonsterStatusToggle(info);
+            DrawMonsterStatusToggle(selected, info);
 
             ImGui.SameLine();
             DrawTeleportToMonsterZone(info);
@@ -236,7 +248,7 @@ public partial class AutoMarksFinder
             ImGui.SameLine();
             DrawAetheryteColumn(info);
 
-            DrawMonsterStatusToggle(info);
+            DrawMonsterStatusToggle(selected, info);
 
             ImGui.SameLine();
             DrawTeleportToMonsterZone(info);
@@ -258,7 +270,12 @@ public partial class AutoMarksFinder
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-SelectRoutes")}:");
 
         ImGui.SameLine();
-        DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex);
+        if (DrawTrainsSelectCombo(200f * GlobalUIScale, ref selectedTrainIndex))
+        {
+            smallCardMobIndex = 0;
+            StopAutoBroadcast();
+            selected = SelectedTrain;
+        }
 
         ImGui.SameLine();
 
@@ -300,9 +317,16 @@ public partial class AutoMarksFinder
 
                     ImGui.SameLine();
                     if (ImGui.Button(Lang.Get("AutoMarksFinder-SortAccordingToStartingPoint")))
+                    {
                         selected.Reorder();
+                        StopAutoBroadcast();
+                        config.Save(this);
+                    }
                 }
             }
+
+            ImGui.SameLine(0, 8f * GlobalUIScale);
+            DrawAutoBroadcastButton();
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
             ImGui.TextDisabled("|");
@@ -320,7 +344,13 @@ public partial class AutoMarksFinder
 
             if (imported != null)
             {
+                foreach (var monster in imported.MonstersFound)
+                    monster.SetState(true);
+
                 config.Trains.Add(imported);
+
+                aliveMonitor?.InitializeTracks(imported);
+
                 config.Save(this);
             }
         }
@@ -352,7 +382,12 @@ public partial class AutoMarksFinder
 
             ImGui.TableNextColumn();
             if (ImGuiOm.ButtonIcon($"删除{info}", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
+            {
                 selected.MonstersFound.Remove(info);
+                aliveMonitor?.RemoveTrack(selected, info);
+                StopAutoBroadcast();
+                config.Save(this);
+            }
 
             ImGui.SameLine();
 
@@ -366,7 +401,9 @@ public partial class AutoMarksFinder
                     {
                         if (ImGuiOm.ButtonIcon("上移", FontAwesomeIcon.ArrowUp, Lang.Get("MoveUp")))
                         {
-                            selected.MonstersFound.Swap(i, i - 1);
+                            selected.MonstersFound.Swap(selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
+                                                        selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i - 1])));
+                            StopAutoBroadcast();
                             config.Save(this);
                         }
                     }
@@ -377,7 +414,9 @@ public partial class AutoMarksFinder
                     {
                         if (ImGuiOm.ButtonIcon("下移", FontAwesomeIcon.ArrowDown, Lang.Get("MoveDown")))
                         {
-                            selected.MonstersFound.Swap(i, i + 1);
+                            selected.MonstersFound.Swap(selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
+                                                        selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i + 1])));
+                            StopAutoBroadcast();
                             config.Save(this);
                         }
                     }
@@ -388,7 +427,7 @@ public partial class AutoMarksFinder
             ImGui.TextUnformatted($"{i + 1:00}");
 
             ImGui.TableNextColumn();
-            DrawMonsterStatusToggle(info);
+            DrawMonsterStatusToggle(selected, info);
 
             ImGui.SameLine();
             using (ImRaii.PushColor
@@ -414,8 +453,118 @@ public partial class AutoMarksFinder
         }
     }
 
-    private static void DrawMonsterStatusToggle
+    private void DrawAutoBroadcastButton()
+    {
+        var label     = autoBroadcast.On ? Lang.Get("AutoMarksFinder-AutoBroadcastOn") : Lang.Get("AutoMarksFinder-AutoBroadcast");
+        var tooltip   = autoBroadcast.On ? Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStop") : Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStart");
+        var clicked   = false;
+
+        if (autoBroadcast.On)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.18f, 0.55f, 0.30f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.22f, 0.65f, 0.35f, 1f));
+            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.15f, 0.50f, 0.28f, 1f));
+            clicked = ImGuiOm.ButtonIcon(label, FontAwesomeIcon.Truck, tooltip);
+            ImGui.PopStyleColor(3);
+        }
+        else
+        {
+            clicked = ImGuiOm.ButtonIcon(label, FontAwesomeIcon.Truck, tooltip);
+        }
+
+        if (clicked)
+            ToggleAutoBroadcast();
+
+        if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
+            ImGui.OpenPopup("AutoBroadcastPopup");
+
+        using var popup = ImRaii.Popup("AutoBroadcastPopup");
+        if (!popup)
+            return;
+
+        ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastSettings"));
+
+        ImGui.Spacing();
+        ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartTime"));
+        ImGui.SetNextItemWidth(160f * GlobalUIScale);
+        ImGui.InputText("###AutoBroadcastDepartTime", ref autoBroadcast.DepartTimeInput, 16);
+
+        ImGui.Spacing();
+        ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastLocalTime",
+            new Dictionary<string, object> { ["timeText"] = DateTime.Now.ToString("HH:mm:ss") }));
+
+        if (autoBroadcast.TimeCalibrated)
+        {
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTime",
+                new Dictionary<string, object> { ["timeText"] = CalibratedNow.ToString("HH:mm:ss") }));
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastCalibOffset",
+                new Dictionary<string, object>
+                {
+                    ["offsetText"] = autoBroadcast.TimeCalibOffsetSec.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)
+                }));
+        }
+        else
+        {
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTimeUncalibrated"));
+        }
+
+        if (autoBroadcast.On &&
+            !autoBroadcast.Departed)
+        {
+            var remain = autoBroadcast.DepartAt - CalibratedNow;
+            if (remain > TimeSpan.Zero)
+                ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastRemain",
+                    new Dictionary<string, object> { ["remainingTimeText"] = remain.ToString("hh\\:mm\\:ss") }));
+            else
+                ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastDepartNow"));
+        }
+        else if (autoBroadcast.On &&
+                 autoBroadcast.Departed)
+        {
+            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastProgress",
+                new Dictionary<string, object> { ["pointIndex"] = autoBroadcast.Index + 1 }));
+        }
+
+        ImGui.Spacing();
+
+        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastCalibrate")))
+        {
+            var serverNow = Framework.GetServerTime()
+                                    .ToUTCDateTimeFromUnixSeconds()
+                                    .ToLocalTime();
+            autoBroadcast.TimeCalibOffsetSec = (DateTime.Now - serverNow).TotalSeconds;
+            autoBroadcast.TimeCalibrated     = true;
+
+            if (autoBroadcast.On &&
+                !autoBroadcast.Departed &&
+                TryParseDepartTime(out var parsed))
+                autoBroadcast.DepartAt = parsed;
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastApply")))
+        {
+            if (!TryParseDepartTime(out var parsed))
+            {
+                NotifyHelper.Instance().NotificationWarning
+                    (Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
+                return;
+            }
+
+            autoBroadcast.DepartAt = parsed;
+            NotifyHelper.Instance().NotificationInfo
+            (
+                Lang.Get("AutoMarksFinder-AutoBroadcastDepartTimeSet",
+                    new Dictionary<string, object> { ["timeText"] = autoBroadcast.DepartAt.ToString("HH:mm:ss") }),
+                Lang.Get("AutoMarksFinder-AutoBroadcast")
+            );
+            ImGui.CloseCurrentPopup();
+        }
+    }
+
+    private void DrawMonsterStatusToggle
     (
+        NotoriousMonsterList? train,
         NotoriousMonsterFound? info
     )
     {
@@ -425,9 +574,21 @@ public partial class AutoMarksFinder
         using (ImRaii.Group())
         {
             if (ImGuiOm.ButtonIcon("切换存活状态", FontAwesomeIcon.HeartCircleBolt, Lang.Get("AutoMarksFinder-SwitchMarkAlive")))
-                info.SetState(info.IsAlive ^ true);
+            {
+                var key = info;
+                var isAlive = !info.IsAlive;
+
+                if (train != null)
+                {
+                    aliveMonitor?.SetManualAlive(train, key, isAlive);
+                    key.SetState(isAlive);
+                }
+
+                config.Save(this);
+            }
         }
     }
+
 
     private void DrawTeleportToMonsterZone
     (
@@ -651,6 +812,36 @@ public partial class AutoMarksFinder
         }
 
         ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoBroadcastStart")}:");
+
+        ImGui.SameLine();
+        ImGui.InputText("###RelayAutoBroadcastStartMacro", ref config.AutoBroadcastStartMacro, 255);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            config.Save(this);
+
+        ImGui.SameLine();
+
+        if (ImGuiOm.ButtonIcon("PreviewAutoBroadcastStart", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
+        {
+            ExecuteBroadcastMacro(config.AutoBroadcastStartMacro);
+        }
+
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayAutoBroadcastEnd")}:");
+
+        ImGui.SameLine();
+        ImGui.InputText("###RelayAutoBroadcastEndMacro", ref config.AutoBroadcastEndMacro, 255);
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            config.Save(this);
+
+        ImGui.SameLine();
+
+        if (ImGuiOm.ButtonIcon("PreviewAutoBroadcastEnd", FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
+        {
+            ExecuteBroadcastMacro(config.AutoBroadcastEndMacro);
+        }
+
+        ImGui.AlignTextToFramePadding();
         ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoMarksFinder-RelayChatTypes")}:");
 
         ImGui.SameLine();
@@ -725,12 +916,7 @@ public partial class AutoMarksFinder
             agentMap->SetFlagMapMarker(info.ZoneID, info.GetMapID(), info.Position);
             NotifyHelper.Instance().NotificationInfo
             (
-                Lang.Get
-                (
-                    "AutoMarksFinder-SetFlagMapMarkerSucceed",
-                    info.GetZoneName(),
-                    $"{info.Position:F0}"
-                ),
+                Lang.Get("AutoMarksFinder-SetFlagMapMarkerSucceed"),
                 Lang.Get("AutoMarksFinderTitle")
             );
         }
@@ -839,7 +1025,6 @@ public partial class AutoMarksFinder
                         }
                         catch
                         {
-                            // ignored
                         }
                     }
                 ).ContinueWith(_ => spawnPointUpdateTask = null);
@@ -1037,9 +1222,18 @@ public partial class AutoMarksFinder
 
                 if (ImGui.Button(Lang.Get("Save")))
                 {
-                    var result = scanner.FoundOnes.SelectMany(x => x.Value).Distinct().ToList();
-                    config.Trains[selectedTrainIndex].MonstersFound.AddRange(result);
-                    config.Save(this);
+                    var target   = config.Trains[selectedTrainIndex];
+                    var existing = target.MonstersFound.ToHashSet();
+                    var found    = scanner.FoundOnes.SelectMany(x => x.Value).Distinct();
+                    var newOnes  = found.Where(x => !existing.Contains(x)).Select(x => x.Copy()).ToList();
+
+                    if (newOnes.Count > 0)
+                    {
+                        target.MonstersFound.AddRange(newOnes);
+                        StopAutoBroadcast();
+                        config.Save(this);
+                        aliveMonitor?.RefreshTracking();
+                    }
 
                     NotifyHelper.Instance().NotificationInfo(Lang.Get("SavedSuccessfully"));
                 }

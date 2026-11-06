@@ -35,6 +35,7 @@ public partial class AutoMarksFinder : ModuleBase
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
     private Config                   config = null!;
+    private MonsterAliveMonitor?     aliveMonitor;
     private CustomOverlay?           overlaySmallCard;
     private NotoriousMonsterScanner? scanner;
     private int                      smallCardMobIndex;
@@ -54,27 +55,38 @@ public partial class AutoMarksFinder : ModuleBase
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoMarksFinder-HelpMessage") });
 
         WindowManager.Instance().PostDraw += DrawScanRoutePreview;
+
+        aliveMonitor = new(this);
+        FrameworkManager.Instance().Reg(UpdateAutoBroadcast, AUTO_BROADCAST_TICK_MS);
     }
 
     protected override void Uninit()
     {
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
 
-        if (config != null)
-            config.Save(this);
+        FrameworkManager.Instance().Unreg(UpdateAutoBroadcast);
+        aliveMonitor?.Dispose();
+        aliveMonitor = null;
+
+        config.Save(this);
 
         ClearScanner();
 
-        overlaySmallCard?.Dispose();
-        overlaySmallCard = null;
+        if (overlaySmallCard != null)
+        {
+            WindowManager.Instance().RemoveWindow(overlaySmallCard);
+            overlaySmallCard.Dispose();
+            overlaySmallCard = null;
+        }
 
-        WindowManager.Instance().RemoveWindow(overlaySmallCard);
         CommandManager.Instance().RemoveCommand(COMMAND);
 
-        selectedTrainIndex  = 0;
-        smallCardMobIndex   = 0;
-        newListNameInput    = string.Empty;
-        startAetheryteInput = string.Empty;
+        selectedTrainIndex            = 0;
+        smallCardMobIndex             = 0;
+        newListNameInput              = string.Empty;
+        startAetheryteInput           = string.Empty;
+        autoBroadcast.DepartTimeInput = string.Empty;
+        StopAutoBroadcast();
     }
 
     private void OnCommand
@@ -131,8 +143,13 @@ public partial class AutoMarksFinder : ModuleBase
         {
             if (!string.IsNullOrWhiteSpace(newListNameInput))
             {
+                var selectedTrain = selected;
                 config.Trains.Add(new(newListNameInput));
                 config.Trains = [.. config.Trains.OrderByDescending(x => x.GeneratedTime)];
+                if (selectedTrain != null)
+                    selectedIndex = config.Trains.FindIndex(x => ReferenceEquals(x, selectedTrain));
+                else
+                    selectedIndex = -1;
                 config.Save(this);
             }
         }
@@ -149,6 +166,7 @@ public partial class AutoMarksFinder : ModuleBase
             {
                 selectedIndex = i;
                 changed       = true;
+                selected      = train;
             }
 
             ImGuiOm.TooltipHover(Lang.Get("AutoMarksFinder-CreationTime", train.GeneratedDateTime));
@@ -158,9 +176,28 @@ public partial class AutoMarksFinder : ModuleBase
             if (context)
             {
                 if (ImGui.MenuItem(Lang.Get("Delete")))
+                {
                     config.Trains.RemoveAt(i);
+                    aliveMonitor?.RemoveTrain(train);
+                    if (config.Trains.Count == 0)
+                        selectedIndex = -1;
+                    else if (selectedIndex > i)
+                        selectedIndex--;
+                    else if (ReferenceEquals(selected, train))
+                    {
+                        selectedIndex = Math.Min(i, config.Trains.Count - 1);
+                        StopAutoBroadcast();
+                    }
+
+                    config.Save(this);
+                    aliveMonitor?.RefreshTracking();
+                    return true;
+                }
             }
         }
+
+        if (changed)
+            aliveMonitor?.RefreshTracking();
 
         return changed;
     }
@@ -315,8 +352,10 @@ public partial class AutoMarksFinder : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public int             DelayMS       = 5000;
-        public HashSet<string> RelayCommands = [];
+        public string          AutoBroadcastEndMacro   = string.Empty;
+        public string          AutoBroadcastStartMacro = string.Empty;
+        public int             DelayMS                 = 5000;
+        public HashSet<string> RelayCommands           = [];
 
         public string RelayMacroPattern = "检测到恶名精英 {1} 于 {0} {2}";
 

@@ -104,6 +104,17 @@ public partial class AutoMarksFinder
             bool isAlive
         ) => IsAlive = isAlive;
 
+        public NotoriousMonsterFound Copy() =>
+            new()
+            {
+                DataID   = DataID,
+                Position = Position,
+                ZoneID   = ZoneID,
+                Instance = Instance,
+                Rank     = Rank,
+                IsAlive  = IsAlive
+            };
+
         public override string ToString() => $"NotoriousMonsterFound_{DataID}_{Position}";
 
         public override bool Equals
@@ -288,5 +299,28 @@ public partial class AutoMarksFinder
         public Vector3          TargetPosition { get; set; }
         public AetheryteRecord? Aetheryte      { get; set; }
         public float            EstimatedTime  { get; set; }
+    }
+
+    private sealed class AliveTrack
+    {
+        public bool ManualAlive { get; set; }
+    }
+
+    private sealed class AutoBroadcastSession
+    {
+        public bool                  On;
+        public bool                  Departed;
+        public int                   Index;
+        public NotoriousMonsterList? Train;
+        public bool                  FirstPointPending;
+        public long                  FirstPointAt;
+        public bool                  NextPending;
+        public long                  NextAt;
+        public bool                  EndPending;
+        public long                  EndAt;
+        public string                DepartTimeInput = string.Empty;
+        public DateTime              DepartAt;
+        public double                TimeCalibOffsetSec;
+        public bool                  TimeCalibrated;
     }
 }
