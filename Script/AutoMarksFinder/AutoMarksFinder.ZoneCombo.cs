@@ -57,7 +57,7 @@ public partial class AutoMarksFinder
             using var group   = ImRaii.PushId($"Version_{groupID}");
             var       changed = ImGui.Checkbox("###Version", ref selected);
             ImGui.TableNextColumn();
-            ImGui.TableHeader($"{groupID + 2}.0 ({selectedCount}/{groupZones.Length})");
+            ImGui.TableHeader($"{LuminaWrapper.GetExVersionName(groupID)} ({selectedCount}/{groupZones.Length})");
             changed |= ImGui.IsItemClicked();
             ImGui.TableNextColumn();
             ImGui.TableHeader($"{groupZones.Sum(zone => config.ScanPoints[zone].Count)}");

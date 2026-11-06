@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Dalamud;
+using OmenTools.ImGuiOm.Widgets.MapRenderer;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using Action = System.Action;
@@ -22,6 +23,11 @@ public partial class AutoMarksFinder
     private ScanZoneCombo? scanZoneCombo;
     private int            scanResultTrainIndex = -1;
     private bool           confirmClearScanResults;
+    private readonly ImGuiMapRenderer scanMapRenderer = new()
+    {
+        EnableResizeGrip     = false,
+        EnableDefaultMarkers = true
+    };
 
     protected override void ConfigUI()
     {
@@ -648,6 +654,124 @@ public partial class AutoMarksFinder
         DrawScanResult();
     }
 
+    private void DrawScanRoutePreview()
+    {
+        if (scanner is not { IsRunning: true, ScanPoints.Count: > 0 } ||
+            !LuminaGetter.TryGetRow<TerritoryType>(scanner.ZoneID, out var zone))
+            return;
+
+        ImGui.SetNextWindowSize(ScaledVector2(400,            470), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSizeConstraints(ScaledVector2(320, 380), new(float.MaxValue));
+        var visible = ImGui.Begin
+        (
+            Lang.Get("AutoMarksFinder-ScanPreview") + "###AutoMarksFinderScanPreview",
+            ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoFocusOnAppearing
+        );
+
+        if (visible)
+        {
+            scanMapRenderer.SetMap(zone.Map.RowId);
+            scanMapRenderer.ClearMarkers();
+
+            for (var index = 0; index < scanner.ScanPoints.Count; index++)
+            {
+                var point   = scanner.ScanPoints[index];
+                var pending = scanner.PendingPoints.Contains(point);
+                scanMapRenderer.AddMarker
+                (
+                    new()
+                    {
+                        ID       = $"Point_{index}",
+                        Position = point,
+                        Size     = ScaledVector2(7),
+                        Color = ImGui.ColorConvertFloat4ToU32
+                        (
+                            pending ?
+                                KnownColor.Orange.ToVector4() :
+                                KnownColor.GreenYellow.ToVector4()
+                        ),
+                        ShowLabel   = false,
+                        TooltipText = $"#{index + 1} {point:F0}"
+                    }
+                );
+            }
+
+            if (scanner.FoundOnes.TryGetValue(scanner.ZoneID, out var found))
+            {
+                foreach (var monster in found.Where(monster => monster.Instance == scanner.Instance))
+                {
+                    scanMapRenderer.AddMarker
+                    (
+                        new()
+                        {
+                            ID          = $"Monster_{monster.DataID}",
+                            Position    = monster.Position,
+                            Size        = ScaledVector2(12),
+                            Color       = ImGui.ColorConvertFloat4ToU32(KnownColor.Red.ToVector4()),
+                            ShowLabel   = false,
+                            TooltipText = $"{monster.GetBNPCName()} {monster.Position:F0}"
+                        }
+                    );
+                }
+            }
+
+            scanMapRenderer.Draw(ImGui.GetContentRegionAvail());
+        }
+
+        ImGui.End();
+    }
+
+    private void DrawScanMapCoverage(ImGuiMapRenderer renderer, ImDrawListPtr drawList)
+    {
+        if (scanner == null)
+            return;
+
+        var coverageColor = KnownColor.GreenYellow.ToVector4();
+        coverageColor.W = 0.12f;
+
+        foreach (var position in scanner.ObservedPositions)
+        {
+            var center = renderer.WorldToScreen(position);
+            var radius = Vector2.Distance(center, renderer.WorldToScreen(position + new Vector3(NotoriousMonsterScanner.DETECTION_RADIUS, 0, 0)));
+            drawList.AddCircleFilled(center, radius, ImGui.ColorConvertFloat4ToU32(coverageColor));
+            drawList.AddCircle(center, radius, ImGui.ColorConvertFloat4ToU32(KnownColor.GreenYellow.ToVector4()));
+        }
+
+        for (var index = 1; index < scanner.ActivePath.Count; index++)
+        {
+            drawList.AddLine
+            (
+                renderer.WorldToScreen(scanner.ActivePath[index - 1]),
+                renderer.WorldToScreen(scanner.ActivePath[index]),
+                ImGui.ColorConvertFloat4ToU32(KnownColor.LightSkyBlue.ToVector4()),
+                2 * GlobalUIScale
+            );
+        }
+    }
+
+    private void DrawScanMapForeground(ImGuiMapRenderer renderer, ImDrawListPtr drawList)
+    {
+        if (scanner == null)
+            return;
+
+        if (scanner.NavigationTarget is { } target)
+        {
+            var targetPosition = renderer.WorldToScreen(target);
+            drawList.AddCircle(targetPosition, 10 * GlobalUIScale, ImGui.ColorConvertFloat4ToU32(KnownColor.Red.ToVector4()), 0, 2 * GlobalUIScale);
+        }
+
+        if (GameState.TerritoryType          != scanner.ZoneID   ||
+            InstancesManager.CurrentInstance != scanner.Instance ||
+            LocalPlayerState.Object is not { } player)
+            return;
+
+        var position = renderer.WorldToScreen(player.Position);
+        var radius   = Vector2.Distance(position, renderer.WorldToScreen(player.Position + new Vector3(NotoriousMonsterScanner.DETECTION_RADIUS, 0, 0)));
+        var color    = KnownColor.LightSkyBlue.ToVector4();
+        drawList.AddCircle(position, radius, ImGui.ColorConvertFloat4ToU32(color), 0, 2 * GlobalUIScale);
+        drawList.AddCircleFilled(position, 5                                            * GlobalUIScale, ImGui.ColorConvertFloat4ToU32(color));
+    }
+
     private void DrawTabItemSettings()
     {
         using var tabSettings = ImRaii.TabItem(Lang.Get("Settings"));
@@ -1023,7 +1147,7 @@ public partial class AutoMarksFinder
 
         foreach (var info in scanner.FoundOnes)
         {
-            if (ImGui.CollapsingHeader($"{LuminaGetter.GetRow<TerritoryType>(info.Key)?.ExtractPlaceName()} ({info.Key})"))
+            if (ImGui.CollapsingHeader($"{LuminaGetter.GetRow<TerritoryType>(info.Key)?.ExtractPlaceName()} ({info.Value.Count})###ScanResults_{info.Key}"))
             {
                 foreach (var monster in info.Value)
                 {

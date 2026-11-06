@@ -69,10 +69,14 @@ public partial class AutoMarksFinder : ModuleBase
         );
         OnActorControlHook.Enable();
         FrameworkManager.Instance().Reg(UpdateAutoBroadcast, AUTO_BROADCAST_TICK_MS);
+        scanMapRenderer.OnCustomMapDraw        =  DrawScanMapCoverage;
+        scanMapRenderer.OnCustomForegroundDraw =  DrawScanMapForeground;
+        WindowManager.Instance().PostDraw      += DrawScanRoutePreview;
     }
 
     protected override void Uninit()
     {
+        WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
         spawnPointUpdateCancellation?.Cancel();
         spawnPointUpdateCancellation?.Dispose();
         spawnPointUpdateCancellation = null;
@@ -132,7 +136,7 @@ public partial class AutoMarksFinder : ModuleBase
                            config.Trains[selectedIndex];
 
         ImGui.SetNextItemWidth(width);
-        ImGui.SetNextWindowSizeConstraints(ScaledVector2(760, 360), ScaledVector2(1100, 640));
+        ImGui.SetNextWindowSizeConstraints(ScaledVector2(760, 400), ScaledVector2(760, 400));
         using var combo = ImRaii.Combo
         (
             "###TrainsSelectCombo",

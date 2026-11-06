@@ -9,6 +9,7 @@ using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game.AetheryteRecord;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
@@ -35,13 +36,13 @@ public partial class AutoMarksFinder
             SwitchingInstance
         }
 
-        private readonly Dictionary<uint, List<Vector3>>     zones            = [];
-        private readonly HashSet<(uint Zone, uint Instance)> completedAreas   = [];
-        private readonly List<Vector3>                       pendingPoints    = [];
-        private readonly List<Vector3>                       candidates       = [];
-        private readonly List<Vector3>                       failedCandidates = [];
-        private readonly List<Vector3>                       targetPoints     = [];
-        private readonly Queue<Vector3>                      retryTargets     = [];
+        private readonly Dictionary<uint, List<Vector3>>     zones             = [];
+        private readonly HashSet<(uint Zone, uint Instance)> completedAreas    = [];
+        private readonly List<Vector3>                       candidates        = [];
+        private readonly List<Vector3>                       failedCandidates  = [];
+        private readonly List<Vector3>                       targetPoints      = [];
+        private readonly Queue<Vector3>                      retryTargets      = [];
+        private readonly List<Vector3>                       observedPositions = [];
         private          CancellationTokenSource?            pathCancellation;
         private          Task<List<Vector3>>?                pathTask;
         private          ScanState                           state;
@@ -52,12 +53,29 @@ public partial class AutoMarksFinder
         private          Vector3                             target;
         private          Vector3                             anchor;
         private          Vector3                             observationPosition;
-        private          uint                                currentZone;
-        private          uint                                currentInstance;
+        private          Vector3                             navigationTarget;
+        private          float                               flightHeight;
         private          uint?                               originalAroundRangeMode;
         private          bool                                disposed;
 
         public bool IsRunning => state != ScanState.Stopped;
+
+        public uint ZoneID { get; private set; }
+
+        public uint Instance { get; private set; }
+
+        public List<Vector3> ScanPoints { get; private set; } = [];
+
+        public List<Vector3> PendingPoints { get; } = [];
+
+        public IReadOnlyList<Vector3> ObservedPositions => observedPositions;
+
+        public List<Vector3> ActivePath { get; } = [];
+
+        public Vector3? NavigationTarget =>
+            state is ScanState.Pathfinding or ScanState.Moving ?
+                navigationTarget :
+                null;
 
         public Dictionary<uint, HashSet<NotoriousMonsterFound>> FoundOnes { get; } = [];
 
@@ -185,8 +203,8 @@ public partial class AutoMarksFinder
                     if (module.TaskHelper.IsBusy)
                         return;
 
-                    if (GameState.TerritoryType          != currentZone ||
-                        InstancesManager.CurrentInstance != currentInstance)
+                    if (GameState.TerritoryType          != ZoneID ||
+                        InstancesManager.CurrentInstance != Instance)
                     {
                         StopWithWarning("AutoMarksFinder-ScanInterrupted");
                         return;
@@ -208,8 +226,8 @@ public partial class AutoMarksFinder
                     return;
 
                 if (state != ScanState.Preparing &&
-                    (GameState.TerritoryType          != currentZone ||
-                     InstancesManager.CurrentInstance != currentInstance))
+                    (GameState.TerritoryType          != ZoneID ||
+                     InstancesManager.CurrentInstance != Instance))
                 {
                     StopWithWarning("AutoMarksFinder-ScanInterrupted");
                     return;
@@ -253,17 +271,21 @@ public partial class AutoMarksFinder
 
         private void PrepareArea()
         {
-            currentZone     = GameState.TerritoryType;
-            currentInstance = InstancesManager.CurrentInstance;
+            ZoneID   = GameState.TerritoryType;
+            Instance = InstancesManager.CurrentInstance;
 
-            if (!zones.TryGetValue(currentZone, out var points))
+            if (!zones.TryGetValue(ZoneID, out var points))
             {
                 SwitchZone();
                 return;
             }
 
-            pendingPoints.Clear();
-            pendingPoints.AddRange(points);
+            PendingPoints.Clear();
+            PendingPoints.AddRange(points);
+            ScanPoints   = points;
+            flightHeight = points.Max(point => point.Y) + FLIGHT_HEIGHT;
+            observedPositions.Clear();
+            ActivePath.Clear();
             failedCandidates.Clear();
             retryTargets.Clear();
             BuildCandidates();
@@ -273,7 +295,7 @@ public partial class AutoMarksFinder
 
         private void SelectPoint()
         {
-            if (pendingPoints.Count == 0)
+            if (PendingPoints.Count == 0)
             {
                 CompleteArea();
                 return;
@@ -289,7 +311,7 @@ public partial class AutoMarksFinder
                 if (failedCandidates.Any(failed => DistanceSquared(failed, candidate) < 1))
                     continue;
 
-                var coveredPoints = pendingPoints.Where(point => DistanceSquared(point, candidate) <= PLANNING_RADIUS * PLANNING_RADIUS).ToList();
+                var coveredPoints = PendingPoints.Where(point => DistanceSquared(point, candidate) <= PLANNING_RADIUS * PLANNING_RADIUS).ToList();
                 var coverage      = coveredPoints.Count;
                 if (coverage == 0 ||
                     coverage < bestCoverage)
@@ -297,7 +319,7 @@ public partial class AutoMarksFinder
 
                 var margin      = PLANNING_RADIUS - coveredPoints.Max(point => MathF.Sqrt(DistanceSquared(point, candidate)));
                 var cost        = MathF.Max(0, MathF.Sqrt(DistanceSquared(position,                              candidate)) - margin) / MOUNT_SPEED;
-                var aetheryte   = AetheryteRecordManager.Instance().GetNearestAetheryte(currentZone, candidate);
+                var aetheryte   = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, candidate);
                 var useTeleport = false;
 
                 if (aetheryte != null)
@@ -315,9 +337,13 @@ public partial class AutoMarksFinder
                     cost     >= bestCost)
                     continue;
 
+                var destination = candidate with { Y = MathF.Max(flightHeight, position.Y) };
+                if (RaycastHelper.IsInsideCollision(destination))
+                    continue;
+
                 bestCoverage = coverage;
                 bestCost     = cost;
-                target       = candidate;
+                target       = destination;
                 teleport = useTeleport ?
                                aetheryte :
                                null;
@@ -329,9 +355,9 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            anchor = pendingPoints.MinBy(point => DistanceSquared(point, target));
+            anchor = PendingPoints.MinBy(point => DistanceSquared(point, target));
             targetPoints.Clear();
-            targetPoints.AddRange(pendingPoints.Where(point => DistanceSquared(point, target) <= PLANNING_RADIUS * PLANNING_RADIUS));
+            targetPoints.AddRange(PendingPoints.Where(point => DistanceSquared(point, target) <= PLANNING_RADIUS * PLANNING_RADIUS));
 
             if (teleport != null)
             {
@@ -368,6 +394,12 @@ public partial class AutoMarksFinder
         {
             if (ICondition.Instance()[ConditionFlag.Mounted])
             {
+                if (!Control.CanFly)
+                {
+                    StopWithWarning("AutoMarksFinder-FlightUnavailable");
+                    return;
+                }
+
                 StartPathfinding();
                 return;
             }
@@ -392,13 +424,13 @@ public partial class AutoMarksFinder
 
             while (retryTargets.TryDequeue(out var candidate))
             {
-                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, MESH_SEARCH_RADIUS, MESH_SEARCH_HEIGHT) is not { } meshPoint ||
-                    DistanceSquared(meshPoint, anchor) > PLANNING_RADIUS * PLANNING_RADIUS)
+                candidate.Y = MathF.Max(flightHeight, LocalPlayerState.Object.Position.Y);
+                if (RaycastHelper.IsInsideCollision(candidate))
                     continue;
 
-                var fly = ICondition.Instance()[ConditionFlag.Mounted] && Control.CanFly;
+                navigationTarget = candidate;
                 pathCancellation = new();
-                pathTask         = vnavmeshIPC.PathfindCancelable(LocalPlayerState.Object.Position, meshPoint, fly, pathCancellation.Token);
+                pathTask         = vnavmeshIPC.PathfindCancelable(LocalPlayerState.Object.Position, candidate, true, pathCancellation.Token);
                 ChangeState(ScanState.Pathfinding);
                 return;
             }
@@ -431,22 +463,24 @@ public partial class AutoMarksFinder
 
             var path = pathTask.Result;
 
-            if (path.Count                        == 0 ||
-                DistanceSquared(path[^1], anchor) > PLANNING_RADIUS * PLANNING_RADIUS)
+            if (path.Count                        == 0                                ||
+                DistanceSquared(path[^1], anchor) > PLANNING_RADIUS * PLANNING_RADIUS ||
+                RaycastHelper.IsInsideCollision(path[^1]))
             {
                 StartPathfinding();
                 return;
             }
 
             CancelPath();
-            var endIndex = path.FindIndex(point => DistanceSquared(point, target) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS);
+            var endIndex = path.FindIndex(point => DistanceSquared(point, navigationTarget) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS);
             if (endIndex >= 0)
                 path.RemoveRange(endIndex + 1, path.Count - endIndex - 1);
 
-            path[0] = LocalPlayerState.Object.Position;
+            ActivePath.Add(LocalPlayerState.Object.Position);
+            ActivePath.AddRange(path);
             vnavmeshIPC.SetPathfindTolerance(2f);
-            vnavmeshIPC.PathfindWithPath(path, ICondition.Instance()[ConditionFlag.Mounted] && Control.CanFly);
-            closestDistance = DistanceSquared(LocalPlayerState.Object.Position, target);
+            vnavmeshIPC.PathfindWithPath(path, true);
+            closestDistance = DistanceSquared(LocalPlayerState.Object.Position, navigationTarget);
             lastProgressAt  = Environment.TickCount64;
             ChangeState(ScanState.Moving);
         }
@@ -454,7 +488,7 @@ public partial class AutoMarksFinder
         private void UpdateMovement()
         {
             var position = LocalPlayerState.Object.Position;
-            var distance = DistanceSquared(position, target);
+            var distance = DistanceSquared(position, navigationTarget);
 
             if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS ||
                 targetPoints.All(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
@@ -476,7 +510,7 @@ public partial class AutoMarksFinder
             {
                 vnavmeshIPC.StopPathfind();
 
-                if (pendingPoints.Any(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
+                if (PendingPoints.Any(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
                 {
                     observationPosition = position;
                     ChangeState(ScanState.Observing);
@@ -506,13 +540,15 @@ public partial class AutoMarksFinder
                     ObserveMonster(obj.DataID, obj.Position);
             }
 
-            pendingPoints.RemoveAll(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS);
+            PendingPoints.RemoveAll(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS);
+            observedPositions.Add(position);
+            ActivePath.Clear();
             ChangeState(ScanState.SelectingPoint);
         }
 
         private bool HasEnoughMonsters() =>
-            FoundOnes.TryGetValue(currentZone, out var found) &&
-            found.Count(monster => monster.Instance == currentInstance) >=
+            FoundOnes.TryGetValue(ZoneID, out var found) &&
+            found.Count(monster => monster.Instance == Instance) >=
             (GameState.TerritoryTypeData.ExVersion.RowId == 0 ?
                  1 :
                  2);
@@ -521,19 +557,19 @@ public partial class AutoMarksFinder
         {
             CancelPath();
             vnavmeshIPC.StopPathfind();
-            completedAreas.Add((currentZone, currentInstance));
+            completedAreas.Add((ZoneID, Instance));
             var instanceCount = InstancesManager.IsInstancedArea ?
-                                    InstancesManager.Instance().GetInstancesCount(currentZone) :
+                                    InstancesManager.Instance().GetInstancesCount(ZoneID) :
                                     0;
 
             for (uint instance = 1; instance <= instanceCount; instance++)
             {
-                if (completedAreas.Contains((currentZone, instance)))
+                if (completedAreas.Contains((ZoneID, instance)))
                     continue;
 
-                currentInstance = instance;
+                Instance = instance;
                 module.TaskHelper.Enqueue(IsAbleToTeleport, "等待切换分线");
-                var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(currentZone, Vector3.Zero);
+                var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, Vector3.Zero);
 
                 if (aetheryte == null)
                 {
@@ -553,18 +589,18 @@ public partial class AutoMarksFinder
                     );
                 }
 
-                module.TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage($"/pdr insc {currentInstance}"), "切换分线");
+                module.TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage($"/pdr insc {Instance}"), "切换分线");
                 module.TaskHelper.Enqueue
                 (
                     () => UIModule.IsScreenReady() &&
-                          InstancesManager.CurrentInstance == currentInstance,
+                          InstancesManager.CurrentInstance == Instance,
                     "等待分线切换完成"
                 );
                 ChangeState(ScanState.SwitchingInstance);
                 return;
             }
 
-            zones.Remove(currentZone);
+            zones.Remove(ZoneID);
             SwitchZone();
         }
 
@@ -576,30 +612,33 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            currentZone = zones.Keys.Min();
-            module.TaskHelper.Enqueue(IsAbleToTeleport,                                                  "等待区域传送");
-            module.TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(currentZone), "传送至扫描区域");
+            ZoneID     = zones.Keys.Min();
+            ScanPoints = [];
+            PendingPoints.Clear();
+            observedPositions.Clear();
+            module.TaskHelper.Enqueue(IsAbleToTeleport,                                             "等待区域传送");
+            module.TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(ZoneID), "传送至扫描区域");
             module.TaskHelper.DelayNext(500, "等待传送开始");
             module.TaskHelper.Enqueue
             (
-                () => GameState.TerritoryType == currentZone &&
+                () => GameState.TerritoryType == ZoneID &&
                       UIModule.IsScreenReady(),
                 "等待区域传送完成"
             );
-            module.TaskHelper.Enqueue(() => currentInstance = InstancesManager.CurrentInstance, "记录当前分线");
+            module.TaskHelper.Enqueue(() => Instance = InstancesManager.CurrentInstance, "记录当前分线");
             ChangeState(ScanState.SwitchingZone);
         }
 
         private void BuildCandidates()
         {
             candidates.Clear();
-            candidates.AddRange(pendingPoints);
+            candidates.AddRange(PendingPoints);
 
-            for (var first = 0; first < pendingPoints.Count; first++)
-            for (var second = first + 1; second < pendingPoints.Count; second++)
+            for (var first = 0; first < PendingPoints.Count; first++)
+            for (var second = first + 1; second < PendingPoints.Count; second++)
             {
-                var start    = pendingPoints[first];
-                var end      = pendingPoints[second];
+                var start    = PendingPoints[first];
+                var end      = PendingPoints[second];
                 var distance = DistanceSquared(start, end);
                 if (distance is <= 0 or > 4 * PLANNING_RADIUS * PLANNING_RADIUS)
                     continue;
@@ -620,6 +659,7 @@ public partial class AutoMarksFinder
 
         private void CancelPath()
         {
+            ActivePath.Clear();
             pathCancellation?.Cancel();
             pathCancellation?.Dispose();
             pathCancellation = null;
@@ -648,14 +688,13 @@ public partial class AutoMarksFinder
 
         #region 常量
 
-        private const float DETECTION_RADIUS     = 300;
+        public const  float DETECTION_RADIUS     = 300;
         private const float PLANNING_RADIUS      = 280;
         private const float ARRIVAL_RADIUS       = 20;
         private const float MOUNT_SPEED          = 12;
         private const float TELEPORT_DURATION    = 10;
         private const float AETHERYTE_RADIUS     = 60;
-        private const float MESH_SEARCH_RADIUS   = 30;
-        private const float MESH_SEARCH_HEIGHT   = 10000;
+        private const float FLIGHT_HEIGHT        = 100;
         private const float RETRY_DISTANCE       = 80;
         private const float PROGRESS_DISTANCE    = 2;
         private const int   RETRY_RINGS          = 2;
