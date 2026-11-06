@@ -30,6 +30,8 @@ public partial class UnifiedGlamourManager : ModuleBase
         config = Config.Load(this) ?? new();
         NormalizeConfig();
 
+        presetEditor = new(this);
+
         selectedPreset = config.Presets
                                .OrderByDescending(x => x.CreatedAt)
                                .FirstOrDefault();
@@ -79,7 +81,10 @@ public partial class UnifiedGlamourManager : ModuleBase
     {
         GameState.Instance().Login  -= OnLogin;
         GameState.Instance().Logout -= ResetStoredItemsSession;
+
         ResetStoredItemsSession();
+        presetEditor.Dispose();
+        blockedSlotsCache.Clear();
 
         if (openOverlayPlateTabPayload != null)
             LinkPayloadManager.Instance().Unreg(openOverlayPlateTabPayload.CommandId);
