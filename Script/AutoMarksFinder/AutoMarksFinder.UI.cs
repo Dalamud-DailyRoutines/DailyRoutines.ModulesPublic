@@ -1032,14 +1032,6 @@ public partial class AutoMarksFinder
 
     private void DrawScannerSetting()
     {
-        using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-PointDelayMS")))
-        {
-            ImGui.SetNextItemWidth(150f * GlobalUIScale);
-            ImGui.InputInt("###AutoMarksFinder-PointDelayMS", ref config.DelayMS, 500);
-            if (ImGui.IsItemDeactivatedAfterEdit())
-                config.Save(this);
-        }
-
         using var heading = ImRaii.Heading1(Lang.Get("AutoMarksFinder-TargetZones"));
         var data = config.ScanPoints
                          .Select

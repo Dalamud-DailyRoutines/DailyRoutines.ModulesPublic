@@ -212,7 +212,6 @@ public partial class AutoMarksFinder : ModuleBase
 
     private class Config : ModuleConfig
     {
-        public int          DelayMS       = 5000;
         public List<string> RelayCommands = [];
 
         public string AutoRelayBeforeStartPattern = string.Empty;

@@ -235,9 +235,6 @@ public partial class AutoMarksFinder
                 case PathDecision.PathType.DirectNav:
                     EnqueueDirectRoute(decision);
                     break;
-                case PathDecision.PathType.SmartTP:
-                    EnqueueSmartTPRoute(decision);
-                    break;
             }
 
             currentState = ScanState.Scanning;
@@ -646,20 +643,6 @@ public partial class AutoMarksFinder
 
             EnqueueMount(module.TaskHelper);
             EnqueuePathfind(finalPos);
-        }
-
-        private void EnqueueSmartTPRoute
-        (
-            PathDecision decision
-        )
-        {
-            EnqueueMount(module.TaskHelper);
-            module.TaskHelper.Enqueue
-            (
-                () => MovementManager.Instance().TPSmart_InZone(decision.TargetPosition),
-                $"TP 至: {decision.TargetPosition}"
-            );
-            module.TaskHelper.DelayNext(module.config.DelayMS);
         }
 
         private void EnqueuePathfind
