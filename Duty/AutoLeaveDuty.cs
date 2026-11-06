@@ -3,7 +3,6 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.DutyState;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -11,7 +10,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -88,22 +86,21 @@ public class AutoLeaveDuty : ModuleBase
         ImGui.NewLine();
 
         // 延迟
-        if (ImGui.InputInt($"{Lang.Get("Delay")} (ms)###DelayInput", ref config.Delay))
+        if (ImGui.InputUInt($"{Lang.Get("AutoLeaveDuty-Delay")}###DelayInput", ref config.Delay))
             config.Delay = Math.Max(0, config.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
+        ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-Delay-Help"));
+        
+        ImGui.Spacing();
 
         // 不退高难
         if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref config.NoLeaveHighEndDuties))
             config.Save(this);
-        ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties-Help"));
-
-        // 强制退本
-        if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-ForceToLeave")}###ForceToLeave", ref config.ForceToLeave))
-            config.Save(this);
-
-        ImGui.NewLine();
-
+        ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties-Help"));
+        
+        ImGui.Spacing();
+        
         // 黑名单副本
         {
             if (contentSelectCombo.DrawCheckbox())
@@ -115,8 +112,10 @@ public class AutoLeaveDuty : ModuleBase
             ImGui.SameLine();
             ImGui.TextUnformatted(Lang.Get("AutoLeaveDuty-BlacklistContents"));
 
-            ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-BlacklistContents-Help"));
+            ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-BlacklistContents-Help"));
         }
+        
+        ImGui.Spacing();
 
         // 立刻退出
         {
@@ -129,7 +128,7 @@ public class AutoLeaveDuty : ModuleBase
             ImGui.SameLine();
             ImGui.TextUnformatted(Lang.Get("AutoLeaveDuty-ImmediateLeaveContents"));
 
-            ImGuiOm.HelpMarker(Lang.Get("AutoLeaveDuty-ImmediateLeaveContents-Help"));
+            ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-ImmediateLeaveContents-Help"));
         }
     }
 
@@ -209,15 +208,9 @@ public class AutoLeaveDuty : ModuleBase
             return;
 
         if (config.Delay > 0)
-            TaskHelper.DelayNext(config.Delay);
+            TaskHelper.DelayNext((int)config.Delay);
 
-        if (!config.ForceToLeave)
-        {
-            TaskHelper.Enqueue(() => !ICondition.Instance()[ConditionFlag.InCombat]);
-            TaskHelper.Enqueue(() => TryLeaveDuty());
-        }
-        else
-            TaskHelper.Enqueue(() => TryLeaveDuty(DutyCommand.LeaveDutyKind.Inactive));
+        TaskHelper.Enqueue(() => TryLeaveDuty(DutyCommand.LeaveDutyKind.Inactive));
     }
 
     private static unsafe bool TryLeaveDuty
@@ -267,8 +260,8 @@ public class AutoLeaveDuty : ModuleBase
     {
         public HashSet<uint> BlacklistContent      = [];
         public HashSet<uint> ImmediateLeaveContent = [];
-        public int           Delay;
-        public bool          ForceToLeave;
+
+        public uint Delay = 6000;
 
         public bool NoLeaveHighEndDuties = true;
     }
