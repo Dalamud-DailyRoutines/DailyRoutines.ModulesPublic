@@ -7,7 +7,6 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Gui.PartyFinder.Types;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -191,6 +190,9 @@ public partial class BetterPartyFinderFilter : ModuleBase
 
         var job = LocalPlayerState.ClassJobData;
 
+        var slots       = listing.Slots.ToArray();
+        var jobsPresent = listing.JobsPresent.ToArray();
+
         if (manualMode)
         {
             var filter0 = JobTypeCounter(1, config.FilterJobTypeCountData.Tank,           job);
@@ -228,18 +230,19 @@ public partial class BetterPartyFinderFilter : ModuleBase
             var count   = 0;
             var hasSlot = false;
 
-            var slots       = listing.Slots.ToList();
-            var jobsPresent = listing.JobsPresent.ToList();
-
-            foreach (var i in Enumerable.Range(0, 8))
+            for (var index = 0; index < 8; index++)
             {
-                if (slots.Count <= i || jobsPresent.Count <= i || count >= maxCount)
+                if (slots.Length       <= index ||
+                    jobsPresent.Length <= index ||
+                    count              >= maxCount)
                     break;
 
-                if (jobsPresent.ElementAt(i).Value.RowId != 0)
+                var present = jobsPresent[index];
+
+                if (present.RowId != 0)
                 {
-                    // 如果该位置已有玩家，检查职业类型
-                    if (jobsPresent.ElementAt(i).Value.JobType == jobType)
+                    if (present.ValueNullable is { } presentJob &&
+                        presentJob.JobType == jobType)
                         count++;
                 }
                 else if (!hasSlot) // 有空位后不再检查
@@ -251,7 +254,7 @@ public partial class BetterPartyFinderFilter : ModuleBase
                         foreach (var playerJob in LuminaGetter.Get<ClassJob>().Where(j => j.RowId != 0 && j.JobType == jobType))
                         {
                             if (Enum.TryParse<JobFlags>(playerJob.NameEnglish.ToString().Replace(" ", string.Empty), out var flag) &&
-                                slots.ElementAt(i)[flag])
+                                slots[index][flag])
                             {
                                 hasSlot = true;
                                 break;
@@ -261,7 +264,8 @@ public partial class BetterPartyFinderFilter : ModuleBase
                     else
                     {
                         // 自动模式：检查当前职业是否有空位
-                        if (Enum.TryParse<JobFlags>(currentJob.NameEnglish.ToString().Replace(" ", string.Empty), out var flag) && slots.ElementAt(i)[flag])
+                        if (Enum.TryParse<JobFlags>(currentJob.NameEnglish.ToString().Replace(" ", string.Empty), out var flag) &&
+                            slots[index][flag])
                             hasSlot = true;
                     }
                 }
