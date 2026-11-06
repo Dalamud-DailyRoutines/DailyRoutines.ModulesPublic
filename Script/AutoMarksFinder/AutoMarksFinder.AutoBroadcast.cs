@@ -1,20 +1,14 @@
 using System.Globalization;
-using DailyRoutines.Manager;
-using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using OmenTools.Dalamud;
-using OmenTools.Extensions;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
     private NotoriousMonsterList? SelectedTrain =>
-        selectedTrainIndex >= 0 && selectedTrainIndex < config.Trains.Count
-            ? config.Trains[selectedTrainIndex]
-            : null;
+        selectedTrainIndex >= 0 && selectedTrainIndex < config.Trains.Count ?
+            config.Trains[selectedTrainIndex] :
+            null;
 
     private DateTime CalibratedNow =>
         autoBroadcast.TimeCalibrated ?
@@ -32,12 +26,13 @@ public partial class AutoMarksFinder
         }
 
         var train = SelectedTrain;
-        if (train == null ||
+        if (train                     == null ||
             train.MonstersFound.Count == 0)
             return;
 
         var      hasDepartTime = !string.IsNullOrWhiteSpace(autoBroadcast.DepartTimeInput);
         DateTime parsed        = default;
+
         if (hasDepartTime &&
             !TryParseDepartTime(out parsed))
         {
@@ -45,19 +40,20 @@ public partial class AutoMarksFinder
             return;
         }
 
+        relayTaskHelper.Abort();
         autoBroadcast.On          = true;
         autoBroadcast.Index       = 0;
         autoBroadcast.Train       = train;
         autoBroadcast.NextPending = false;
-        autoBroadcast.NextAt      = default;
+        autoBroadcast.NextAt      = 0;
         autoBroadcast.EndPending  = false;
-        autoBroadcast.EndAt       = default;
+        autoBroadcast.EndAt       = 0;
 
         if (hasDepartTime)
         {
             autoBroadcast.Departed          = false;
             autoBroadcast.FirstPointPending = false;
-            autoBroadcast.FirstPointAt      = default;
+            autoBroadcast.FirstPointAt      = 0;
             autoBroadcast.DepartAt          = parsed;
         }
         else
@@ -65,7 +61,12 @@ public partial class AutoMarksFinder
             autoBroadcast.Departed          = true;
             autoBroadcast.FirstPointPending = true;
             autoBroadcast.FirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
-            ExecuteBroadcastMacro(config.AutoBroadcastStartMacro);
+
+            if (!Relay(RelayType.BeforeStart))
+            {
+                StopAutoBroadcast();
+                return;
+            }
         }
 
         NotifyHelper.Instance().NotificationInfo
@@ -77,16 +78,17 @@ public partial class AutoMarksFinder
 
     private void StopAutoBroadcast()
     {
+        relayTaskHelper?.Abort();
         autoBroadcast.On                = false;
         autoBroadcast.Departed          = false;
         autoBroadcast.Index             = 0;
         autoBroadcast.Train             = null;
         autoBroadcast.FirstPointPending = false;
-        autoBroadcast.FirstPointAt      = default;
+        autoBroadcast.FirstPointAt      = 0;
         autoBroadcast.NextPending       = false;
-        autoBroadcast.NextAt            = default;
+        autoBroadcast.NextAt            = 0;
         autoBroadcast.EndPending        = false;
-        autoBroadcast.EndAt             = default;
+        autoBroadcast.EndAt             = 0;
     }
 
     private bool TryParseDepartTime
@@ -97,7 +99,7 @@ public partial class AutoMarksFinder
         parsed = default;
 
         if (!TimeSpan.TryParseExact(autoBroadcast.DepartTimeInput.Trim(), @"hh\:mm\:ss", CultureInfo.InvariantCulture, out var timeOfDay) ||
-            timeOfDay < TimeSpan.Zero ||
+            timeOfDay < TimeSpan.Zero                                                                                                     ||
             timeOfDay >= TimeSpan.FromDays(1))
             return false;
 
@@ -119,17 +121,20 @@ public partial class AutoMarksFinder
             return;
 
         if (LocalPlayerState.Object == null ||
-            !UIModule.IsScreenReady() ||
+            !UIModule.IsScreenReady()       ||
             ICondition.Instance().IsBetweenAreas)
             return;
 
         if (autoBroadcast.Train is not { MonstersFound.Count: > 0 } train ||
-            !config.Trains.Any(x => ReferenceEquals(x, train)) ||
+            !config.Trains.Any(x => ReferenceEquals(x, train))            ||
             !ReferenceEquals(SelectedTrain, train))
         {
             StopAutoBroadcast();
             return;
         }
+
+        if (relayTaskHelper.IsBusy)
+            return;
 
         if (!autoBroadcast.Departed)
         {
@@ -140,7 +145,8 @@ public partial class AutoMarksFinder
             autoBroadcast.Index             = 0;
             autoBroadcast.FirstPointPending = true;
             autoBroadcast.FirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
-            ExecuteBroadcastMacro(config.AutoBroadcastStartMacro);
+            if (!Relay(RelayType.BeforeStart))
+                StopAutoBroadcast();
             return;
         }
 
@@ -161,7 +167,7 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            if (AnnouncePosition(train.MonstersFound[autoBroadcast.Index]))
+            if (Relay(RelayType.Position, train.MonstersFound[autoBroadcast.Index]))
                 autoBroadcast.FirstPointPending = false;
             return;
         }
@@ -183,7 +189,7 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            if (AnnouncePosition(train.MonstersFound[autoBroadcast.Index]))
+            if (Relay(RelayType.Position, train.MonstersFound[autoBroadcast.Index]))
                 autoBroadcast.NextPending = false;
             return;
         }
@@ -194,8 +200,8 @@ public partial class AutoMarksFinder
                 return;
 
             autoBroadcast.EndPending = false;
-            ExecuteBroadcastMacro(config.AutoBroadcastEndMacro);
-            StopAutoBroadcast();
+            Relay(RelayType.AfterEnd);
+            relayTaskHelper.Enqueue(StopAutoBroadcast);
             return;
         }
 
@@ -225,77 +231,6 @@ public partial class AutoMarksFinder
         autoBroadcast.NextAt      = Environment.TickCount64 + AUTO_BROADCAST_NEXT_DELAY_MS;
     }
 
-    private void ExecuteBroadcastMacro
-    (
-        string macro
-    )
-    {
-        if (string.IsNullOrWhiteSpace(macro))
-            return;
-
-        var lines = macro.Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries);
-        if (lines.Length == 0)
-            return;
-
-        var hasCommandLine = false;
-        foreach (var line in lines)
-        {
-            if (!line.TrimStart().StartsWith('/'))
-                continue;
-
-            hasCommandLine = true;
-            break;
-        }
-
-        if (hasCommandLine ||
-            config.RelayCommands.Count == 0)
-        {
-            if (lines.Length > BROADCAST_MACRO_MAX_LINES)
-                return;
-
-            ChatManager.Instance().ExecuteMacro(lines);
-            return;
-        }
-
-        foreach (var line in lines)
-        {
-            var text = line.Trim();
-            if (text.Length == 0)
-                continue;
-
-            foreach (var command in config.RelayCommands)
-                ChatManager.Instance().SendMessage($"{command} {text}");
-        }
-    }
-
-    private unsafe bool AnnouncePosition
-    (
-        NotoriousMonsterFound info
-    )
-    {
-        var agentMap = AgentMap.Instance();
-        if (agentMap == null)
-            return false;
-
-        agentMap->SetMapFlagByZoneAndOpen(info.ZoneID, info.Position, info.GetBNPCName());
-
-        foreach (var command in config.RelayCommands)
-        {
-            var formatted = FormatPattern
-            (
-                config.RelayMacroPattern,
-                "<flag>",
-                info.GetBNPCName(),
-                info.Instance == 0 ?
-                    null :
-                    $"{Lang.Get("AutoMarksFinder-RelayInstanceDisplay", info.Instance.ToSESquareCount())}"
-            );
-            ChatManager.Instance().SendMessage($"{command} {formatted}");
-        }
-
-        return true;
-    }
-
     #region 常量
 
     private const uint AUTO_BROADCAST_TICK_MS = 500;
@@ -303,7 +238,6 @@ public partial class AutoMarksFinder
     private const long AUTO_BROADCAST_FIRST_POINT_DELAY_MS = 3_000;
     private const long AUTO_BROADCAST_NEXT_DELAY_MS        = 1_000;
     private const long AUTO_BROADCAST_END_DELAY_MS         = 2_000;
-    private const int  BROADCAST_MACRO_MAX_LINES           = 15;
 
     #endregion
 }

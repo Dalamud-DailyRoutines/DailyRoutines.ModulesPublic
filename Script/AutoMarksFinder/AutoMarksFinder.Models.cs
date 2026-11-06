@@ -4,7 +4,6 @@ using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -13,11 +12,6 @@ public partial class AutoMarksFinder
     private sealed class NotoriousMonsterFound : IEquatable<NotoriousMonsterFound>
     {
         public static readonly Dictionary<uint, uint> NotoriousMonsters;
-
-        private static readonly Dictionary<uint, Vector3> AetheryteRedirection = new()
-        {
-            [818] = new(573f, 349.1f, -200f)
-        };
 
         static NotoriousMonsterFound() =>
             NotoriousMonsters = LuminaGetter.Get<NotoriousMonster>()
@@ -38,13 +32,11 @@ public partial class AutoMarksFinder
             Position = position;
             ZoneID   = zoneID;
             Instance = instance;
-            Rank     = (NotoriousMonsterRank)GetData().Rank;
         }
 
-        public uint                 DataID   { get; set; }
-        public uint                 ZoneID   { get; set; }
-        public uint                 Instance { get; set; }
-        public NotoriousMonsterRank Rank     { get; set; }
+        public uint DataID   { get; init; }
+        public uint ZoneID   { get; init; }
+        public uint Instance { get; init; }
 
         [JsonIgnore]
         public Aetheryte? NearestAetheryte => LazyNearestAetheryte.Value;
@@ -74,7 +66,7 @@ public partial class AutoMarksFinder
              )?.Position
             );
 
-        public Vector3 Position { get; set; }
+        public Vector3 Position { get; init; }
         public bool    IsAlive  { get; set; } = true;
 
         public bool Equals
@@ -111,7 +103,6 @@ public partial class AutoMarksFinder
                 Position = Position,
                 ZoneID   = ZoneID,
                 Instance = Instance,
-                Rank     = Rank,
                 IsAlive  = IsAlive
             };
 
@@ -132,6 +123,7 @@ public partial class AutoMarksFinder
 
     private sealed class NotoriousMonsterList : IEquatable<NotoriousMonsterList>
     {
+        [JsonConstructor]
         public NotoriousMonsterList() { }
 
         public NotoriousMonsterList
@@ -144,7 +136,7 @@ public partial class AutoMarksFinder
         }
 
         public string Name          { get; set; }
-        public long   GeneratedTime { get; set; }
+        public long   GeneratedTime { get; init; }
 
         [JsonIgnore]
         public DateTime? GeneratedDateTime { get; set; }
@@ -231,9 +223,8 @@ public partial class AutoMarksFinder
 
     private sealed class NotoriousMonsterScanPoint : IEquatable<NotoriousMonsterScanPoint>
     {
-        public uint    Zone            { get; set; }
-        public Vector3 Position        { get; set; }
-        public bool    CancelAnimation { get; set; }
+        public uint    Zone     { get; init; }
+        public Vector3 Position { get; init; }
 
         public bool Equals
         (
@@ -260,32 +251,6 @@ public partial class AutoMarksFinder
         public override int GetHashCode() => HashCode.Combine(Zone, Position);
     }
 
-    private sealed class ZoneScanProgress
-    {
-        public uint          ZoneID              { get; set; }
-        public uint          Instance            { get; set; }
-        public int           FoundARank          { get; set; }
-        public int           FoundBRank          { get; set; }
-        public HashSet<uint> ScannedPointIndices { get; set; } = [];
-
-        public bool IsCompleted
-        (
-            HashSet<NotoriousMonsterRank> targetRanks,
-            int                           expectedAmount
-        )
-        {
-            if (targetRanks.Count == 1)
-            {
-                var rank = targetRanks.First();
-                return rank           == NotoriousMonsterRank.A ?
-                           FoundARank >= expectedAmount :
-                           FoundBRank >= expectedAmount;
-            }
-
-            return FoundARank >= expectedAmount && FoundBRank >= expectedAmount;
-        }
-    }
-
     private sealed class PathDecision
     {
         public enum PathType
@@ -295,9 +260,9 @@ public partial class AutoMarksFinder
             SmartTP
         }
 
-        public PathType         Type           { get; set; }
-        public Vector3          TargetPosition { get; set; }
-        public AetheryteRecord? Aetheryte      { get; set; }
+        public PathType         Type           { get; init; }
+        public Vector3          TargetPosition { get; init; }
+        public AetheryteRecord? Aetheryte      { get; init; }
         public float            EstimatedTime  { get; set; }
     }
 

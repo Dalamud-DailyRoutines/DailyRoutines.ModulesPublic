@@ -9,10 +9,8 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.Threading;
 using OmenTools.Threading.TaskHelper;
 using OmenTools.Threading.TaskHelper.Enums;
@@ -34,14 +32,10 @@ public partial class AutoMarksFinder
             Completed
         }
 
-        private const float MOUNT_SPEED       = 12f;
-        private const float TELEPORT_DURATION = 10f;
-        private const float DETECTION_RADIUS  = 300f;
-
         private readonly AutoMarksFinder module;
-        
+
         private uint? originalAroundRangeMode;
-        
+
         private bool disposed;
 
         private ScanState                       currentState;
@@ -50,23 +44,15 @@ public partial class AutoMarksFinder
         private int                             currentScanPointIndex;
         private List<NotoriousMonsterScanPoint> currentSortedPoints = [];
         private Vector3?                        currentTargetPoint;
-        private long                            lastMonsterFoundTime;
-
-        private Dictionary<ulong, ZoneScanProgress> zoneScanProgress = [];
 
         public Dictionary<uint, HashSet<NotoriousMonsterFound>> FoundOnes { get; set; } = [];
 
         public NotoriousMonsterScanner
         (
-            AutoMarksFinder                   module,
-            IEnumerable<NotoriousMonsterRank> ranks,
-            IEnumerable<uint>                 zones
+            AutoMarksFinder module
         )
         {
             this.module = module;
-
-            module.config.SelectedRanks = ranks.Distinct().ToHashSet();
-            module.config.SelectedZones = zones.Distinct().ToHashSet();
 
             currentState = ScanState.Idle;
 
@@ -77,8 +63,9 @@ public partial class AutoMarksFinder
         {
             if (disposed) return;
 
-            disposed = true;
+            disposed     = true;
             currentState = ScanState.Idle;
+
             try
             {
                 FrameworkManager.Instance().Unreg(OnUpdate);
@@ -106,6 +93,7 @@ public partial class AutoMarksFinder
                 if (IGameConfig.Instance().System.TryGetUInt(nameof(SystemConfigOption.DynamicAroundRangeMode), out var mode) && mode <= 2)
                 {
                     originalAroundRangeMode = mode;
+
                     if (mode != 2)
                     {
                         IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), 2u);
@@ -461,22 +449,9 @@ public partial class AutoMarksFinder
                                      1 :
                                      2;
 
-            var key = GetProgressKey(zoneID, instance);
-
-            if (!zoneScanProgress.TryGetValue(key, out var progress))
-            {
-                progress              = new ZoneScanProgress { ZoneID = zoneID, Instance = instance };
-                zoneScanProgress[key] = progress;
-            }
-
-            if (FoundOnes.TryGetValue(zoneID, out var monsters))
-            {
-                progress.FoundARank = monsters.Count(m => m.Rank == NotoriousMonsterRank.A && m.Instance == instance);
-                progress.FoundBRank = monsters.Count(m => m.Rank == NotoriousMonsterRank.B && m.Instance == instance);
-            }
-
-            var hasEnoughMonsters = progress.IsCompleted(module.config.SelectedRanks, expectedAmount);
-            var allPointsScanned  = currentScanPointIndex >= currentSortedPoints.Count;
+            var hasEnoughMonsters = FoundOnes.TryGetValue(zoneID, out var monsters) &&
+                                    monsters.Count(monster => monster.Instance == instance) >= expectedAmount;
+            var allPointsScanned = currentScanPointIndex >= currentSortedPoints.Count;
 
             return hasEnoughMonsters || allPointsScanned;
         }
@@ -494,13 +469,6 @@ public partial class AutoMarksFinder
 
             return null;
         }
-
-        private static ulong GetProgressKey
-        (
-            uint zoneID,
-            uint instance
-        ) =>
-            ((ulong)zoneID << 32) | instance;
 
         private void OnUpdate
         (
@@ -528,15 +496,15 @@ public partial class AutoMarksFinder
                 if (obj is not { ObjectKind: ObjectKind.BattleNpc, IsDead: false }) continue;
                 if (!NotoriousMonsterFound.NotoriousMonsters.TryGetValue(obj.DataID, out var dataRowID)) continue;
                 if (!LuminaGetter.TryGetRow<NotoriousMonster>(dataRowID, out var dataRow)) continue;
-                if (!module.config.SelectedRanks.Contains((NotoriousMonsterRank)dataRow.Rank)) continue;
+                if (dataRow.Rank != 2)
+                    continue;
 
                 FoundOnes.TryAdd(currentZone, []);
 
                 var parsed = new NotoriousMonsterFound(obj.DataID, obj.Position, currentZone, currentInstance);
                 if (!FoundOnes[currentZone].Add(parsed)) continue;
 
-                foundNewMonster      = true;
-                lastMonsterFoundTime = StandardTimeManager.Instance().UTCNowOffset.ToUnixTimeMilliseconds();
+                foundNewMonster = true;
 
                 var mapPos = PositionHelper.WorldToMap(obj.Position.ToVector2(), GameState.MapData);
                 NotifyHelper.Instance().Chat
@@ -544,9 +512,11 @@ public partial class AutoMarksFinder
                     Lang.GetSe
                     (
                         "AutoMarksFinder-DetectPowerfulMark",
-                        (NotoriousMonsterRank)dataRow.Rank,
-                        dataRow.BNpcName.Value.Singular.ToString(),
-                        SeString.CreateMapLink(currentZone, GameState.Map, mapPos.X, mapPos.Y)
+                        new Dictionary<string, object>
+                        {
+                            ["name"]     = dataRow.BNpcName.Value.Singular.ToString(),
+                            ["position"] = SeString.CreateMapLink(currentZone, GameState.Map, mapPos.X, mapPos.Y)
+                        }
                     )
                 );
             }
@@ -577,7 +547,8 @@ public partial class AutoMarksFinder
                 }
             }
 
-            if (!module.config.SelectedZones.Any() && !module.TaskHelper.IsBusy)
+            if (module.config.SelectedZones.Count == 0 &&
+                !module.TaskHelper.IsBusy)
                 module.StopScanner();
         }
 
@@ -741,7 +712,7 @@ public partial class AutoMarksFinder
             );
 
         private static bool IsAbleToTeleport() =>
-            !LocalPlayerState.Instance().IsMoving                     &&
+            !LocalPlayerState.Instance().IsMoving             &&
             !ICondition.Instance().Any(ConditionFlag.Casting) &&
             !ICondition.Instance().IsBetweenAreas             &&
             UIModule.IsScreenReady();
@@ -809,5 +780,13 @@ public partial class AutoMarksFinder
 
             return sorted;
         }
+
+        #region 常量
+
+        private const float MOUNT_SPEED       = 12f;
+        private const float TELEPORT_DURATION = 10f;
+        private const float DETECTION_RADIUS  = 300f;
+
+        #endregion
     }
 }
