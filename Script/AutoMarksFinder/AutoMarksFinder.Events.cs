@@ -26,7 +26,7 @@ public partial class AutoMarksFinder
 
         aliveMonitor?.ObserveMonster(targetID, baseID, position, isDead);
         if (!isDead)
-            scanner?.ObserveMonster(baseID, position);
+            MonsterScanner.Scanner?.ObserveMonster(baseID, position);
     }
 
     private void OnActorControlDetour

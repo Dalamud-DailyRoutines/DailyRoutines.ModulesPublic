@@ -2,6 +2,7 @@ using System.Numerics;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
+using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
@@ -10,7 +11,9 @@ public partial class AutoMarksFinder
 {
     private sealed class NotoriousMonsterFound : IEquatable<NotoriousMonsterFound>
     {
-        public static readonly Dictionary<uint, uint> NotoriousMonsters;
+        public static Dictionary<uint, uint> NotoriousMonsters { get; }
+
+        private AetheryteRecord? nearestAetheryteRecord;
 
         static NotoriousMonsterFound() =>
             NotoriousMonsters = LuminaGetter.Get<NotoriousMonster>()
@@ -37,36 +40,49 @@ public partial class AutoMarksFinder
         public uint ZoneID   { get; init; }
         public uint Instance { get; init; }
 
-        [JsonIgnore]
-        public Aetheryte? NearestAetheryte => LazyNearestAetheryte.Value;
+        public uint NearestAetheryteID
+        {
+            get
+            {
+                if (field == 0)
+                    field = GetInitialNearestAetheryteID();
+
+                return field;
+            }
+            set
+            {
+                field                  = value;
+                nearestAetheryteRecord = null;
+            }
+        }
 
         [JsonIgnore]
-        public Vector3? NearestAetherytePosition => LazyNearestAetherytePosition.Value;
+        public uint AetheryteZoneID => ZoneID == DRAVANIAN_HINTERLANDS_ZONE_ID ?
+                                           IDYLLSHIRE_ZONE_ID :
+                                           ZoneID;
 
-        private Lazy<Aetheryte?> LazyNearestAetheryte =>
-            new
-            (() => AetheryteRecordManager.Instance().GetNearestAetheryte
-             (
-                 ZoneID,
-                 ZoneID == 818 ?
-                     new(573f, 349.1f, -200f) :
-                     Position
-             )?.GetData()
-            );
+        [JsonIgnore]
+        public AetheryteRecord? NearestAetheryteRecord =>
+            nearestAetheryteRecord ??= LuminaGetter.GetRow<Aetheryte>(NearestAetheryteID) is { } aetheryte ?
+                                           AetheryteRecord.Parse(aetheryte) :
+                                           null;
 
-        private Lazy<Vector3?> LazyNearestAetherytePosition =>
-            new
-            (() => AetheryteRecordManager.Instance().GetNearestAetheryte
-             (
-                 ZoneID,
-                 ZoneID == 818 ?
-                     new(573f, 349.1f, -200f) :
-                     Position
-             )?.Position
-            );
+        [JsonIgnore]
+        public Aetheryte? NearestAetheryte => NearestAetheryteRecord?.GetData();
+
+        [JsonIgnore]
+        public Vector3? NearestAetherytePosition => NearestAetheryteRecord?.Position;
 
         public Vector3 Position { get; init; }
         public bool    IsAlive  { get; set; } = true;
+
+        private uint GetInitialNearestAetheryteID() =>
+            ZoneID switch
+            {
+                RUBY_SEA_ZONE_ID => ONOKORO_AETHERYTE_ID,
+                TEMPEST_ZONE_ID  => ONDO_CUPS_AETHERYTE_ID,
+                _                => AetheryteRecordManager.Instance().GetNearestAetheryte(AetheryteZoneID, Position, true)?.RowID ?? 0
+            };
 
         public bool Equals
         (
@@ -98,11 +114,12 @@ public partial class AutoMarksFinder
         public NotoriousMonsterFound Copy() =>
             new()
             {
-                DataID   = DataID,
-                Position = Position,
-                ZoneID   = ZoneID,
-                Instance = Instance,
-                IsAlive  = IsAlive
+                DataID             = DataID,
+                Position           = Position,
+                ZoneID             = ZoneID,
+                Instance           = Instance,
+                IsAlive            = IsAlive,
+                NearestAetheryteID = NearestAetheryteID
             };
 
         public override string ToString() => $"NotoriousMonsterFound_{DataID}_{Position}";
@@ -118,6 +135,17 @@ public partial class AutoMarksFinder
         }
 
         public override int GetHashCode() => HashCode.Combine(DataID, ZoneID, Instance);
+
+        #region 常量
+
+        private const uint DRAVANIAN_HINTERLANDS_ZONE_ID = 399;
+        private const uint IDYLLSHIRE_ZONE_ID            = 478;
+        private const uint RUBY_SEA_ZONE_ID              = 613;
+        private const uint TEMPEST_ZONE_ID               = 818;
+        private const uint ONOKORO_AETHERYTE_ID          = 106;
+        private const uint ONDO_CUPS_AETHERYTE_ID        = 147;
+
+        #endregion
     }
 
     private sealed class NotoriousMonsterList : IEquatable<NotoriousMonsterList>
@@ -150,24 +178,19 @@ public partial class AutoMarksFinder
             NotoriousMonsterList? other
         )
         {
-            if (ReferenceEquals(null, other)) return false;
-            if (ReferenceEquals(this, other)) return true;
+            if (ReferenceEquals(null, other))
+                return false;
+            if (ReferenceEquals(this, other))
+                return true;
+
             return GeneratedTime == other.GeneratedTime;
         }
 
         public void Reorder()
         {
-            if (MonstersFound.Count <= 0)
-            {
-                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-CantSortEmptyList"), Lang.Get("AutoMarksFinderTitle"));
+            if (MonstersFound.Count <= 0 ||
+                StartAetheryte      == null)
                 return;
-            }
-
-            if (StartAetheryte == null)
-            {
-                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-CantSortNullStartingPoint"), Lang.Get("AutoMarksFinderTitle"));
-                return;
-            }
 
             var orderedMonsters = MonstersFound
                                   .OrderByDescending(x => x.ZoneID == StartAetheryte?.Map.Value.TerritoryType.RowId)

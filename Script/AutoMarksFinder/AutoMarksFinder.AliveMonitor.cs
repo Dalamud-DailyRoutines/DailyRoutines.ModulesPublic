@@ -18,15 +18,16 @@ public partial class AutoMarksFinder
         private readonly AutoMarksFinder module;
 
         private readonly Dictionary<NotoriousMonsterList, Dictionary<NotoriousMonsterFound, AliveTrack>> aliveTracks = new(ReferenceEqualityComparer.Instance);
-        private readonly Dictionary<uint, FrozenSet<uint>>                                               territoryIdentities = [];
-        private readonly Dictionary<uint, NotoriousMonsterFound>                                         trackedMonsters = [];
+        
+        private readonly Dictionary<uint, FrozenSet<uint>>       territoryIdentities = [];
+        private readonly Dictionary<uint, NotoriousMonsterFound> trackedMonsters     = [];
 
         public MonsterAliveMonitor
         (
-            AutoMarksFinder module
+            AutoMarksFinder inModule
         )
         {
-            this.module = module;
+            module = inModule;
 
             IClientState.Instance().TerritoryChanged += OnTerritoryChanged;
             GameState.Instance().WarpComplete        += OnWarpCompleted;

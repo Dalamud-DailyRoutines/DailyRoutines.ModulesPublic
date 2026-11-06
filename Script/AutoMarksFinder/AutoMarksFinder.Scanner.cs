@@ -17,25 +17,19 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
-    private sealed class NotoriousMonsterScanner
+    private sealed class MonsterScanner
     (
         AutoMarksFinder module
     ) : IDisposable
     {
-        private enum ScanState
-        {
-            Stopped,
-            Preparing,
-            SelectingPoint,
-            Teleporting,
-            Mounting,
-            Pathfinding,
-            Moving,
-            Observing,
-            SwitchingZone,
-            SwitchingInstance
-        }
+        public static MonsterScanner? Scanner { get; set; }
 
+        public static void ClearScanner()
+        {
+            Scanner?.Dispose();
+            Scanner = null;
+        }
+        
         private readonly Dictionary<uint, List<Vector3>>     zones             = [];
         private readonly HashSet<(uint Zone, uint Instance)> completedAreas    = [];
         private readonly List<Vector3>                       candidates        = [];
@@ -43,20 +37,23 @@ public partial class AutoMarksFinder
         private readonly List<Vector3>                       targetPoints      = [];
         private readonly Queue<Vector3>                      retryTargets      = [];
         private readonly List<Vector3>                       observedPositions = [];
-        private          CancellationTokenSource?            pathCancellation;
-        private          Task<List<Vector3>>?                pathTask;
-        private          ScanState                           state;
-        private          long                                stateStartedAt;
-        private          long                                lastProgressAt;
-        private          long                                mountRequestedAt;
-        private          float                               closestDistance;
-        private          Vector3                             target;
-        private          Vector3                             anchor;
-        private          Vector3                             observationPosition;
-        private          Vector3                             navigationTarget;
-        private          float                               flightHeight;
-        private          uint?                               originalAroundRangeMode;
-        private          bool                                disposed;
+
+        private CancellationTokenSource? pathCancellation;
+        private Task<List<Vector3>>?     pathTask;
+
+        private ScanState state;
+        private long      stateStartedAt;
+        private long      lastProgressAt;
+        private long      mountRequestedAt;
+        private float     closestDistance;
+        private Vector3   target;
+        private Vector3   anchor;
+        private Vector3   observationPosition;
+        private Vector3   navigationTarget;
+        private float     flightHeight;
+        private uint?     originalAroundRangeMode;
+
+        private bool disposed;
 
         public bool IsRunning => state != ScanState.Stopped;
 
@@ -685,6 +682,20 @@ public partial class AutoMarksFinder
 
         private static float DistanceSquared(Vector3 first, Vector3 second) =>
             Vector2.DistanceSquared(new(first.X, first.Z), new(second.X, second.Z));
+        
+        private enum ScanState
+        {
+            Stopped,
+            Preparing,
+            SelectingPoint,
+            Teleporting,
+            Mounting,
+            Pathfinding,
+            Moving,
+            Observing,
+            SwitchingZone,
+            SwitchingInstance
+        }
 
         #region 常量
 

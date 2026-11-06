@@ -68,12 +68,6 @@ public partial class AutoMarksFinder
                 return;
             }
         }
-
-        NotifyHelper.Instance().NotificationInfo
-        (
-            Lang.Get("AutoMarksFinder-AutoBroadcastNotice"),
-            Lang.Get("AutoMarksFinder-AutoBroadcast")
-        );
     }
 
     private void StopAutoBroadcast()

@@ -24,24 +24,9 @@ public unsafe partial class AutoMarksFinder
                 (!preview && config.RelayCommands.Count == 0))
                 return true;
 
-            var lines = text.ReplaceLineEndings("\n").Split('\n');
-
-            if (lines.Length > MAX_RELAY_LINES)
-            {
-                NotifyHelper.Instance().NotificationWarning
-                (
-                    Lang.Get
-                    (
-                        "AutoMarksFinder-Relay-TooManyLines",
-                        new Dictionary<string, object>
-                        {
-                            ["count"] = MAX_RELAY_LINES
-                        }
-                    ),
-                    Lang.Get("AutoMarksFinder-AutoBroadcast")
-                );
-                return false;
-            }
+            var lines = text.ReplaceLineEndings("\n")
+                            .Split('\n')
+                            .Take(MAX_RELAY_LINES);
 
             string[] commands = preview ?
                                     ["/e"] :
@@ -99,7 +84,7 @@ public unsafe partial class AutoMarksFinder
             info.NearestAetheryte is not { } aetheryte)
             return false;
 
-        return RelayPosition(pattern, info.ZoneID, position, aetheryte.PlaceName.Value.Name.ToString(), info.Instance);
+        return RelayPosition(pattern, aetheryte.Territory.RowId, position, aetheryte.PlaceName.Value.Name.ToString(), info.Instance);
     }
 
     private bool RelayPosition
