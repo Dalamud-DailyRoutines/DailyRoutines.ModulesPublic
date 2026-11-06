@@ -16,7 +16,7 @@ using GameObjectId      = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject
 using GameObjectManager = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectManager;
 using ObjectKindNative  = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
-namespace DailyRoutines.Modules.AutoMarksFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {

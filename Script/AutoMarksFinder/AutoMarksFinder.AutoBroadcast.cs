@@ -7,7 +7,7 @@ using OmenTools.Dalamud;
 using OmenTools.Extensions;
 using OmenTools.OmenService;
 
-namespace DailyRoutines.Modules.AutoMarksFinder;
+namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
