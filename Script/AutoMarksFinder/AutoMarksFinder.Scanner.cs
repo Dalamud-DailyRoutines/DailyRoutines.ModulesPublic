@@ -8,6 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
+using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
@@ -490,9 +491,12 @@ public partial class AutoMarksFinder
 
             foreach (var obj in IObjectTable.Instance())
             {
-                if (obj is not { ObjectKind: ObjectKind.BattleNpc, IsDead: false }) continue;
-                if (!NotoriousMonsterFound.NotoriousMonsters.TryGetValue(obj.DataID, out var dataRowID)) continue;
-                if (!LuminaGetter.TryGetRow<NotoriousMonster>(dataRowID, out var dataRow)) continue;
+                if (obj is not { ObjectKind: ObjectKind.BattleNpc, IsDead: false }) 
+                    continue;
+                if (!NotoriousMonsterFound.NotoriousMonsters.TryGetValue(obj.DataID, out var dataRowID)) 
+                    continue;
+                if (!LuminaGetter.TryGetRow<NotoriousMonster>(dataRowID, out var dataRow)) 
+                    continue;
                 if (dataRow.Rank != 2)
                     continue;
 
@@ -512,7 +516,7 @@ public partial class AutoMarksFinder
                         new Dictionary<string, object>
                         {
                             ["name"]     = dataRow.BNpcName.Value.Singular.ToString(),
-                            ["position"] = SeString.CreateMapLink(currentZone, GameState.Map, mapPos.X, mapPos.Y)
+                            ["position"] = ReadOnlySeString.CreateMapLink(obj.Position, currentZone, GameState.Map)
                         }
                     )
                 );
