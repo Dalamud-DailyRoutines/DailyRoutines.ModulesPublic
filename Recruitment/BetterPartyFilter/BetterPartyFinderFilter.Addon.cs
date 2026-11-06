@@ -14,7 +14,6 @@ using KamiToolKit.Nodes.Simplified;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -750,31 +749,30 @@ public partial class BetterPartyFinderFilter
             };
             descriptionPanel.AddNode(listContainer);
 
-            const float ROW_CHECKBOX_HEIGHT = 28f;
-            const float ROW_ITEM_SPACING    = 4f;
-
             for (var i = 0; i < 10; i++)
             {
                 var row = new HorizontalListNode
                 {
-                    IsVisible = false,
-                    Size      = ContentSize with { Y = 32f }
+                    IsVisible   = false,
+                    ItemSpacing = ROW_ITEM_SPACING,
+                    Size        = ContentSize with { Y = 32f }
                 };
 
                 var checkbox = new CheckboxNode
                 {
-                    Size   = new(ROW_CHECKBOX_HEIGHT, ROW_CHECKBOX_HEIGHT),
-                    String = string.Empty
+                    IsAutoResizeWidthEnabled = false,
+                    String                   = string.Empty,
+                    Size                     = new(REGEX_CHECKBOX_SIZE),
+                    Position                 = new(0f, 4f)
                 };
 
                 var textInput = new TextInputNode
                 {
-                    Size              = new(ContentSize.X - checkbox.Width - ROW_ITEM_SPACING, 32f),
+                    Size              = new(ContentSize.X - REGEX_CHECKBOX_SIZE - ROW_ITEM_SPACING, 32f),
                     PlaceholderString = Lang.Get("Regex")
                 };
 
                 row.AddNode(checkbox);
-                row.AddDummy(ROW_ITEM_SPACING);
                 row.AddNode(textInput);
 
                 listContainer.AddNode(row);
@@ -786,7 +784,7 @@ public partial class BetterPartyFinderFilter
                     TextInput = textInput
                 };
 
-                checkbox.AddEvent
+                checkbox.CollisionNode.AddEvent
                 (
                     AtkEventType.MouseClick,
                     (_, _, _, _, atkEventData) =>
@@ -1052,18 +1050,21 @@ public partial class BetterPartyFinderFilter
 
                     regexRow.Index              = globalIndex;
                     regexRow.Row.IsVisible      = true;
+                    regexRow.Checkbox.OnClick   = null;
                     regexRow.Checkbox.IsChecked = localItem.Key;
                     regexRow.Checkbox.OnClick = isChecked =>
                     {
-                        module.config.BlackList[globalIndex] = new(isChecked, localItem.Value);
+                        module.config.BlackList[globalIndex] = new(isChecked, module.config.BlackList[globalIndex].Value);
                         module.config.Save(module);
                     };
 
-                    regexRow.TextInput.String = localItem.Value;
+                    regexRow.TextInput.OnInputComplete = null;
+                    regexRow.TextInput.String          = localItem.Value;
                     regexRow.TextInput.OnInputComplete = text =>
                     {
                         module.HandleRegexUpdate(globalIndex, module.config.BlackList[globalIndex].Key, text.ToString());
                     };
+
                 }
                 else
                     regexRow.Row.IsVisible = false;
@@ -1124,8 +1125,10 @@ public partial class BetterPartyFinderFilter
 
         #region 常量
 
-        private const float ORDER_ROW_SPACING = 10f;
-        private const float ROW_INDENT        = 20f;
+        private const float ORDER_ROW_SPACING   = 10f;
+        private const float ROW_INDENT          = 20f;
+        private const float REGEX_CHECKBOX_SIZE = 24f;
+        private const float ROW_ITEM_SPACING    = 4f;
 
         #endregion
     }
