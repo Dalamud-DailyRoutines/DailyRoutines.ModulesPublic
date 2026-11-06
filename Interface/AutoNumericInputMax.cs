@@ -392,7 +392,9 @@ public unsafe class AutoNumericInputMax : ModuleBase
         "LookingForGroupCondition",
         "CountDownSettingDialog",
         "ConfigSystem",
-        "ConfigCharacter"
+        "ConfigCharacter",
+        
+        "DRBetterPartyFinderFilter"
     ];
 
     #endregion
