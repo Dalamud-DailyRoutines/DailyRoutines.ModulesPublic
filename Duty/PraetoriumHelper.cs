@@ -13,16 +13,10 @@ public unsafe class PraetoriumHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("PraetoriumHelperTitle"),
-        Description = Lang.Get
-        (
-            "PraetoriumHelperDescription",
-            LuminaWrapper.GetContentName(16), // 最终决战天幕魔导城
-            LuminaWrapper.GetMountName(6),    // 魔导装甲
-            LuminaWrapper.GetActionName(2434) // 魔导加农炮
-        ),
-        Category = ModuleCategory.Duty,
-        Author   = ["逆光"]
+        Title       = Lang.Get("PraetoriumHelperTitle"),
+        Description = Lang.Get("PraetoriumHelperDescription"),
+        Category    = ModuleCategory.Duty,
+        Author      = ["逆光"]
     };
 
     public override ModuleBehaviour Permission { get; } = new()
@@ -87,7 +81,6 @@ public unsafe class PraetoriumHelper : ModuleBase
             if (Vector3.DistanceSquared(IObjectTable.Instance().LocalPlayer.Position, b.Position) - b.HitboxRadius > 900) continue;
 
             var aoeCount = GetTargetAoECount(b, allTargets);
-
             if (aoeCount > preObjectsAoECount)
             {
                 preObjectsAoECount = aoeCount;

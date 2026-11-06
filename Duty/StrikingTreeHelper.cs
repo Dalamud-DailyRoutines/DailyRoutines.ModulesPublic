@@ -13,14 +13,9 @@ public unsafe class StrikingTreeHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("StrikingTreeHelperTitle"),
-        Description = Lang.Get
-        (
-            "StrikingTreeHelperDescription",
-            LuminaWrapper.GetContentName(77),      // 拉姆歼灭战
-            LuminaWrapper.GetStatusName(STATUS_ID) // 恐怖
-        ),
-        Category = ModuleCategory.Duty
+        Title       = Lang.Get("StrikingTreeHelperTitle"),
+        Description = Lang.Get("StrikingTreeHelperDescription"),
+        Category    = ModuleCategory.Duty
     };
 
     public override ModuleBehaviour Permission { get; } = new()

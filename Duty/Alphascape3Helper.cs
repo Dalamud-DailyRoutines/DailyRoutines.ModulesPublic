@@ -14,15 +14,9 @@ public unsafe class Alphascape3Helper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("Alphascape3HelperTitle"),
-        Description = Lang.Get
-        (
-            "Alphascape3HelperDescription",
-            LuminaWrapper.GetContentName(589), // 欧米茄时空狭缝 阿尔法幻境3
-            LuminaWrapper.GetBNPCName(7852),   // 雷力投射点
-            LuminaWrapper.GetActionName(12911) // 欧米茄干扰器
-        ),
-        Category = ModuleCategory.Duty
+        Title       = Lang.Get("Alphascape3HelperTitle"),
+        Description = Lang.Get("Alphascape3HelperDescription"),
+        Category    = ModuleCategory.Duty
     };
 
     public override ModuleBehaviour Permission { get; } = new()

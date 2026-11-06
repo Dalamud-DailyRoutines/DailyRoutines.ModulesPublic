@@ -14,15 +14,9 @@ public unsafe class HullbreakerIsleHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("HullbreakerIsleHelperTitle"),
-        Description = Lang.Get
-        (
-            "HullbreakerIsleHelperDescription",
-            LuminaWrapper.GetContentName(23), // 财宝传说破舰岛
-            LuminaWrapper.GetBNPCName(2891),  // 捕兽夹
-            LuminaWrapper.GetBNPCName(2896)   // 怪宝箱
-        ),
-        Category = ModuleCategory.Duty
+        Title       = Lang.Get("HullbreakerIsleHelperTitle"),
+        Description = Lang.Get("HullbreakerIsleHelperDescription"),
+        Category    = ModuleCategory.Duty
     };
 
     public override ModuleBehaviour Permission { get; } = new()

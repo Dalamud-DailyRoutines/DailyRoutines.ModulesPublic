@@ -8,7 +8,6 @@ using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using KamiToolKit.Classes;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
@@ -21,7 +20,7 @@ public unsafe class SastashaHelper : ModuleBase
     public override ModuleInfo Info { get; } = new()
     {
         Title       = Lang.Get("SastashaHelperTitle"),
-        Description = Lang.Get("SastashaHelperDescription", LuminaWrapper.GetContentName(4)),
+        Description = Lang.Get("SastashaHelperDescription"),
         Category    = ModuleCategory.Duty
     };
 
@@ -122,28 +121,32 @@ public unsafe class SastashaHelper : ModuleBase
             return true;
 
         var book = IObjectTable.Instance()
-                           .SearchObject
-                           (
-                               x => x is { IsTargetable: true, ObjectKind: DObjectKind.EventObj } &&
-                                    BookToCoral.ContainsKey(x.DataID),
-                               IObjectTable.EventRange
-                           );
+                               .SearchObject
+                               (
+                                   x => x is { IsTargetable: true, ObjectKind: DObjectKind.EventObj } &&
+                                        BookToCoral.ContainsKey(x.DataID),
+                                   IObjectTable.EventRange
+                               );
         if (book == null) return false;
 
         var info = BookToCoral[book.DataID];
 
         using var rented = new RentedSeStringBuilder();
+        rented.PushColorType(info.UIColor)
+              .Append(LuminaWrapper.GetEObjName(info.CoralDataID))
+              .PopColorType();
+
         NotifyHelper.Instance().Chat
         (
             Lang.GetSe
             (
                 "SastashaHelper-Message",
-                rented.Builder
-                      .PushColorType(info.UIColor)
-                      .Append(LuminaWrapper.GetEObjName(info.CoralDataID))
-                      .PopColorType()
-                      .ToReadOnlySeString()
-            )
+                new Dictionary<string, object>
+                {
+                    ["name"] = rented.ToReadOnlySeString()
+                }
+            ),
+            false
         );
 
         correctBookID = book.DataID;

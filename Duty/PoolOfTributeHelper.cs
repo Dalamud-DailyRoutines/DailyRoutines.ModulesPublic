@@ -13,15 +13,9 @@ public unsafe class PoolOfTributeHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title = Lang.Get("PoolOfTributeHelperTitle"),
-        Description = Lang.Get
-        (
-            "PoolOfTributeHelperDescription",
-            LuminaWrapper.GetContentName(243),      // 须佐之男歼灭战
-            LuminaWrapper.GetStatusName(STATUS_ID), // 拘束
-            LuminaWrapper.GetBNPCName(6224)         // 天之岩户
-        ),
-        Category = ModuleCategory.Duty
+        Title       = Lang.Get("PoolOfTributeHelperTitle"),
+        Description = Lang.Get("PoolOfTributeHelperDescription"),
+        Category    = ModuleCategory.Duty
     };
 
     public override ModuleBehaviour Permission { get; } = new()
