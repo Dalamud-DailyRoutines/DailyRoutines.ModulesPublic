@@ -121,8 +121,10 @@ public unsafe class AutoConstantlyClick : ModuleBase
 
         var info = inputIDInfos[(int)key];
 
-        var isClicked = InputIDManager.Instance().IsInputIDPressed(key);
-        var isPressed = InputIDManager.Instance().IsInputIDDown(key);
+        var inputIDManager    = InputIDManager.Instance();
+        var isCrossHotbarSlot = key is >= InputId.HOT_PAD_LL_L and <= InputId.HOT_PAD_RR_R;
+        var isClicked         = inputIDManager.IsInputIDPressed(key, isCrossHotbarSlot);
+        var isPressed         = inputIDManager.IsInputIDDown(key, isCrossHotbarSlot);
 
         if (!info.IsWaiting(this) && isPressed && !info.LastFrameHeld)
         {
