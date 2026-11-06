@@ -499,6 +499,15 @@ public class AutoDisplayNetworkLatency : ModuleBase
                                      100d * retransmittedBytes / sentBytes;
 
             var value = info.RoundTripTime / 1000f;
+            unsafe
+            {
+                if (value <= 10)
+                {
+                    var module = (NetworkModule*)Framework.Instance()->GetNetworkModuleProxy()->NetworkModule;
+                    value = MathF.Max(10, module->RoundTripTime - (Framework.Instance()->FrameDeltaTime * 1000f));
+                }
+            }
+            
             History[HistoryIndex] = value;
             HistoryIndex          = (HistoryIndex + 1) % History.Length;
             FilledCount           = Math.Min(FilledCount + 1, History.Length);
