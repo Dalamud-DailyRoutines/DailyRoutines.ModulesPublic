@@ -336,7 +336,7 @@ public unsafe class OptimizedCastBar : ModuleBase
                     // 传送
                     case ActionType.Action when localPlayer.CastActionID == 5:
                     {
-                        if (AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == aetheryteID) is not { } aetheryteRecord)
+                        if (AetheryteRecordManager.Instance().GameRecords.FirstOrDefault(x => x.RowID == aetheryteID) is not { } aetheryteRecord)
                             return;
 
                         using var utf8String = new Utf8String(aetheryteRecord.Name);
