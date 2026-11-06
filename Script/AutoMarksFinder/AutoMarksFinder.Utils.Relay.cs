@@ -30,7 +30,14 @@ public unsafe partial class AutoMarksFinder
             {
                 NotifyHelper.Instance().NotificationWarning
                 (
-                    Lang.Get("AutoMarksFinder-Relay-TooManyLines", new Dictionary<string, object> { ["count"] = MAX_RELAY_LINES }),
+                    Lang.Get
+                    (
+                        "AutoMarksFinder-Relay-TooManyLines",
+                        new Dictionary<string, object>
+                        {
+                            ["count"] = MAX_RELAY_LINES
+                        }
+                    ),
                     Lang.Get("AutoMarksFinder-AutoBroadcast")
                 );
                 return false;

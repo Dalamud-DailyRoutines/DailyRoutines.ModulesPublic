@@ -3,776 +3,670 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Config;
-using Dalamud.Game.Text.SeStringHandling;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
-using OmenTools.Interop.Game.Helpers;
+using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.Threading;
-using OmenTools.Threading.TaskHelper;
-using OmenTools.Threading.TaskHelper.Enums;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
-    private sealed class NotoriousMonsterScanner : IDisposable
+    private sealed class NotoriousMonsterScanner
+    (
+        AutoMarksFinder module
+    ) : IDisposable
     {
         private enum ScanState
         {
-            Idle,
-            Initializing,
-            MovingToPoint,
-            Scanning,
-            SwitchingInstance,
+            Stopped,
+            Preparing,
+            SelectingPoint,
+            Teleporting,
+            Mounting,
+            Pathfinding,
+            Moving,
+            Observing,
             SwitchingZone,
-            Completed
+            SwitchingInstance
         }
 
-        private readonly AutoMarksFinder module;
+        private readonly Dictionary<uint, List<Vector3>>     zones            = [];
+        private readonly HashSet<(uint Zone, uint Instance)> completedAreas   = [];
+        private readonly List<Vector3>                       pendingPoints    = [];
+        private readonly List<Vector3>                       candidates       = [];
+        private readonly List<Vector3>                       failedCandidates = [];
+        private readonly List<Vector3>                       targetPoints     = [];
+        private readonly Queue<Vector3>                      retryTargets     = [];
+        private          CancellationTokenSource?            pathCancellation;
+        private          Task<List<Vector3>>?                pathTask;
+        private          ScanState                           state;
+        private          long                                stateStartedAt;
+        private          long                                lastProgressAt;
+        private          long                                mountRequestedAt;
+        private          float                               closestDistance;
+        private          Vector3                             target;
+        private          Vector3                             anchor;
+        private          Vector3                             observationPosition;
+        private          uint                                currentZone;
+        private          uint                                currentInstance;
+        private          uint?                               originalAroundRangeMode;
+        private          bool                                disposed;
 
-        private uint? originalAroundRangeMode;
+        public bool IsRunning => state != ScanState.Stopped;
 
-        private bool disposed;
+        public Dictionary<uint, HashSet<NotoriousMonsterFound>> FoundOnes { get; } = [];
 
-        private ScanState                       currentState;
-        private uint                            currentScanZone;
-        private uint                            currentInstance;
-        private int                             currentScanPointIndex;
-        private List<NotoriousMonsterScanPoint> currentSortedPoints = [];
-        private Vector3?                        currentTargetPoint;
-
-        public Dictionary<uint, HashSet<NotoriousMonsterFound>> FoundOnes { get; set; } = [];
-
-        public NotoriousMonsterScanner
-        (
-            AutoMarksFinder module
-        )
+        public void StartScan()
         {
-            this.module = module;
+            if (disposed ||
+                IsRunning)
+                return;
 
-            currentState = ScanState.Idle;
+            foreach (var zone in module.config.SelectedZones)
+            {
+                if (module.config.ScanPoints.TryGetValue(zone, out var points) &&
+                    points.Count > 0)
+                    zones[zone] = [.. points.Select(point => point.Position).Distinct()];
+            }
 
-            FrameworkManager.Instance().Reg(OnUpdate, 100);
+            if (zones.Count == 0)
+                return;
+
+            if (IGameConfig.Instance().System.TryGetUInt(nameof(SystemConfigOption.DynamicAroundRangeMode), out var mode) &&
+                mode <= 2)
+            {
+                originalAroundRangeMode = mode;
+
+                if (mode != 2)
+                {
+                    IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), 2u);
+                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, 2);
+                }
+            }
+
+            ChangeState(ScanState.Preparing);
+            FrameworkManager.Instance().Reg(OnUpdate, UPDATE_INTERVAL_MS);
         }
 
         public void Dispose()
         {
-            if (disposed) return;
+            if (disposed)
+                return;
 
-            disposed     = true;
-            currentState = ScanState.Idle;
-
-            try
-            {
-                FrameworkManager.Instance().Unreg(OnUpdate);
-            }
-            finally
-            {
-                if (originalAroundRangeMode is { } mode)
-                {
-                    IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), mode);
-                    ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, mode);
-                    originalAroundRangeMode = null;
-                }
-            }
-        }
-
-        public (uint ZoneID, List<NotoriousMonsterScanPoint> Points, int CurrentIndex) GetCurrentScanState() =>
-            (currentScanZone, currentSortedPoints, currentScanPointIndex);
-
-        public void StartScan()
-        {
-            if (disposed || currentState != ScanState.Idle) return;
-
-            try
-            {
-                if (IGameConfig.Instance().System.TryGetUInt(nameof(SystemConfigOption.DynamicAroundRangeMode), out var mode) && mode <= 2)
-                {
-                    originalAroundRangeMode = mode;
-
-                    if (mode != 2)
-                    {
-                        IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), 2u);
-                        ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, 2);
-                    }
-                }
-
-                currentState = ScanState.Initializing;
-                StateCheck();
-            }
-            catch
-            {
-                module.StopScanner();
-            }
-        }
-
-        private void StateCheck()
-        {
-            if (disposed) return;
+            var previousState = state;
+            disposed = true;
+            state    = ScanState.Stopped;
+            FrameworkManager.Instance().Unreg(OnUpdate);
             module.TaskHelper.Abort();
+            CancelPath();
+            if (vnavmeshIPC.IsPluginEnabled())
+                vnavmeshIPC.StopPathfind();
 
-            if (!CheckPreCondition())
-                return;
-
-            switch (currentState)
+            switch (previousState)
             {
-                case ScanState.Initializing:
-                    HandleInitializing();
-                    break;
-
-                case ScanState.MovingToPoint:
-                    HandleMovingToPoint();
-                    break;
-
-                case ScanState.Scanning:
-                    HandleScanning();
-                    break;
-
                 case ScanState.SwitchingInstance:
-                    HandleSwitchingInstance();
+                    ChatManager.Instance().SendMessage("/pdr insc abort");
                     break;
-
                 case ScanState.SwitchingZone:
-                    HandleSwitchingZone();
-                    break;
-
-                case ScanState.Completed:
-                    module.StopScanner();
-                    break;
-            }
-        }
-
-        private void EnqueueCheckState
-        (
-            string name
-        ) =>
-            module.TaskHelper.Enqueue(StateCheck, name);
-
-        private bool CheckPreCondition()
-        {
-            if (!UIModule.IsScreenReady() || IObjectTable.Instance().LocalPlayer == null)
-            {
-                EnqueueCheckState("等待屏幕就绪, 进入新循环");
-                return false;
-            }
-
-            if (!IDalamudPluginInterface.Instance().IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) || !vnavmeshIPC.GetIsNavReady())
-            {
-                EnqueueCheckState("等待导航就绪, 进入新循环");
-                return false;
-            }
-
-            return true;
-        }
-
-        private void HandleInitializing()
-        {
-            var currentZone = GameState.TerritoryType;
-
-            if (!module.config.SelectedZones.Contains(currentZone))
-            {
-                currentState = ScanState.SwitchingZone;
-                EnqueueCheckState("当前区域不在扫描列表，切换区域");
-                return;
-            }
-
-            if (!module.config.ScanPoints.TryGetValue(currentZone, out var points) || points.Count == 0)
-            {
-                module.config.SelectedZones.Remove(currentZone);
-                currentState = ScanState.SwitchingZone;
-                EnqueueCheckState("当前区域无扫描点，切换区域");
-                return;
-            }
-
-            currentScanZone       = currentZone;
-            currentInstance       = InstancesManager.CurrentInstance;
-            currentScanPointIndex = 0;
-            currentSortedPoints   = SortPoints(points);
-
-            currentState = ScanState.MovingToPoint;
-            EnqueueCheckState("初始化完成，开始移动");
-        }
-
-        private void HandleMovingToPoint()
-        {
-            if (currentScanPointIndex >= currentSortedPoints.Count)
-            {
-                currentState = ScanState.SwitchingZone;
-                EnqueueCheckState("所有扫描点已完成");
-                return;
-            }
-
-            if (IsCurrentAreaCompleted(currentScanZone, currentInstance))
-            {
-                if (InstancesManager.IsInstancedArea)
-                {
-                    currentState = ScanState.SwitchingInstance;
-                    EnqueueCheckState("当前副本线完成，切换副本线");
-                }
-                else
-                {
-                    currentState = ScanState.SwitchingZone;
-                    EnqueueCheckState("当前区域完成，切换区域");
-                }
-
-                return;
-            }
-
-            var currentPoint = currentSortedPoints[currentScanPointIndex];
-            currentTargetPoint = currentPoint.Position;
-
-            var decision = DecideOptimalPath(currentPoint.Position, currentScanZone);
-
-            switch (decision.Type)
-            {
-                case PathDecision.PathType.TeleportThenNav:
-                    EnqueueTeleportRoute(decision);
-                    break;
-                case PathDecision.PathType.DirectNav:
-                    EnqueueDirectRoute(decision);
+                    MovementManager.Instance().AbortTasks();
                     break;
             }
 
-            currentState = ScanState.Scanning;
-            EnqueueCheckState("开始扫描");
+            if (originalAroundRangeMode is { } mode)
+            {
+                IGameConfig.Instance().System.Set(nameof(SystemConfigOption.DynamicAroundRangeMode), mode);
+                ExecuteCommandManager.Instance().ExecuteCommand(ExecuteCommandFlag.SetAroundRangeMode, mode);
+                originalAroundRangeMode = null;
+            }
         }
 
-        private void HandleScanning()
+        public void ObserveMonster(uint dataID, Vector3 position)
         {
-            if (!currentTargetPoint.HasValue)
-            {
-                MoveToNextPoint("无目标点");
+            if (!IsRunning                                                                  ||
+                !zones.ContainsKey(GameState.TerritoryType)                                 ||
+                !NotoriousMonsterFound.NotoriousMonsters.TryGetValue(dataID, out var rowID) ||
+                !LuminaGetter.TryGetRow<NotoriousMonster>(rowID, out var row)               ||
+                row.Rank != 2)
                 return;
-            }
 
-            var distance2D = LocalPlayerState.DistanceTo2D(currentTargetPoint.Value.ToVector2());
+            var zone = GameState.TerritoryType;
+            if (!FoundOnes.TryGetValue(zone, out var found))
+                FoundOnes[zone] = found = [];
 
-            if (distance2D <= DETECTION_RADIUS)
-            {
-                module.TaskHelper.DelayNext(500, "等待怪物加载");
-                module.TaskHelper.Enqueue
-                (
-                    () =>
-                    {
-                        vnavmeshIPC.StopPathfind();
-                        module.TaskHelper.Abort();
-                        MoveToNextPoint("已进入检测范围");
-                        return true;
-                    },
-                    "进入检测范围"
-                );
+            if (!found.Add(new(dataID, position, zone, InstancesManager.CurrentInstance)))
                 return;
-            }
 
-            module.TaskHelper.Enqueue
+            NotifyHelper.Instance().Chat
             (
-                () =>
-                {
-                    if (!ICondition.Instance().Any(ConditionFlag.BetweenAreas, ConditionFlag.Jumping))
+                Lang.GetSe
+                (
+                    "AutoMarksFinder-DetectPowerfulMark",
+                    new Dictionary<string, object>
                     {
-                        var currentDistance = LocalPlayerState.DistanceTo2D(currentTargetPoint.Value.ToVector2());
-
-                        if (currentDistance <= DETECTION_RADIUS)
-                        {
-                            vnavmeshIPC.StopPathfind();
-                            module.TaskHelper.Abort();
-                            MoveToNextPoint("移动中进入检测范围");
-                            return true;
-                        }
+                        ["name"]     = row.BNpcName.Value.Singular.ToString(),
+                        ["position"] = ReadOnlySeString.CreateMapLink(position, zone, GameState.Map)
                     }
-
-                    return false;
-                },
-                "等待进入检测范围"
+                )
             );
         }
 
-        private void MoveToNextPoint
-        (
-            string reason
-        )
+        private void OnUpdate(IFramework framework)
         {
-            currentScanPointIndex++;
-            currentState = currentScanPointIndex >= currentSortedPoints.Count ?
-                               ScanState.SwitchingZone :
-                               ScanState.MovingToPoint;
-            EnqueueCheckState($"{reason}，跳转下一点");
+            if (!IsRunning)
+                return;
+
+            try
+            {
+                if (!GameState.IsLoggedIn ||
+                    Environment.TickCount64 - stateStartedAt > STATE_TIMEOUT_MS)
+                {
+                    StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                    return;
+                }
+
+                if (!UIModule.IsScreenReady()       ||
+                    LocalPlayerState.Object == null ||
+                    ICondition.Instance().IsBetweenAreas)
+                    return;
+
+                if (LocalPlayerState.Object.IsDead)
+                {
+                    StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                    return;
+                }
+
+                if (state is ScanState.SwitchingZone or ScanState.SwitchingInstance or ScanState.Teleporting)
+                {
+                    if (module.TaskHelper.IsBusy)
+                        return;
+
+                    if (GameState.TerritoryType          != currentZone ||
+                        InstancesManager.CurrentInstance != currentInstance)
+                    {
+                        StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                        return;
+                    }
+
+                    observationPosition = LocalPlayerState.Object.Position;
+                    ChangeState
+                    (
+                        state == ScanState.Teleporting ?
+                            ScanState.Observing :
+                            ScanState.Preparing
+                    );
+                    return;
+                }
+
+                if (!vnavmeshIPC.IsPluginEnabled() ||
+                    !vnavmeshIPC.GetIsNavReady()   ||
+                    MovementManager.Instance().IsManagerBusy)
+                    return;
+
+                if (state != ScanState.Preparing &&
+                    (GameState.TerritoryType          != currentZone ||
+                     InstancesManager.CurrentInstance != currentInstance))
+                {
+                    StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                    return;
+                }
+
+                if (state != ScanState.Preparing &&
+                    HasEnoughMonsters())
+                {
+                    CompleteArea();
+                    return;
+                }
+
+                switch (state)
+                {
+                    case ScanState.Preparing:
+                        PrepareArea();
+                        break;
+                    case ScanState.SelectingPoint:
+                        SelectPoint();
+                        break;
+                    case ScanState.Mounting:
+                        Mount();
+                        break;
+                    case ScanState.Pathfinding:
+                        UpdatePathfinding();
+                        break;
+                    case ScanState.Moving:
+                        UpdateMovement();
+                        break;
+                    case ScanState.Observing:
+                        ObserveArea();
+                        break;
+                }
+            }
+            catch (Exception exception)
+            {
+                DLog.Error(exception);
+                StopWithWarning("AutoMarksFinder-ScanInterrupted");
+            }
         }
 
-        private unsafe void HandleSwitchingInstance()
+        private void PrepareArea()
         {
-            var currentZone     = GameState.TerritoryType;
-            var currentInstance = InstancesManager.CurrentInstance;
-            var totalInstances  = InstancesManager.Instance().GetInstancesCount(currentZone);
+            currentZone     = GameState.TerritoryType;
+            currentInstance = InstancesManager.CurrentInstance;
 
-            var nextInstance = FindNextIncompleteInstance(currentZone, currentInstance, totalInstances);
+            if (!zones.TryGetValue(currentZone, out var points))
+            {
+                SwitchZone();
+                return;
+            }
 
-            if (nextInstance.HasValue)
+            pendingPoints.Clear();
+            pendingPoints.AddRange(points);
+            failedCandidates.Clear();
+            retryTargets.Clear();
+            BuildCandidates();
+            ChangeState(ScanState.Observing);
+            observationPosition = LocalPlayerState.Object.Position;
+        }
+
+        private void SelectPoint()
+        {
+            if (pendingPoints.Count == 0)
+            {
+                CompleteArea();
+                return;
+            }
+
+            var              position     = LocalPlayerState.Object.Position;
+            var              bestCoverage = 0;
+            var              bestCost     = float.MaxValue;
+            AetheryteRecord? teleport     = null;
+
+            foreach (var candidate in candidates)
+            {
+                if (failedCandidates.Any(failed => DistanceSquared(failed, candidate) < 1))
+                    continue;
+
+                var coveredPoints = pendingPoints.Where(point => DistanceSquared(point, candidate) <= PLANNING_RADIUS * PLANNING_RADIUS).ToList();
+                var coverage      = coveredPoints.Count;
+                if (coverage == 0 ||
+                    coverage < bestCoverage)
+                    continue;
+
+                var margin      = PLANNING_RADIUS - coveredPoints.Max(point => MathF.Sqrt(DistanceSquared(point, candidate)));
+                var cost        = MathF.Max(0, MathF.Sqrt(DistanceSquared(position,                              candidate)) - margin) / MOUNT_SPEED;
+                var aetheryte   = AetheryteRecordManager.Instance().GetNearestAetheryte(currentZone, candidate);
+                var useTeleport = false;
+
+                if (aetheryte != null)
+                {
+                    var teleportCost = TELEPORT_DURATION + (MathF.Max(0, MathF.Sqrt(DistanceSquared(aetheryte.Position, candidate)) - margin) / MOUNT_SPEED);
+
+                    if (teleportCost < cost)
+                    {
+                        cost        = teleportCost;
+                        useTeleport = true;
+                    }
+                }
+
+                if (coverage == bestCoverage &&
+                    cost     >= bestCost)
+                    continue;
+
+                bestCoverage = coverage;
+                bestCost     = cost;
+                target       = candidate;
+                teleport = useTeleport ?
+                               aetheryte :
+                               null;
+            }
+
+            if (bestCoverage == 0)
+            {
+                StopWithWarning("AutoMarksFinder-UnreachablePoints");
+                return;
+            }
+
+            anchor = pendingPoints.MinBy(point => DistanceSquared(point, target));
+            targetPoints.Clear();
+            targetPoints.AddRange(pendingPoints.Where(point => DistanceSquared(point, target) <= PLANNING_RADIUS * PLANNING_RADIUS));
+
+            if (teleport != null)
+            {
+                var destination = teleport;
+                module.TaskHelper.Enqueue(IsAbleToTeleport,       "等待传送");
+                module.TaskHelper.Enqueue(destination.TeleportTo, "传送至以太之光");
+                module.TaskHelper.DelayNext(500, "等待传送开始");
+                module.TaskHelper.Enqueue
+                (
+                    () => UIModule.IsScreenReady() &&
+                          DistanceSquared(LocalPlayerState.Object.Position, destination.Position) <= AETHERYTE_RADIUS * AETHERYTE_RADIUS,
+                    "等待传送完成"
+                );
+                ChangeState(ScanState.Teleporting);
+                return;
+            }
+
+            retryTargets.Clear();
+            retryTargets.Enqueue(target);
+
+            for (var ring = 1; ring <= RETRY_RINGS; ring++)
+            for (var direction = 0; direction < RETRY_DIRECTIONS; direction++)
+            {
+                var angle  = MathF.Tau * direction / RETRY_DIRECTIONS;
+                var nearby = target + (new Vector3(MathF.Cos(angle), 0, MathF.Sin(angle)) * (ring * RETRY_DISTANCE));
+                if (DistanceSquared(nearby, anchor) <= PLANNING_RADIUS * PLANNING_RADIUS)
+                    retryTargets.Enqueue(nearby);
+            }
+
+            ChangeState(ScanState.Mounting);
+        }
+
+        private void Mount()
+        {
+            if (ICondition.Instance()[ConditionFlag.Mounted])
+            {
+                StartPathfinding();
+                return;
+            }
+
+            if (Environment.TickCount64 - stateStartedAt > MOUNT_TIMEOUT_MS)
+            {
+                StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                return;
+            }
+
+            if (ICondition.Instance().IsCasting ||
+                Environment.TickCount64 - mountRequestedAt < MOUNT_RETRY_MS)
+                return;
+
+            mountRequestedAt = Environment.TickCount64;
+            UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9);
+        }
+
+        private void StartPathfinding()
+        {
+            CancelPath();
+
+            while (retryTargets.TryDequeue(out var candidate))
+            {
+                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, MESH_SEARCH_RADIUS, MESH_SEARCH_HEIGHT) is not { } meshPoint ||
+                    DistanceSquared(meshPoint, anchor) > PLANNING_RADIUS * PLANNING_RADIUS)
+                    continue;
+
+                var fly = ICondition.Instance()[ConditionFlag.Mounted] && Control.CanFly;
+                pathCancellation = new();
+                pathTask         = vnavmeshIPC.PathfindCancelable(LocalPlayerState.Object.Position, meshPoint, fly, pathCancellation.Token);
+                ChangeState(ScanState.Pathfinding);
+                return;
+            }
+
+            failedCandidates.Add(target);
+            ChangeState(ScanState.SelectingPoint);
+        }
+
+        private void UpdatePathfinding()
+        {
+            if (pathTask == null)
+            {
+                StartPathfinding();
+                return;
+            }
+
+            if (!pathTask.IsCompleted)
+            {
+                if (Environment.TickCount64 - stateStartedAt >= PATHFIND_TIMEOUT_MS)
+                    StartPathfinding();
+
+                return;
+            }
+
+            if (!pathTask.IsCompletedSuccessfully)
+            {
+                StartPathfinding();
+                return;
+            }
+
+            var path = pathTask.Result;
+
+            if (path.Count                        == 0 ||
+                DistanceSquared(path[^1], anchor) > PLANNING_RADIUS * PLANNING_RADIUS)
+            {
+                StartPathfinding();
+                return;
+            }
+
+            CancelPath();
+            var endIndex = path.FindIndex(point => DistanceSquared(point, target) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS);
+            if (endIndex >= 0)
+                path.RemoveRange(endIndex + 1, path.Count - endIndex - 1);
+
+            path[0] = LocalPlayerState.Object.Position;
+            vnavmeshIPC.SetPathfindTolerance(2f);
+            vnavmeshIPC.PathfindWithPath(path, ICondition.Instance()[ConditionFlag.Mounted] && Control.CanFly);
+            closestDistance = DistanceSquared(LocalPlayerState.Object.Position, target);
+            lastProgressAt  = Environment.TickCount64;
+            ChangeState(ScanState.Moving);
+        }
+
+        private void UpdateMovement()
+        {
+            var position = LocalPlayerState.Object.Position;
+            var distance = DistanceSquared(position, target);
+
+            if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS ||
+                targetPoints.All(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
             {
                 vnavmeshIPC.StopPathfind();
-                module.TaskHelper.Abort();
+                observationPosition = position;
+                ChangeState(ScanState.Observing);
+                return;
+            }
 
-                if (!EventFramework.Instance()->TryGetNearestEventID
-                    (
-                        x => x.EventId.ContentId == EventHandlerContent.Aetheryte,
-                        x => x.NameString.Equals
-                        (
-                            LuminaGetter.GetRowOrDefault<Aetheryte>(0).Singular.ToString(),
-                            StringComparison.OrdinalIgnoreCase
-                        ),
-                        default,
-                        out _
-                    ))
+            if (distance < closestDistance - (PROGRESS_DISTANCE * PROGRESS_DISTANCE))
+            {
+                closestDistance = distance;
+                lastProgressAt  = Environment.TickCount64;
+            }
+
+            if (!vnavmeshIPC.GetIsPathfindRunning() ||
+                Environment.TickCount64 - lastProgressAt > MOVEMENT_TIMEOUT_MS)
+            {
+                vnavmeshIPC.StopPathfind();
+
+                if (pendingPoints.Any(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
                 {
-                    module.TaskHelper.Enqueue
-                    (
-                        IsAbleToTeleport,
-                        "等待停止移动"
-                    );
-                    module.TaskHelper.Enqueue
-                    (
-                        () => AetheryteRecordManager.Instance().GetNearestAetheryte(currentZone, Vector3.Zero)?.TeleportTo(),
-                        "传送至以太之光"
-                    );
+                    observationPosition = position;
+                    ChangeState(ScanState.Observing);
+                }
+                else
+                    StartPathfinding();
+            }
+        }
+
+        private void ObserveArea()
+        {
+            var position = LocalPlayerState.Object.Position;
+
+            if (DistanceSquared(position, observationPosition) > 1)
+            {
+                observationPosition = position;
+                stateStartedAt      = Environment.TickCount64;
+                return;
+            }
+
+            if (Environment.TickCount64 - stateStartedAt < OBSERVATION_DELAY_MS)
+                return;
+
+            foreach (var obj in IObjectTable.Instance())
+            {
+                if (obj is { ObjectKind: ObjectKind.BattleNpc, IsDead: false })
+                    ObserveMonster(obj.DataID, obj.Position);
+            }
+
+            pendingPoints.RemoveAll(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS);
+            ChangeState(ScanState.SelectingPoint);
+        }
+
+        private bool HasEnoughMonsters() =>
+            FoundOnes.TryGetValue(currentZone, out var found) &&
+            found.Count(monster => monster.Instance == currentInstance) >=
+            (GameState.TerritoryTypeData.ExVersion.RowId == 0 ?
+                 1 :
+                 2);
+
+        private void CompleteArea()
+        {
+            CancelPath();
+            vnavmeshIPC.StopPathfind();
+            completedAreas.Add((currentZone, currentInstance));
+            var instanceCount = InstancesManager.IsInstancedArea ?
+                                    InstancesManager.Instance().GetInstancesCount(currentZone) :
+                                    0;
+
+            for (uint instance = 1; instance <= instanceCount; instance++)
+            {
+                if (completedAreas.Contains((currentZone, instance)))
+                    continue;
+
+                currentInstance = instance;
+                module.TaskHelper.Enqueue(IsAbleToTeleport, "等待切换分线");
+                var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(currentZone, Vector3.Zero);
+
+                if (aetheryte == null)
+                {
+                    StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                    return;
+                }
+
+                if (DistanceSquared(LocalPlayerState.Object.Position, aetheryte.Position) > AETHERYTE_RADIUS * AETHERYTE_RADIUS)
+                {
+                    module.TaskHelper.Enqueue(aetheryte.TeleportTo, "传送至以太之光");
+                    module.TaskHelper.DelayNext(500, "等待传送开始");
                     module.TaskHelper.Enqueue
                     (
                         () => UIModule.IsScreenReady() &&
-                              EventFramework.Instance()->TryGetNearestEventID
-                              (
-                                  x => x.EventId.ContentId == EventHandlerContent.Aetheryte,
-                                  x => x.NameString.Equals
-                                  (
-                                      LuminaGetter.GetRowOrDefault<Aetheryte>(0).Singular.ToString(),
-                                      StringComparison.OrdinalIgnoreCase
-                                  ),
-                                  default,
-                                  out _
-                              ),
+                              DistanceSquared(LocalPlayerState.Object.Position, aetheryte.Position) <= AETHERYTE_RADIUS * AETHERYTE_RADIUS,
                         "等待靠近以太之光"
                     );
                 }
 
-                module.TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage($"/pdr insc {nextInstance.Value}"),              $"切换至 {nextInstance.Value} 线");
-                module.TaskHelper.Enqueue(() => UIModule.IsScreenReady() && InstancesManager.CurrentInstance == nextInstance.Value, "等待切换完毕");
-
-                this.currentInstance  = nextInstance.Value;
-                currentScanPointIndex = 0;
-                currentState          = ScanState.Initializing;
-
-                EnqueueCheckState("副本线切换完成，重新开始扫描");
-            }
-            else
-            {
-                currentState = ScanState.SwitchingZone;
-                EnqueueCheckState("当前区域所有副本线完成");
-            }
-        }
-
-        private void HandleSwitchingZone()
-        {
-            var currentZone = GameState.TerritoryType;
-
-            if (module.config.SelectedZones.Contains(currentZone))
-            {
-                vnavmeshIPC.StopPathfind();
-                module.TaskHelper.Abort();
-
-                module.config.SelectedZones.Remove(currentZone);
-            }
-
-            var targetZone = module.config.SelectedZones.FirstOrDefault();
-
-            if (targetZone == 0)
-            {
-                currentState = ScanState.Completed;
-                EnqueueCheckState("所有区域扫描完成");
-                return;
-            }
-
-            if (!module.config.ScanPoints.TryGetValue(targetZone, out var points) || points.Count == 0)
-            {
-                module.config.SelectedZones.Remove(targetZone);
-                EnqueueCheckState("目标区域无扫描点，移除并重新检查");
-                return;
-            }
-
-            vnavmeshIPC.StopPathfind();
-
-            module.TaskHelper.Enqueue
-            (
-                IsAbleToTeleport,
-                "等待停止移动"
-            );
-            module.TaskHelper.Enqueue
-            (
-                () => MovementManager.Instance().TPSmart_BetweenZone(targetZone),
-                $"传送至区域 {targetZone}"
-            );
-            module.TaskHelper.Enqueue
-            (
-                () => GameState.TerritoryType == targetZone && UIModule.IsScreenReady(),
-                "等待传送完毕"
-            );
-            module.TaskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (!InstancesManager.IsInstancedArea) return;
-
-                    if (InstancesManager.CurrentInstance != 1)
-                    {
-                        module.TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage("/pdr insc 1"),                 "切换至 1 线", weight: 1);
-                        module.TaskHelper.Enqueue(() => UIModule.IsScreenReady() && InstancesManager.CurrentInstance == 1, "等待切换完毕",  weight: 1);
-                    }
-                },
-                "检查副本区切换"
-            );
-
-            currentState = ScanState.Initializing;
-            EnqueueCheckState("传送完毕，开始扫描");
-        }
-
-        private bool IsCurrentAreaCompleted
-        (
-            uint zoneID,
-            uint instance
-        )
-        {
-            var expectedAmount = GameState.TerritoryTypeData.ExVersion.RowId == 0 ?
-                                     1 :
-                                     2;
-
-            var hasEnoughMonsters = FoundOnes.TryGetValue(zoneID, out var monsters) &&
-                                    monsters.Count(monster => monster.Instance == instance) >= expectedAmount;
-            var allPointsScanned = currentScanPointIndex >= currentSortedPoints.Count;
-
-            return hasEnoughMonsters || allPointsScanned;
-        }
-
-        private uint? FindNextIncompleteInstance
-        (
-            uint zoneID,
-            uint currentInstance,
-            int  totalInstances
-        )
-        {
-            for (var i = currentInstance + 1; i <= totalInstances; i++)
-                if (!IsCurrentAreaCompleted(zoneID, i))
-                    return i;
-
-            return null;
-        }
-
-        private void OnUpdate
-        (
-            IFramework _
-        )
-        {
-            if (disposed) return;
-
-            if (currentState != ScanState.Idle && !module.TaskHelper.IsBusy)
-            {
-                module.StopScanner();
-                return;
-            }
-
-            var currentZone     = GameState.TerritoryType;
-            var currentInstance = InstancesManager.CurrentInstance;
-
-            if (!module.config.SelectedZones.Contains(currentZone) || !module.config.ScanPoints.TryGetValue(currentZone, out var _))
-                return;
-
-            var foundNewMonster = false;
-
-            foreach (var obj in IObjectTable.Instance())
-            {
-                if (obj is not { ObjectKind: ObjectKind.BattleNpc, IsDead: false }) 
-                    continue;
-                if (!NotoriousMonsterFound.NotoriousMonsters.TryGetValue(obj.DataID, out var dataRowID)) 
-                    continue;
-                if (!LuminaGetter.TryGetRow<NotoriousMonster>(dataRowID, out var dataRow)) 
-                    continue;
-                if (dataRow.Rank != 2)
-                    continue;
-
-                FoundOnes.TryAdd(currentZone, []);
-
-                var parsed = new NotoriousMonsterFound(obj.DataID, obj.Position, currentZone, currentInstance);
-                if (!FoundOnes[currentZone].Add(parsed)) continue;
-
-                foundNewMonster = true;
-
-                var mapPos = PositionHelper.WorldToMap(obj.Position.ToVector2(), GameState.MapData);
-                NotifyHelper.Instance().Chat
+                module.TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage($"/pdr insc {currentInstance}"), "切换分线");
+                module.TaskHelper.Enqueue
                 (
-                    Lang.GetSe
-                    (
-                        "AutoMarksFinder-DetectPowerfulMark",
-                        new Dictionary<string, object>
-                        {
-                            ["name"]     = dataRow.BNpcName.Value.Singular.ToString(),
-                            ["position"] = ReadOnlySeString.CreateMapLink(obj.Position, currentZone, GameState.Map)
-                        }
-                    )
+                    () => UIModule.IsScreenReady() &&
+                          InstancesManager.CurrentInstance == currentInstance,
+                    "等待分线切换完成"
                 );
-            }
-
-            if (foundNewMonster && module.TaskHelper.IsBusy && currentScanZone == currentZone)
-            {
-                if (IsCurrentAreaCompleted(currentZone, currentInstance))
-                {
-                    vnavmeshIPC.StopPathfind();
-                    module.TaskHelper.Abort();
-
-                    if (InstancesManager.IsInstancedArea)
-                    {
-                        currentState = ScanState.SwitchingInstance;
-                        EnqueueCheckState("发现足够怪物，切换副本线");
-                    }
-                    else
-                    {
-                        currentState = ScanState.SwitchingZone;
-                        EnqueueCheckState("发现足够怪物，切换区域");
-                    }
-                }
-                else
-                {
-                    vnavmeshIPC.StopPathfind();
-                    module.TaskHelper.Abort();
-                    MoveToNextPoint("发现新怪物");
-                }
-            }
-
-            if (module.config.SelectedZones.Count == 0 &&
-                !module.TaskHelper.IsBusy)
-                module.StopScanner();
-        }
-
-        private static PathDecision DecideOptimalPath
-        (
-            Vector3 targetPoint,
-            uint    zoneID
-        )
-        {
-            var currentPos     = LocalPlayerState.Object?.Position ?? Vector3.Zero;
-            var directDistance = Vector3.Distance(currentPos, targetPoint);
-
-            if (directDistance <= 100)
-            {
-                return new PathDecision
-                {
-                    Type           = PathDecision.PathType.DirectNav,
-                    TargetPosition = targetPoint,
-                    EstimatedTime  = directDistance / MOUNT_SPEED
-                };
-            }
-
-            var nearestAetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(zoneID, targetPoint);
-
-            if (nearestAetheryte == null)
-            {
-                return new PathDecision
-                {
-                    Type           = PathDecision.PathType.DirectNav,
-                    TargetPosition = targetPoint,
-                    EstimatedTime  = directDistance / MOUNT_SPEED
-                };
-            }
-
-            var aetherytePos                  = vnavmeshIPC.QueryNearestPointOnMesh(nearestAetheryte.Position, 15, 10000) ?? nearestAetheryte.Position;
-            var distanceFromAetheryteToTarget = Vector3.Distance(aetherytePos, targetPoint);
-
-            var directTime   = directDistance / MOUNT_SPEED;
-            var teleportTime = TELEPORT_DURATION + (distanceFromAetheryteToTarget / MOUNT_SPEED);
-
-            if (teleportTime < directTime)
-            {
-                return new PathDecision
-                {
-                    Type           = PathDecision.PathType.TeleportThenNav,
-                    TargetPosition = targetPoint,
-                    Aetheryte      = nearestAetheryte,
-                    EstimatedTime  = teleportTime
-                };
-            }
-
-            return new PathDecision
-            {
-                Type           = PathDecision.PathType.DirectNav,
-                TargetPosition = targetPoint,
-                EstimatedTime  = directTime
-            };
-        }
-
-        private void EnqueueTeleportRoute
-        (
-            PathDecision decision
-        )
-        {
-            module.TaskHelper.Enqueue(IsAbleToTeleport, "等待停止移动");
-            module.TaskHelper.Enqueue
-            (
-                () => AetheryteRecordManager.Instance().GetNearestAetheryte(currentScanZone, decision.TargetPosition)?.TeleportTo(),
-                $"传送至距离 {decision.TargetPosition} 最近的以太之光"
-            );
-
-            var aetherytePos = vnavmeshIPC.QueryNearestPointOnMesh(decision.Aetheryte.Position, 15, 10000) ?? decision.Aetheryte.Position;
-            module.TaskHelper.Enqueue
-            (
-                () => UIModule.IsScreenReady() && LocalPlayerState.DistanceTo2D(aetherytePos.ToVector2()) <= 60,
-                "等待以太之光传送完毕"
-            );
-
-            EnqueueMount(module.TaskHelper);
-            EnqueuePathfind(decision.TargetPosition);
-        }
-
-        private void EnqueueDirectRoute
-        (
-            PathDecision decision
-        )
-        {
-            module.TaskHelper.Enqueue(IsAbleToTeleport, "等待停止移动");
-
-            if (vnavmeshIPC.QueryNearestPointOnMesh(decision.TargetPosition, 10, 10000) is not { } finalPos)
-            {
-                MoveToNextPoint("跳过无效扫描点");
+                ChangeState(ScanState.SwitchingInstance);
                 return;
             }
 
-            EnqueueMount(module.TaskHelper);
-            EnqueuePathfind(finalPos);
+            zones.Remove(currentZone);
+            SwitchZone();
         }
 
-        private void EnqueuePathfind
-        (
-            Vector3 targetPos
-        ) =>
-            module.TaskHelper.EnqueueAsync
-            (
-                async ct =>
-                {
-                    var isOnMount    = ICondition.Instance()[ConditionFlag.Mounted];
-                    var cancelSource = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
-                    var paths = await vnavmeshIPC.PathfindCancelable
-                                (
-                                    LocalPlayerState.Object?.Position ?? Vector3.Zero,
-                                    targetPos,
-                                    isOnMount,
-                                    cancelSource.Token
-                                );
-
-                    if (paths.Count == 0)
-                    {
-                        vnavmeshIPC.StopPathfind();
-                        module.TaskHelper.Abort();
-                        MoveToNextPoint("寻路失败");
-                        return;
-                    }
-
-                    if (Vector2.DistanceSquared(paths.Last().ToVector2(), targetPos.ToVector2()) > 625)
-                    {
-                        vnavmeshIPC.StopPathfind();
-                        module.TaskHelper.Abort();
-                        MoveToNextPoint("路径无法到达");
-                        return;
-                    }
-
-                    vnavmeshIPC.SetPathfindTolerance(2f);
-                    vnavmeshIPC.PathfindWithPath(paths, isOnMount);
-                },
-                $"移动至: {targetPos}",
-                30_000,
-                TaskAbortBehaviour.AbortAll,
-                timeoutAction: () =>
-                {
-                    vnavmeshIPC.StopPathfind();
-                    module.TaskHelper.Abort();
-                    MoveToNextPoint("寻路超时");
-                }
-            );
-
-        private static bool IsAbleToTeleport() =>
-            !LocalPlayerState.Instance().IsMoving             &&
-            !ICondition.Instance().Any(ConditionFlag.Casting) &&
-            !ICondition.Instance().IsBetweenAreas             &&
-            UIModule.IsScreenReady();
-
-        private static void EnqueueMount
-        (
-            TaskHelper taskHelper
-        ) =>
-            taskHelper.Enqueue
-            (
-                () =>
-                {
-                    if (ICondition.Instance()[ConditionFlag.Mounted]) return true;
-                    if (!Throttler.Shared.Throttle("AutoMarksFinder-Mount", 1000)) return false;
-                    if (ICondition.Instance().IsCasting) return false;
-
-                    UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9);
-                    return false;
-                },
-                "上坐骑"
-            );
-
-        private static List<NotoriousMonsterScanPoint> SortPoints
-        (
-            List<NotoriousMonsterScanPoint> points
-        )
+        private void SwitchZone()
         {
-            if (points.Count == 0) return [];
-
-            var sorted    = new List<NotoriousMonsterScanPoint>();
-            var remaining = new List<NotoriousMonsterScanPoint>(points);
-
-            var current = LocalPlayerState.Object?.Position ?? Vector3.Zero;
-
-            while (remaining.Count > 0)
+            if (zones.Count == 0)
             {
-                var nearest = remaining.OrderBy(p => Vector3.DistanceSquared(current, p.Position)).First();
-                sorted.Add(nearest);
-                remaining.Remove(nearest);
-                current = nearest.Position;
+                Dispose();
+                return;
             }
 
-            for (var iteration = 0; iteration < 500; iteration++)
-            {
-                var improved = false;
-
-                for (var i = 0; i < sorted.Count - 1; i++)
-                for (var j = i + 1; j < sorted.Count; j++)
-                {
-                    var currentDistance = Vector3.Distance(sorted[i].Position, sorted[i + 1].Position) +
-                                          Vector3.Distance(sorted[j].Position, sorted[(j + 1) % sorted.Count].Position);
-
-                    var newDistance = Vector3.Distance(sorted[i].Position,     sorted[j].Position) +
-                                      Vector3.Distance(sorted[i + 1].Position, sorted[(j + 1) % sorted.Count].Position);
-
-                    if (newDistance < currentDistance)
-                    {
-                        sorted.Reverse(i + 1, j - i);
-                        improved = true;
-                    }
-                }
-
-                if (!improved) break;
-            }
-
-            return sorted;
+            currentZone = zones.Keys.Min();
+            module.TaskHelper.Enqueue(IsAbleToTeleport,                                                  "等待区域传送");
+            module.TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(currentZone), "传送至扫描区域");
+            module.TaskHelper.DelayNext(500, "等待传送开始");
+            module.TaskHelper.Enqueue
+            (
+                () => GameState.TerritoryType == currentZone &&
+                      UIModule.IsScreenReady(),
+                "等待区域传送完成"
+            );
+            module.TaskHelper.Enqueue(() => currentInstance = InstancesManager.CurrentInstance, "记录当前分线");
+            ChangeState(ScanState.SwitchingZone);
         }
+
+        private void BuildCandidates()
+        {
+            candidates.Clear();
+            candidates.AddRange(pendingPoints);
+
+            for (var first = 0; first < pendingPoints.Count; first++)
+            for (var second = first + 1; second < pendingPoints.Count; second++)
+            {
+                var start    = pendingPoints[first];
+                var end      = pendingPoints[second];
+                var distance = DistanceSquared(start, end);
+                if (distance is <= 0 or > 4 * PLANNING_RADIUS * PLANNING_RADIUS)
+                    continue;
+
+                var middle = (start + end)                                       / 2;
+                var offset = new Vector3(-(end.Z - start.Z), 0, end.X - start.X) * MathF.Sqrt(((PLANNING_RADIUS * PLANNING_RADIUS) - (distance / 4)) / distance);
+                candidates.Add(middle);
+                candidates.Add(middle + offset);
+                candidates.Add(middle - offset);
+            }
+        }
+
+        private void ChangeState(ScanState next)
+        {
+            state          = next;
+            stateStartedAt = Environment.TickCount64;
+        }
+
+        private void CancelPath()
+        {
+            pathCancellation?.Cancel();
+            pathCancellation?.Dispose();
+            pathCancellation = null;
+
+            if (pathTask != null)
+            {
+                _ = pathTask.ContinueWith
+                (
+                    completed => DLog.Error(completed.Exception),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default
+                );
+                pathTask = null;
+            }
+        }
+
+        private void StopWithWarning(string key)
+        {
+            NotifyHelper.Instance().NotificationWarning(Lang.Get(key), Lang.Get("AutoMarksFinderTitle"));
+            Dispose();
+        }
+
+        private static float DistanceSquared(Vector3 first, Vector3 second) =>
+            Vector2.DistanceSquared(new(first.X, first.Z), new(second.X, second.Z));
 
         #region 常量
 
-        private const float MOUNT_SPEED       = 12f;
-        private const float TELEPORT_DURATION = 10f;
-        private const float DETECTION_RADIUS  = 300f;
+        private const float DETECTION_RADIUS     = 300;
+        private const float PLANNING_RADIUS      = 280;
+        private const float ARRIVAL_RADIUS       = 20;
+        private const float MOUNT_SPEED          = 12;
+        private const float TELEPORT_DURATION    = 10;
+        private const float AETHERYTE_RADIUS     = 60;
+        private const float MESH_SEARCH_RADIUS   = 30;
+        private const float MESH_SEARCH_HEIGHT   = 10000;
+        private const float RETRY_DISTANCE       = 80;
+        private const float PROGRESS_DISTANCE    = 2;
+        private const int   RETRY_RINGS          = 2;
+        private const int   RETRY_DIRECTIONS     = 8;
+        private const int   UPDATE_INTERVAL_MS   = 250;
+        private const int   STATE_TIMEOUT_MS     = 180_000;
+        private const int   PATHFIND_TIMEOUT_MS  = 15_000;
+        private const int   MOVEMENT_TIMEOUT_MS  = 15_000;
+        private const int   MOUNT_TIMEOUT_MS     = 20_000;
+        private const int   MOUNT_RETRY_MS       = 1000;
+        private const int   OBSERVATION_DELAY_MS = 1500;
 
         #endregion
     }

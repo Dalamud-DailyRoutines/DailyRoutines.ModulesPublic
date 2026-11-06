@@ -2,19 +2,12 @@ using System.Collections.Frozen;
 using System.Numerics;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Game.ClientState.Objects.Types;
-using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using FFXIVClientStructs.FFXIV.Client.Game.Network;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.Network;
 using Lumina.Excel.Sheets;
-using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
-using GameObjectId      = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectId;
 using GameObjectManager = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectManager;
-using ObjectKindNative  = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
+using ObjectKindNative = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -25,34 +18,15 @@ public partial class AutoMarksFinder
         private readonly AutoMarksFinder module;
 
         private readonly Dictionary<NotoriousMonsterList, Dictionary<NotoriousMonsterFound, AliveTrack>> aliveTracks = new(ReferenceEqualityComparer.Instance);
-        private readonly Dictionary<uint, FrozenSet<uint>>                                              territoryIdentities = [];
-        private readonly Dictionary<uint, NotoriousMonsterFound>                                        trackedMonsters = [];
+        private readonly Dictionary<uint, FrozenSet<uint>>                                               territoryIdentities = [];
+        private readonly Dictionary<uint, NotoriousMonsterFound>                                         trackedMonsters = [];
 
-        private Hook<PacketDispatcher.Delegates.HandleSpawnNpcPacket>?     OnSpawnNPCHook;
-        private Hook<PacketDispatcher.Delegates.HandleActorControlPacket>? OnActorControlHook;
-
-        public unsafe MonsterAliveMonitor
+        public MonsterAliveMonitor
         (
             AutoMarksFinder module
         )
         {
             this.module = module;
-
-            OnSpawnNPCHook = IGameInteropProvider.Instance().HookFromMemberFunction
-            (
-                typeof(PacketDispatcher.MemberFunctionPointers),
-                nameof(PacketDispatcher.HandleSpawnNpcPacket),
-                (PacketDispatcher.Delegates.HandleSpawnNpcPacket)OnSpawnNPCDetour
-            );
-            OnSpawnNPCHook.Enable();
-
-            OnActorControlHook = IGameInteropProvider.Instance().HookFromMemberFunction
-            (
-                typeof(PacketDispatcher.MemberFunctionPointers),
-                nameof(PacketDispatcher.HandleActorControlPacket),
-                (PacketDispatcher.Delegates.HandleActorControlPacket)OnActorControlDetour
-            );
-            OnActorControlHook.Enable();
 
             IClientState.Instance().TerritoryChanged += OnTerritoryChanged;
             GameState.Instance().WarpComplete        += OnWarpCompleted;
@@ -66,18 +40,6 @@ public partial class AutoMarksFinder
             IClientState.Instance().TerritoryChanged -= OnTerritoryChanged;
             GameState.Instance().WarpComplete        -= OnWarpCompleted;
             GameState.Instance().Logout              -= OnLogout;
-
-            if (OnSpawnNPCHook != null)
-            {
-                OnSpawnNPCHook.Dispose();
-                OnSpawnNPCHook = null;
-            }
-
-            if (OnActorControlHook != null)
-            {
-                OnActorControlHook.Dispose();
-                OnActorControlHook = null;
-            }
 
             aliveTracks.Clear();
             territoryIdentities.Clear();
@@ -102,13 +64,13 @@ public partial class AutoMarksFinder
 
         public void RemoveTrack
         (
-            NotoriousMonsterList train,
+            NotoriousMonsterList  train,
             NotoriousMonsterFound monster
         ) => GetTrainTracks(train).Remove(monster);
 
         public void SetManualAlive
         (
-            NotoriousMonsterList train,
+            NotoriousMonsterList  train,
             NotoriousMonsterFound monster,
             bool                  manualAlive
         ) => GetTrack(GetTrainTracks(train), monster).ManualAlive = manualAlive;
@@ -137,8 +99,8 @@ public partial class AutoMarksFinder
                 if (monster == null)
                     continue;
 
-                trackedMonsters[chara.EntityID] = monster;
-                changed |= ApplyObservedState(monster, GetTrack(tracks, monster), chara.IsDead || chara.CurrentHp == 0);
+                trackedMonsters[chara.EntityID] =  monster;
+                changed                         |= ApplyObservedState(monster, GetTrack(tracks, monster), chara.IsDead || chara.CurrentHp == 0);
             }
 
             if (changed)
@@ -157,66 +119,25 @@ public partial class AutoMarksFinder
 
         private void OnLogout() => trackedMonsters.Clear();
 
-        private unsafe void OnSpawnNPCDetour
+        public void ObserveMonster
         (
-            uint            targetID,
-            SpawnNpcPacket* packet
+            uint    entityID,
+            uint    baseID,
+            Vector3 position,
+            bool    isDead
         )
         {
-            if (packet == null)
-            {
-                OnSpawnNPCHook.Original(targetID, packet);
-                return;
-            }
-
-            var baseID   = packet->Common.BaseId;
-            var position = packet->Common.Position;
-            var mode     = packet->Common.CharacterMode;
-            var health   = packet->Common.HealthPoints;
-
-            OnSpawnNPCHook.Original(targetID, packet);
-
-            if (!TrackSpawnedMonster(targetID, baseID, position))
+            if (!TrackSpawnedMonster(entityID, baseID, position))
                 return;
 
-            if (!TryResolveMonster(targetID, out var monster, out var track))
+            if (!TryResolveMonster(entityID, out var monster, out var track))
                 return;
 
-            var isDead = mode == CharacterModes.Dead || health == 0;
             if (ApplyNotifiedState(monster, track, isDead))
                 module.config.Save(module);
         }
 
-        private unsafe void OnActorControlDetour
-        (
-            uint         entityID,
-            uint         category,
-            uint         arg1,
-            uint         arg2,
-            uint         arg3,
-            uint         arg4,
-            uint         arg5,
-            uint         arg6,
-            uint         arg7,
-            uint         arg8,
-            GameObjectId targetID,
-            bool         isRecorded
-        )
-        {
-            OnActorControlHook.Original(entityID, category, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, targetID, isRecorded);
-
-            switch (category)
-            {
-                case ACTOR_CONTROL_DEATH:
-                    OnConfirmedDeath(entityID);
-                    break;
-                case ACTOR_CONTROL_SET_MODE:
-                    OnCharacterModeChanged(entityID);
-                    break;
-            }
-        }
-
-        private void OnConfirmedDeath
+        public void OnConfirmedDeath
         (
             uint entityID
         )
@@ -228,7 +149,7 @@ public partial class AutoMarksFinder
                 module.config.Save(module);
         }
 
-        private void OnCharacterModeChanged
+        public void OnCharacterModeChanged
         (
             uint entityID
         )
@@ -430,7 +351,7 @@ public partial class AutoMarksFinder
             if (tracks.TryGetValue(monster, out var track))
                 return track;
 
-            track = new();
+            track           = new();
             tracks[monster] = track;
             return track;
         }
@@ -445,19 +366,14 @@ public partial class AutoMarksFinder
             if (monster.ZoneID != zoneID)
                 return false;
 
-            if (InstancesManager.IsInstancedArea &&
-                monster.Instance != 0            &&
-                monster.Instance != instance)
-                return false;
-
-            return true;
+            return !InstancesManager.IsInstancedArea ||
+                   monster.Instance == 0             ||
+                   monster.Instance == instance;
         }
 
         #region 常量
 
-        private const uint  ACTOR_CONTROL_SET_MODE = 2;
-        private const uint  ACTOR_CONTROL_DEATH    = 14;
-        private const float MONSTER_MATCH_RADIUS   = 200f;
+        private const float MONSTER_MATCH_RADIUS = 200f;
 
         #endregion
     }

@@ -2,7 +2,6 @@ using System.Numerics;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
-using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
@@ -249,21 +248,6 @@ public partial class AutoMarksFinder
         }
 
         public override int GetHashCode() => HashCode.Combine(Zone, Position);
-    }
-
-    private sealed class PathDecision
-    {
-        public enum PathType
-        {
-            DirectNav,
-            TeleportThenNav,
-            SmartTP
-        }
-
-        public PathType         Type           { get; init; }
-        public Vector3          TargetPosition { get; init; }
-        public AetheryteRecord? Aetheryte      { get; init; }
-        public float            EstimatedTime  { get; set; }
     }
 
     private sealed class AliveTrack

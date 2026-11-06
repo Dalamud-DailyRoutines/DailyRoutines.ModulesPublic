@@ -3,8 +3,9 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Network;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Dalamud;
+using OmenTools.Interop.Game.Lumina;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
@@ -36,12 +37,15 @@ public partial class AutoMarksFinder : ModuleBase
     private int                      selectedTrainIndex;
     private string                   newListNameInput    = string.Empty;
     private string                   startAetheryteInput = string.Empty;
+    private string                   trainSearchInput    = string.Empty;
+    private string                   renameTrainInput    = string.Empty;
 
-    protected override void Init()
+    protected override unsafe void Init()
     {
-        config          =   Config.Load(this) ?? new();
-        TaskHelper      ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
-        relayTaskHelper ??= new() { ShowDebug = IS_SHOW_DEBUG };
+        config                       =   Config.Load(this) ?? new();
+        spawnPointUpdateCancellation =   new();
+        TaskHelper                   ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
+        relayTaskHelper              ??= new() { ShowDebug = IS_SHOW_DEBUG };
 
         overlaySmallCard       =  new(DrawSmallCard, Lang.Get("AutoMarksFinder-SmallCardTitle"));
         overlaySmallCard.Flags &= ~ImGuiWindowFlags.NoTitleBar;
@@ -49,16 +53,33 @@ public partial class AutoMarksFinder : ModuleBase
 
         CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoMarksFinder-HelpMessage") });
 
-        WindowManager.Instance().PostDraw += DrawScanRoutePreview;
-
         aliveMonitor = new(this);
+        OnSpawnNPCHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(PacketDispatcher.MemberFunctionPointers),
+            nameof(PacketDispatcher.HandleSpawnNpcPacket),
+            (PacketDispatcher.Delegates.HandleSpawnNpcPacket)OnSpawnNPCDetour
+        );
+        OnSpawnNPCHook.Enable();
+        OnActorControlHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(PacketDispatcher.MemberFunctionPointers),
+            nameof(PacketDispatcher.HandleActorControlPacket),
+            (PacketDispatcher.Delegates.HandleActorControlPacket)OnActorControlDetour
+        );
+        OnActorControlHook.Enable();
         FrameworkManager.Instance().Reg(UpdateAutoBroadcast, AUTO_BROADCAST_TICK_MS);
     }
 
     protected override void Uninit()
     {
-        WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
-
+        spawnPointUpdateCancellation?.Cancel();
+        spawnPointUpdateCancellation?.Dispose();
+        spawnPointUpdateCancellation = null;
+        scanZoneCombo                = null;
+        scanResultTrainIndex         = -1;
+        trainSearchInput             = string.Empty;
+        renameTrainInput             = string.Empty;
         FrameworkManager.Instance().Unreg(UpdateAutoBroadcast);
         StopAutoBroadcast();
         relayTaskHelper?.Dispose();
@@ -93,16 +114,9 @@ public partial class AutoMarksFinder : ModuleBase
     ) =>
         overlaySmallCard.IsOpen ^= true;
 
-    private void StopScanner()
-    {
-        vnavmeshIPC.StopPathfind();
-        TaskHelper.Abort();
-        scanner?.Dispose();
-    }
-
     private void ClearScanner()
     {
-        StopScanner();
+        scanner?.Dispose();
         scanner = null;
     }
 
@@ -113,82 +127,169 @@ public partial class AutoMarksFinder : ModuleBase
     )
     {
         var changed = false;
-        var selected = selectedIndex == -1 || selectedIndex > config.Trains.Count - 1 ?
+        var selected = selectedIndex < 0 || selectedIndex >= config.Trains.Count ?
                            null :
                            config.Trains[selectedIndex];
 
         ImGui.SetNextItemWidth(width);
+        ImGui.SetNextWindowSizeConstraints(ScaledVector2(760, 360), ScaledVector2(1100, 640));
         using var combo = ImRaii.Combo
         (
             "###TrainsSelectCombo",
             selected == null ?
                 $"({Lang.Get("None")})" :
-                selected.Name
+                $"{selected.Name} ({selected.MonstersFound.Count})",
+            ImGuiComboFlags.HeightLarge
         );
         if (!combo) return changed;
 
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+        ImGui.InputTextWithHint("###TrainSearch", Lang.Get("AutoMarksFinder-SearchRoutes"), ref trainSearchInput, 128);
 
-        if (ImGui.InputTextWithHint
-            (
-                "###AddNewTrainList",
-                Lang.Get("AutoMarksFinder-NewTrainListTip"),
-                ref newListNameInput,
-                128,
-                ImGuiInputTextFlags.EnterReturnsTrue
-            ))
+        ImGui.SetNextItemWidth(-ImGui.GetFrameHeightWithSpacing());
+        var create = ImGui.InputTextWithHint
+        (
+            "###AddNewTrainList",
+            Lang.Get("AutoMarksFinder-NewTrainListTip"),
+            ref newListNameInput,
+            128,
+            ImGuiInputTextFlags.EnterReturnsTrue
+        );
+        ImGui.SameLine();
+        using (ImRaii.Disabled(string.IsNullOrWhiteSpace(newListNameInput)))
+            create |= ImGuiOm.ButtonIcon("###CreateTrain", FontAwesomeIcon.Plus, Lang.Get("Add"));
+
+        if (create &&
+            !string.IsNullOrWhiteSpace(newListNameInput))
         {
-            if (!string.IsNullOrWhiteSpace(newListNameInput))
-            {
-                var selectedTrain = selected;
-                config.Trains.Add(new(newListNameInput));
-                config.Trains = [.. config.Trains.OrderByDescending(x => x.GeneratedTime)];
-                if (selectedTrain != null)
-                    selectedIndex = config.Trains.FindIndex(x => ReferenceEquals(x, selectedTrain));
-                else
-                    selectedIndex = -1;
-                config.Save(this);
-            }
+            var activeTrain = SelectedTrain;
+            var resultTrain = scanResultTrainIndex >= 0 && scanResultTrainIndex < config.Trains.Count ?
+                                  config.Trains[scanResultTrainIndex] :
+                                  null;
+            var train = new NotoriousMonsterList(newListNameInput.Trim());
+            config.Trains.Insert(0, train);
+            selectedTrainIndex   = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, activeTrain));
+            scanResultTrainIndex = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, resultTrain));
+            selectedIndex        = 0;
+            selected             = train;
+            newListNameInput     = string.Empty;
+            trainSearchInput     = string.Empty;
+            changed              = true;
+            config.Save(this);
         }
 
         ImGui.Separator();
-        ImGui.Spacing();
+
+        using var table = ImRaii.Table
+        (
+            "###Routes",
+            5,
+            ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable,
+            ScaledVector2(0, 300)
+        );
+        if (!table)
+            return changed;
+
+        ImGui.TableSetupColumn(Lang.Get("Name"),                              ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("Zone"),                              ImGuiTableColumnFlags.WidthFixed, 70  * GlobalUIScale);
+        ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-RouteMonsterCount"), ImGuiTableColumnFlags.WidthFixed, 90  * GlobalUIScale);
+        ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-CreationTime"),      ImGuiTableColumnFlags.WidthFixed, 160 * GlobalUIScale);
+        ImGui.TableSetupColumn("###Actions",                                  ImGuiTableColumnFlags.WidthFixed, 2   * ImGui.GetFrameHeightWithSpacing());
+        ImGui.TableSetupScrollFreeze(0, 1);
+        ImGui.TableHeadersRow();
 
         for (var i = 0; i < config.Trains.Count; i++)
         {
             var train = config.Trains[i];
+            if (!train.Name.Contains(trainSearchInput, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             train.GeneratedDateTime ??= train.GeneratedTime.ToUTCDateTimeFromUnixSeconds().ToLocalTime();
 
-            if (ImGui.Selectable($"{train.Name}", selected?.Equals(train) ?? false))
+            using var rowID = ImRaii.PushId(i);
+            ImGui.TableNextRow();
+            ImGui.TableNextColumn();
+
+            if (ImGui.Selectable(train.Name, ReferenceEquals(selected, train)))
             {
                 selectedIndex = i;
                 changed       = true;
                 selected      = train;
             }
 
-            ImGuiOm.TooltipHover(Lang.Get("AutoMarksFinder-CreationTime", train.GeneratedDateTime));
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted($"{train.MonstersFound.Select(monster => monster.ZoneID).Distinct().Count()}");
 
-            using var context = ImRaii.ContextPopupItem(train.ToString());
-
-            if (context)
+            if (ImGui.IsItemHovered())
             {
-                if (ImGui.MenuItem(Lang.Get("Delete")))
+                using var tooltip = ImRaii.Tooltip();
+                foreach (var area in train.MonstersFound.GroupBy(monster => (monster.ZoneID, monster.Instance)))
+                    ImGui.TextUnformatted($"{FormatZoneInfo(LuminaWrapper.GetZonePlaceName(area.Key.ZoneID), area.Key.Instance)} ({area.Count()})");
+            }
+
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted($"{train.MonstersFound.Count(monster => monster.IsAlive)}/{train.MonstersFound.Count}");
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted($"{train.GeneratedDateTime:g}");
+            ImGui.TableNextColumn();
+
+            if (ImGuiOm.ButtonIcon("###RenameTrain", FontAwesomeIcon.Edit, Lang.Get("Rename")))
+            {
+                renameTrainInput = train.Name;
+                ImGui.OpenPopup("###RenameTrainPopup");
+            }
+
+            using (var renamePopup = ImRaii.Popup("###RenameTrainPopup"))
+            {
+                if (renamePopup)
                 {
+                    ImGui.SetNextItemWidth(260 * GlobalUIScale);
+                    var rename = ImGui.InputText("###TrainName", ref renameTrainInput, 128, ImGuiInputTextFlags.EnterReturnsTrue);
+                    ImGui.SameLine();
+                    using (ImRaii.Disabled(string.IsNullOrWhiteSpace(renameTrainInput)))
+                        rename |= ImGui.Button(Lang.Get("Rename"));
+
+                    if (rename &&
+                        !string.IsNullOrWhiteSpace(renameTrainInput))
+                    {
+                        train.Name = renameTrainInput.Trim();
+                        config.Save(this);
+                        ImGui.CloseCurrentPopup();
+                    }
+                }
+            }
+
+            ImGui.SameLine();
+            if (ImGuiOm.ButtonIcon("###DeleteTrain", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
+                ImGui.OpenPopup("###DeleteTrainPopup");
+
+            using var deletePopup = ImRaii.Popup("###DeleteTrainPopup");
+
+            if (deletePopup)
+            {
+                ImGui.TextUnformatted(train.Name);
+
+                if (ImGui.Button(Lang.Get("Delete")))
+                {
+                    var activeTrain = SelectedTrain;
+                    var resultTrain = scanResultTrainIndex >= 0 && scanResultTrainIndex < config.Trains.Count ?
+                                          config.Trains[scanResultTrainIndex] :
+                                          null;
                     config.Trains.RemoveAt(i);
+                    selectedTrainIndex   = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, activeTrain));
+                    scanResultTrainIndex = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, resultTrain));
+                    selectedIndex        = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, selected));
                     aliveMonitor?.RemoveTrain(train);
 
-                    if (config.Trains.Count == 0)
-                        selectedIndex = -1;
-                    else if (selectedIndex > i)
-                        selectedIndex--;
-                    else if (ReferenceEquals(selected, train))
+                    if (ReferenceEquals(activeTrain, train))
                     {
-                        selectedIndex = Math.Min(i, config.Trains.Count - 1);
                         StopAutoBroadcast();
+                        smallCardMobIndex = 0;
                     }
 
                     config.Save(this);
                     aliveMonitor?.RefreshTracking();
+                    ImGui.CloseCurrentPopup();
                     return true;
                 }
             }
@@ -234,6 +335,8 @@ public partial class AutoMarksFinder : ModuleBase
 #endif
 
     private const string COMMAND = "/pdrmf";
+    private const string SPAWN_POINTS_URL =
+        "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
 
     private static readonly string[] SUPPORTED_RELAY_COMMANDS =
     [
