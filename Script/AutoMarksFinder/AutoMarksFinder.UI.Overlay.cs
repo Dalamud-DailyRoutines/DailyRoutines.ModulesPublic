@@ -1,11 +1,14 @@
 using System.Globalization;
 using DailyRoutines.Common.Extensions;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using OmenTools.ImGuiOm.Widgets;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
+    private readonly DatePicker departureDatePicker = new();
+
     protected override void OverlayUI()
     {
         DrawTrainsSelectCombo(300f * GlobalUIScale, selection);
@@ -86,72 +89,66 @@ public partial class AutoMarksFinder
 
     private void DrawAutoBroadcastControls()
     {
-        using var heading   = ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcast"));
-        var       serverNow = Framework.GetServerTime();
-        ImGui.TextUnformatted
-        (
-            Lang.Get
-            (
-                "AutoMarksFinder-AutoBroadcastServerTime",
-                new Dictionary<string, object>
-                {
-                    ["timeText"] = DateTimeOffset.FromUnixTimeSeconds(serverNow).ToString("HH:mm:ss", CultureInfo.InvariantCulture)
-                }
-            )
-        );
+        using var heading = ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcast"));
 
         using (ImRaii.Disabled(autoBroadcast.IsRunning))
         {
-            ImGui.SetNextItemWidth(120 * GlobalUIScale);
-            if (ImGui.InputTextWithHint("###Departure", "HH:mm:ss", ref autoBroadcast.DepartTimeInput, 16))
-                autoBroadcast.InvalidateDeparture();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextUnformatted(Lang.Get("AutoMarksFinder-AutoBroadcastStartTime"));
 
             ImGui.SameLine();
-            if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastApply")))
-                autoBroadcast.ApplyDeparture();
+            var departure = autoBroadcast.LocalDeparture;
+            if (ImGui.Button($"{departure.ToString("d", CultureInfo.CurrentCulture)}###DepartureDate"))
+                ImGui.OpenPopup("DepartureDatePicker");
+
+            using (var popup = ImRaii.Popup("DepartureDatePicker"))
+            {
+                if (popup.Success &&
+                    departureDatePicker.Draw("DepartureDate", ref departure))
+                {
+                    autoBroadcast.LocalDeparture = departure.Date + autoBroadcast.LocalDeparture.TimeOfDay;
+                    ImGui.CloseCurrentPopup();
+                }
+            }
+
+            ImGui.SameLine();
+            var time = TimeOnly.FromDateTime(autoBroadcast.LocalDeparture);
+            if (ImGuiOm.InputTime("DepartureTime", ref time))
+                autoBroadcast.LocalDeparture = autoBroadcast.LocalDeparture.Date + time.ToTimeSpan();
 
             ImGui.SameLine();
             if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastUseCurrentTime")))
-                autoBroadcast.ApplyDeparture(true);
+                autoBroadcast.LocalDeparture = DateTimeOffset.FromUnixTimeSeconds(Framework.GetServerTime()).LocalDateTime;
         }
 
-        if (autoBroadcast.DepartAt is { } departure)
+        using (ImRaii.Disabled
+               (
+                   autoBroadcast.IsRunning                           ||
+                   SelectedTrain is not { MonstersFound.Count: > 0 } ||
+                   config.RelayCommands.Count == 0                   ||
+                   (SelectedTrain?.MonstersFound.Any(monster => monster.IsAlive) == true &&
+                    string.IsNullOrWhiteSpace(config.RelayPositionPattern)) ||
+                   scanner?.IsRunning == true                               ||
+                   relay.IsBusy                                             ||
+                   !GameState.IsLoggedIn
+               ))
         {
-            ImGui.TextUnformatted
-            (
-                Lang.Get
-                (
-                    "AutoMarksFinder-AutoBroadcastDepartTimeSet",
-                    new Dictionary<string, object>
-                    {
-                        ["timeText"] = DateTimeOffset.FromUnixTimeSeconds(departure).ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
-                    }
-                )
-            );
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
+                autoBroadcast.Start();
+        }
+
+        ImGui.SameLine();
+
+        using (ImRaii.Disabled(!autoBroadcast.IsRunning))
+        {
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, Lang.Get("Stop")))
+                autoBroadcast.Stop();
         }
 
         if (autoBroadcast.IsRunning)
         {
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, Lang.Get("Stop")))
-                autoBroadcast.Stop();
-
             ImGui.SameLine();
             ImGui.TextUnformatted(autoBroadcast.Status);
-        }
-        else
-        {
-            using var disabled = ImRaii.Disabled
-            (
-                autoBroadcast.DepartAt == null                         ||
-                SelectedTrain is not { MonstersFound.Count: > 0 }      ||
-                config.RelayCommands.Count == 0                        ||
-                string.IsNullOrWhiteSpace(config.RelayPositionPattern) ||
-                scanner?.IsRunning == true                             ||
-                relay.IsBusy                                           ||
-                !GameState.IsLoggedIn
-            );
-            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
-                autoBroadcast.Start();
         }
     }
 
@@ -184,9 +181,19 @@ public partial class AutoMarksFinder
 
     private void DrawOverlayRelayButton(RelayType type, float cardHeight)
     {
-        var (pattern, label) = type == RelayType.BeforeStart ?
-                                   (config.AutoRelayBeforeStartPattern, "AutoMarksFinder-RelayTrainStart") :
-                                   (config.AutoRelayAfterEndPattern, "AutoMarksFinder-RelayTrainEnd");
+        var label = type == RelayType.BeforeStart ?
+                        "AutoMarksFinder-RelayTrainStart" :
+                        "AutoMarksFinder-RelayTrainEnd";
+        var pattern = config.AutoRelayAfterEndPattern;
+
+        if (SelectedTrain is { MonstersFound.Count: > 0 } train &&
+            train.MonstersFound.Any(monster => monster.IsAlive))
+        {
+            pattern = config.RelayPositionPattern;
+            if (type == RelayType.BeforeStart &&
+                train.MonstersFound.All(monster => monster.IsAlive))
+                pattern = config.AutoRelayBeforeStartPattern;
+        }
 
         var text  = Lang.Get(label);
         var style = ImGui.GetStyle();

@@ -1,15 +1,22 @@
 using System.Numerics;
 using DailyRoutines.Extensions;
+using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game.AetheryteRecord;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Threading.TaskHelper;
+using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
-    private sealed class HuntMovement : IDisposable
+    private sealed class HuntMovement
+    (
+        Config config
+    ) : IDisposable
     {
         private readonly TaskHelper tasks = new()
         {
@@ -21,10 +28,43 @@ public partial class AutoMarksFinder
         private MovementStage            stage;
         private bool                     ownsNavigation;
 
+        private NotoriousMonsterFound? targetMonster;
+        private HuntNavigationMode     navigationMode;
+        private float                  nearbyDistance;
+        private Queue<Vector3>?        candidates;
+        private Vector3                destination;
+        private bool                   fly;
+        private long                   mountRequestedAt;
+        private long                   pathStartedAt;
+        private long                   lastProgressAt;
+        private float                  closestDistance;
+
         public bool IsBusy        => tasks.IsBusy;
         public bool HasArrived    => stage == MovementStage.Arrived;
         public bool IsPathPending => pathTask is { IsCompleted: false };
         public bool IsPathRunning => ownsNavigation && vnavmeshIPC.IsPluginEnabled() && vnavmeshIPC.GetIsPathfindRunning();
+
+        public void NavigateToMonster(NotoriousMonsterFound monster)
+        {
+            var needsTravel = GameState.TerritoryType != monster.ZoneID ||
+                              (monster.Instance != 0 && InstancesManager.CurrentInstance != monster.Instance);
+            Travel
+            (
+                monster.ZoneID,
+                monster.Instance,
+                needsTravel ?
+                    monster.NearestAetheryteRecord :
+                    null
+            );
+
+            targetMonster  = monster;
+            navigationMode = config.NavigationMode;
+            nearbyDistance = Math.Max(1, config.NearbyDistance);
+
+            tasks.Enqueue(Mount,    timeoutMS: 30_000,              timeoutAction: StopWithWarning, exceptionAction: StopWithWarning);
+            tasks.Enqueue(FindPath, timeoutMS: 60_000,              timeoutAction: StopWithWarning, exceptionAction: StopWithWarning);
+            tasks.Enqueue(Move,     timeoutAction: StopWithWarning, exceptionAction: StopWithWarning);
+        }
 
         public void Travel(uint zone, uint instance = 0, AetheryteRecord? aetheryte = null)
         {
@@ -150,7 +190,11 @@ public partial class AutoMarksFinder
                     break;
             }
 
-            stage = MovementStage.Idle;
+            stage            = MovementStage.Idle;
+            targetMonster    = null;
+            candidates       = null;
+            mountRequestedAt = 0;
+            pathStartedAt    = 0;
         }
 
         public void Dispose()
@@ -158,6 +202,169 @@ public partial class AutoMarksFinder
             Stop();
             tasks.Dispose();
         }
+
+        private bool Mount()
+        {
+            if (!IsInTargetArea())
+            {
+                StopWithWarning();
+                return false;
+            }
+
+            if (!vnavmeshIPC.IsPluginEnabled() ||
+                !vnavmeshIPC.GetIsNavReady())
+                return false;
+
+            if (ICondition.Instance()[ConditionFlag.Mounted])
+            {
+                fly = Control.CanFly;
+
+                if (navigationMode == HuntNavigationMode.Nearby &&
+                    !fly)
+                {
+                    StopWithWarning();
+                    return false;
+                }
+
+                return true;
+            }
+
+            if (ICondition.Instance().IsCasting ||
+                Environment.TickCount64 - mountRequestedAt < MOUNT_RETRY_MS)
+                return false;
+
+            mountRequestedAt = Environment.TickCount64;
+            UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9);
+            return false;
+        }
+
+        private bool FindPath()
+        {
+            if (!IsInTargetArea())
+            {
+                StopWithWarning();
+                return false;
+            }
+
+            if (candidates == null)
+            {
+                candidates = [];
+                var position = LocalPlayerState.Object.Position;
+
+                if (navigationMode == HuntNavigationMode.Exact)
+                    candidates.Enqueue(targetMonster.Position);
+                else
+                {
+                    var height = targetMonster.Position.Y;
+
+                    height = Math.Max(height + FLIGHT_HEIGHT, position.Y);
+                    var angle = MathF.Atan2(position.Z - targetMonster.Position.Z, position.X - targetMonster.Position.X);
+
+                    for (var ring = 2; ring >= 1; ring--)
+                    for (var direction = 0; direction < CANDIDATE_DIRECTIONS; direction++)
+                    {
+                        var rotation = angle + (MathF.Tau * direction / CANDIDATE_DIRECTIONS);
+                        var offset   = new Vector3(MathF.Cos(rotation), 0, MathF.Sin(rotation)) * (Math.Max(0, nearbyDistance - (ARRIVAL_RADIUS * 2)) * ring / 2);
+                        candidates.Enqueue((targetMonster.Position + offset) with { Y = height });
+                    }
+
+                    candidates.Enqueue(targetMonster.Position with { Y = height });
+                }
+            }
+
+            if (pathStartedAt != 0)
+            {
+                if (IsPathPending &&
+                    Environment.TickCount64 - pathStartedAt < PATH_TIMEOUT_MS)
+                    return false;
+
+                var path = TakePath();
+                StopNavigation();
+                pathStartedAt = 0;
+
+                if (path is { Count: > 0 }                                                            &&
+                    Vector3.DistanceSquared(path[^1], destination) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS &&
+                    !RaycastHelper.IsInsideCollision(path[^1])                                        &&
+                    (navigationMode                                              == HuntNavigationMode.Exact ||
+                     HorizontalDistanceSquared(path[^1], targetMonster.Position) <= nearbyDistance * nearbyDistance))
+                {
+                    destination     = path[^1];
+                    closestDistance = Vector3.DistanceSquared(LocalPlayerState.Object.Position, destination);
+                    lastProgressAt  = Environment.TickCount64;
+                    FollowPath(path, fly);
+                    return true;
+                }
+            }
+
+            while (candidates.TryDequeue(out var candidate))
+            {
+                if (RaycastHelper.IsInsideCollision(candidate))
+                    continue;
+
+                destination = candidate;
+                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, config.NearbyDistance, 10000) is { } queryResult)
+                    destination = queryResult + new Vector3(0, FLIGHT_HEIGHT, 0);
+                
+                pathStartedAt = Environment.TickCount64;
+                BeginPath(destination, fly);
+                return false;
+            }
+
+            StopWithWarning();
+            return false;
+        }
+
+        private bool Move()
+        {
+            if (!IsInTargetArea())
+            {
+                StopWithWarning();
+                return false;
+            }
+
+            var position        = LocalPlayerState.Object.Position;
+            var currentDistance = Vector3.DistanceSquared(position, destination);
+
+            if (currentDistance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS &&
+                (navigationMode                                              == HuntNavigationMode.Exact ||
+                 HorizontalDistanceSquared(position, targetMonster.Position) <= nearbyDistance * nearbyDistance))
+            {
+                StopNavigation();
+                targetMonster = null;
+                candidates    = null;
+                return true;
+            }
+
+            if (currentDistance < closestDistance - (PROGRESS_DISTANCE * PROGRESS_DISTANCE))
+            {
+                closestDistance = currentDistance;
+                lastProgressAt  = Environment.TickCount64;
+            }
+
+            if (!IsPathRunning ||
+                Environment.TickCount64 - lastProgressAt >= MOVEMENT_TIMEOUT_MS)
+                StopWithWarning();
+
+            return false;
+        }
+
+        private void StopWithWarning()
+        {
+            Stop();
+            NotifyHelper.Instance().ChatError(Lang.Get("AutoMarksFinder-NavigationInterrupted"));
+        }
+
+        private bool IsInTargetArea() =>
+            GameState.IsLoggedIn                            &&
+            targetMonster != null                           &&
+            LocalPlayerState.Object is { IsDead: false }    &&
+            !ICondition.Instance().IsBetweenAreas           &&
+            GameState.TerritoryType == targetMonster.ZoneID &&
+            (targetMonster.Instance           == 0 ||
+             InstancesManager.CurrentInstance == targetMonster.Instance);
+
+        private static float HorizontalDistanceSquared(Vector3 first, Vector3 second) =>
+            Vector2.DistanceSquared(new(first.X, first.Z), new(second.X, second.Z));
 
         private static bool IsReady() =>
             LocalPlayerState.Object != null       &&
@@ -171,7 +378,14 @@ public partial class AutoMarksFinder
 
         #region 常量
 
-        private const float AETHERYTE_RADIUS = 30;
+        private const float AETHERYTE_RADIUS     = 30;
+        private const float FLIGHT_HEIGHT        = 15;
+        private const float ARRIVAL_RADIUS       = 2;
+        private const float PROGRESS_DISTANCE    = 2;
+        private const int   CANDIDATE_DIRECTIONS = 8;
+        private const int   MOUNT_RETRY_MS       = 1000;
+        private const int   PATH_TIMEOUT_MS      = 15_000;
+        private const int   MOVEMENT_TIMEOUT_MS  = 15_000;
 
         #endregion
     }

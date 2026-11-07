@@ -14,6 +14,36 @@ public partial class AutoMarksFinder
 
         using var settingsDisabled = ImRaii.Disabled(autoBroadcast.IsRunning);
 
+        using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-NavigationMode")))
+        {
+            if (ImGui.RadioButton(Lang.Get("AutoMarksFinder-NavigationExact"), config.NavigationMode == HuntNavigationMode.Exact))
+            {
+                config.NavigationMode = HuntNavigationMode.Exact;
+                config.Save(this);
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.RadioButton(Lang.Get("AutoMarksFinder-NavigationNearby"), config.NavigationMode == HuntNavigationMode.Nearby))
+            {
+                config.NavigationMode = HuntNavigationMode.Nearby;
+                config.Save(this);
+            }
+
+            if (config.NavigationMode == HuntNavigationMode.Nearby)
+            {
+                ImGui.SetNextItemWidth(150 * GlobalUIScale);
+
+                if (ImGui.InputFloat(Lang.Get("AutoMarksFinder-NavigationDistance"), ref config.NearbyDistance, 0, 0, "%.0f"))
+                {
+                    config.NearbyDistance = Math.Max(1, config.NearbyDistance);
+                    config.Save(this);
+                }
+            }
+        }
+
+        ImGui.NewLine();
+
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-RelayChatTypes")))
         using (var combo = ImRaii.Combo
                (

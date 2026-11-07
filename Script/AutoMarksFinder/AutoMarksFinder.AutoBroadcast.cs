@@ -1,4 +1,3 @@
-using System.Globalization;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 
@@ -17,13 +16,19 @@ public partial class AutoMarksFinder
         {
             this.module              =  module;
             module.selection.Changed += Stop;
+            DepartAt                 =  Framework.GetServerTime();
         }
 
-        public string DepartTimeInput = string.Empty;
+        public long DepartAt { get; private set; }
 
-        public long? DepartAt  { get; private set; }
-        public int   Index     { get; private set; }
-        public bool  IsRunning => stage != BroadcastStage.Stopped;
+        public DateTime LocalDeparture
+        {
+            get => DateTimeOffset.FromUnixTimeSeconds(DepartAt).LocalDateTime;
+            set => DepartAt = new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Local)).ToUnixTimeSeconds();
+        }
+
+        public int  Index     { get; private set; }
+        public bool IsRunning => stage != BroadcastStage.Stopped;
 
         public string Status => stage switch
         {
@@ -32,7 +37,7 @@ public partial class AutoMarksFinder
                 "AutoMarksFinder-AutoBroadcastRemain",
                 new Dictionary<string, object>
                 {
-                    ["remainingTimeText"] = TimeSpan.FromSeconds(Math.Max(0, DepartAt.GetValueOrDefault() - Framework.GetServerTime())).ToString(@"hh\:mm\:ss")
+                    ["remainingTimeText"] = TimeSpan.FromSeconds(Math.Max(0, DepartAt - Framework.GetServerTime())).ToString("g")
                 }
             ),
             BroadcastStage.Starting                                  => Lang.Get("AutoMarksFinder-AutoBroadcastStarting"),
@@ -47,49 +52,27 @@ public partial class AutoMarksFinder
             )
         };
 
-        public void ApplyDeparture(bool now = false)
-        {
-            if (IsRunning)
-                return;
-
-            var serverNow = DateTimeOffset.FromUnixTimeSeconds(Framework.GetServerTime());
-
-            if (now)
-            {
-                DepartAt        = serverNow.ToUnixTimeSeconds();
-                DepartTimeInput = serverNow.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-                return;
-            }
-
-            if (!TimeOnly.TryParseExact(DepartTimeInput.Trim(), "HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
-            {
-                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
-                return;
-            }
-
-            var departure = new DateTimeOffset(serverNow.Date + time.ToTimeSpan(), TimeSpan.Zero);
-            if (departure < serverNow)
-                departure = departure.AddDays(1);
-
-            DepartAt = departure.ToUnixTimeSeconds();
-        }
-
-        public void InvalidateDeparture() => DepartAt = null;
-
         public void Start()
         {
             if (IsRunning                                                         ||
-                DepartAt == null                                                  ||
                 module.SelectedTrain is not { MonstersFound.Count: > 0 } selected ||
                 module.config.RelayCommands.Count == 0                            ||
-                string.IsNullOrWhiteSpace(module.config.RelayPositionPattern)     ||
-                module.scanner?.IsRunning == true                                 ||
+                (selected.MonstersFound.Any(monster => monster.IsAlive) &&
+                 string.IsNullOrWhiteSpace(module.config.RelayPositionPattern)) ||
+                module.scanner?.IsRunning == true                               ||
                 module.relay.IsBusy)
                 return;
 
             train = selected;
-            Index = 0;
+            Index = selected.MonstersFound.FindIndex(monster => monster.IsAlive);
             stage = BroadcastStage.WaitingForDeparture;
+
+            if (Index < 0)
+            {
+                module.relay.Send(RelayType.AfterEnd, train);
+                stage = BroadcastStage.Finishing;
+            }
+
             FrameworkManager.Instance().Reg(Update, UPDATE_INTERVAL_MS);
         }
 
@@ -131,8 +114,29 @@ public partial class AutoMarksFinder
             switch (stage)
             {
                 case BroadcastStage.WaitingForDeparture:
+                    Index = train.MonstersFound.FindIndex(monster => monster.IsAlive);
+
+                    if (Index < 0)
+                    {
+                        if (!module.relay.Send(RelayType.AfterEnd, train))
+                        {
+                            Stop();
+                            return;
+                        }
+
+                        stage = BroadcastStage.Finishing;
+                        return;
+                    }
+
                     if (now < DepartAt)
                         return;
+
+                    if (train.MonstersFound.Any(monster => !monster.IsAlive))
+                    {
+                        nextAt = now;
+                        stage  = BroadcastStage.WaitingForPoint;
+                        return;
+                    }
 
                     if (!module.relay.Send(RelayType.BeforeStart, train))
                     {
@@ -181,6 +185,15 @@ public partial class AutoMarksFinder
                 case BroadcastStage.WaitingForEnd:
                     if (now < nextAt)
                         return;
+
+                    Index = train.MonstersFound.FindIndex(monster => monster.IsAlive);
+
+                    if (Index >= 0)
+                    {
+                        nextAt = now;
+                        stage  = BroadcastStage.WaitingForPoint;
+                        return;
+                    }
 
                     if (!module.relay.Send(RelayType.AfterEnd, train))
                     {

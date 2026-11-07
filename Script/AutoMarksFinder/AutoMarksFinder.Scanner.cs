@@ -625,7 +625,7 @@ public partial class AutoMarksFinder
 
         #region 常量
 
-        public const  float DETECTION_RADIUS     = 300;
+        public const  float DETECTION_RADIUS     = 400;
         private const float PLANNING_RADIUS      = 280;
         private const float ARRIVAL_RADIUS       = 20;
         private const float MOUNT_SPEED          = 12;

@@ -23,28 +23,31 @@ public partial class AutoMarksFinder : ModuleBase
         Author              = ["AtmoOmen", "KirisameVanilla"]
     };
 
-    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
-
-    private          AutoMarksFinderConfig config        = null!;
-    private          HuntRelay             relay         = null!;
-    private          HuntAutoBroadcast     autoBroadcast = null!;
-    private          HuntMovement          movement      = null!;
-    private          MonsterScanner?       scanner;
-    private readonly HuntSelection         selection           = new();
-    private readonly HuntSelection         scanResultSelection = new();
-
+    public override ModuleBehaviour Behaviour { get; } = new()
+    {
+        NeedAuth = true
+    };
+    
     private NotoriousMonsterList? SelectedTrain => selection.Train;
 
+    private Config config = null!;
+    
+    private HuntRelay         relay         = null!;
+    private HuntAutoBroadcast autoBroadcast = null!;
+    private HuntMovement      movement      = null!;
+    private MonsterScanner?   scanner;
+    
+    private readonly HuntSelection selection           = new();
+    private readonly HuntSelection scanResultSelection = new();
+    
     private MonsterAliveMonitor? aliveMonitor;
-    private string               newListNameInput = string.Empty;
-    private string               renameTrainInput = string.Empty;
 
     protected override unsafe void Init()
     {
-        config                       = AutoMarksFinderConfig.Load(this) ?? new();
+        config                       = Config.Load(this) ?? new();
         spawnPointUpdateCancellation = new();
         relay                        = new(config);
-        movement                     = new();
+        movement                     = new(config);
         autoBroadcast                = new(this);
         selection.Select(config.Trains.FirstOrDefault());
 
@@ -114,11 +117,11 @@ public partial class AutoMarksFinder : ModuleBase
 
         scanner?.Dispose();
         scanner = null;
+        
         movement.Dispose();
 
         selection.Select(null);
         scanResultSelection.Select(null);
-        newListNameInput    = string.Empty;
         startAetheryteCombo = null;
     }
 

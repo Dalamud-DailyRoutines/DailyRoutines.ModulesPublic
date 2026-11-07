@@ -2,6 +2,12 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
+    private enum HuntNavigationMode
+    {
+        Exact,
+        Nearby
+    }
+
     private enum RelayType
     {
         Position,

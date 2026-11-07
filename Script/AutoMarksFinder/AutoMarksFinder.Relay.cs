@@ -8,7 +8,7 @@ public partial class AutoMarksFinder
 {
     private sealed unsafe class HuntRelay
     (
-        AutoMarksFinderConfig config
+        Config config
     ) : IDisposable
     {
         private readonly TaskHelper tasks = new();
@@ -29,6 +29,22 @@ public partial class AutoMarksFinder
         {
             if (IsBusy)
                 return false;
+
+            if (!preview                                            &&
+                type is RelayType.BeforeStart or RelayType.AfterEnd &&
+                train is { MonstersFound.Count: > 0 })
+            {
+                var firstAlive = train.MonstersFound.Find(monster => monster.IsAlive);
+
+                if (firstAlive == null)
+                    type = RelayType.AfterEnd;
+                else if (type == RelayType.AfterEnd ||
+                         train.MonstersFound.Any(monster => !monster.IsAlive))
+                {
+                    type = RelayType.Position;
+                    info = firstAlive;
+                }
+            }
 
             if (type is RelayType.BeforeStart or RelayType.AfterEnd)
             {

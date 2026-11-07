@@ -4,7 +4,7 @@ namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
-    private sealed class AutoMarksFinderConfig : ModuleConfig
+    private sealed class Config : ModuleConfig
     {
         public List<string> RelayCommands = [];
 
@@ -12,6 +12,9 @@ public partial class AutoMarksFinder
         public string AutoRelayAfterEndPattern    = string.Empty;
         public string RelayPositionPattern        = Lang.Get("AutoMarksFinder-Relay-Default-Position");
         public string RelayWaitAetherytePattern   = Lang.Get("AutoMarksFinder-Relay-Default-WaitAetheryte");
+
+        public HuntNavigationMode NavigationMode = HuntNavigationMode.Nearby;
+        public float              NearbyDistance = 30;
 
         public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints    = [];
         public HashSet<uint>                                     SelectedZones = [];

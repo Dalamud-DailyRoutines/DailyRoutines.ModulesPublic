@@ -8,9 +8,9 @@ public partial class AutoMarksFinder
 {
     private sealed class ScanZoneCombo : LuminaComboBase<TerritoryType>
     {
-        private readonly AutoMarksFinderConfig config;
+        private readonly Config config;
 
-        public ScanZoneCombo(AutoMarksFinderConfig config) : base("AutoMarksFinder.ScanZones", null)
+        public ScanZoneCombo(Config config) : base("AutoMarksFinder.ScanZones", null)
         {
             this.config = config;
             Searcher = new
