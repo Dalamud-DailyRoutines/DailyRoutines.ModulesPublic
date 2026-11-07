@@ -239,7 +239,29 @@ public unsafe class OptimizedMacro : ModuleBase
                 if (string.IsNullOrEmpty(selectedPreset) || selectedPreset == DEFAULT_OPTION)
                     return;
 
-                LoadPreset(selectedPreset);
+                SelectYesnoAddon.Open
+                (
+                    new()
+                    {
+                        ParentID        = addon->Id,
+                        BlockedParentID = addon->Id,
+                        Prompt = Lang.Get
+                        (
+                            "OptimizedMacro-Dialogue-Load",
+                            new Dictionary<string, object>
+                            {
+                                ["presetName"] = selectedPreset
+                            }
+                        ),
+                        Callback = (_, result) =>
+                        {
+                            if (result != SelectYesnoAddonResult.Yes)
+                                return;
+
+                            LoadPreset(selectedPreset);
+                        }
+                    }
+                );
             },
             IsEnabled = false
         };
