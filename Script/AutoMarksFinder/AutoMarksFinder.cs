@@ -140,10 +140,11 @@ public partial class AutoMarksFinder : ModuleBase
 
     private static readonly string[] SUPPORTED_RELAY_COMMANDS =
     [
+        "/e",
+        "/p",
         "/sh",
         "/y",
         "/b",
-        "/p",
         "/fc",
         "/cwl1",
         "/cwl2",
