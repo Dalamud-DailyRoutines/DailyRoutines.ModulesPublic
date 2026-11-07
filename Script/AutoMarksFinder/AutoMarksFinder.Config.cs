@@ -16,6 +16,9 @@ public partial class AutoMarksFinder
         public HuntNavigationMode NavigationMode = HuntNavigationMode.Nearby;
         public float              NearbyDistance = 30;
 
+        public bool MoveAfterBroadcast       = true;
+        public bool PreferAetheryteBroadcast = true;
+
         public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints    = [];
         public HashSet<uint>                                     SelectedZones = [];
         public List<NotoriousMonsterList>                        Trains        = [];

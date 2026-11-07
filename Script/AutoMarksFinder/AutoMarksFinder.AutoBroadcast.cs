@@ -27,7 +27,8 @@ public partial class AutoMarksFinder
             set => DepartAt = new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Local)).ToUnixTimeSeconds();
         }
 
-        public int  Index     { get; private set; }
+        public int Index { get; private set; }
+
         public bool IsRunning => stage != BroadcastStage.Stopped;
 
         public string Status => stage switch
@@ -40,8 +41,8 @@ public partial class AutoMarksFinder
                     ["remainingTimeText"] = TimeSpan.FromSeconds(Math.Max(0, DepartAt - Framework.GetServerTime())).ToString("g")
                 }
             ),
-            BroadcastStage.Starting                                  => Lang.Get("AutoMarksFinder-AutoBroadcastStarting"),
-            BroadcastStage.WaitingForEnd or BroadcastStage.Finishing => Lang.Get("AutoMarksFinder-AutoBroadcastFinishing"),
+            BroadcastStage.Starting                                  => string.Empty,
+            BroadcastStage.WaitingForEnd or BroadcastStage.Finishing => string.Empty,
             _ => Lang.Get
             (
                 "AutoMarksFinder-AutoBroadcastProgress",
@@ -114,7 +115,7 @@ public partial class AutoMarksFinder
             switch (stage)
             {
                 case BroadcastStage.WaitingForDeparture:
-                    Index = train.MonstersFound.FindIndex(monster => monster.IsAlive);
+                    Index = train.MonstersFound.FindIndex(candidate => candidate.IsAlive);
 
                     if (Index < 0)
                     {
@@ -165,14 +166,50 @@ public partial class AutoMarksFinder
                         return;
                     }
 
-                    if (!module.relay.Send(RelayType.Position, train, train.MonstersFound[Index]))
+                    var monster = train.MonstersFound[Index];
+                    var gather = module.config.PreferAetheryteBroadcast &&
+                                 (GameState.TerritoryType != monster.ZoneID ||
+                                  (monster.Instance != 0 && InstancesManager.CurrentInstance != monster.Instance));
+
+                    if (!module.relay.Send
+                        (
+                            gather ?
+                                RelayType.WaitAetheryte :
+                                RelayType.Position,
+                            train,
+                            monster
+                        ))
                     {
                         Stop();
                         return;
                     }
 
                     module.selection.MonsterIndex = Index;
-                    stage                         = BroadcastStage.WaitingForDeath;
+                    stage = gather ?
+                                BroadcastStage.WaitingForArrival :
+                                BroadcastStage.WaitingForDeath;
+                    break;
+                case BroadcastStage.WaitingForArrival:
+                    if (!train.MonstersFound[Index].IsAlive)
+                    {
+                        Index++;
+                        nextAt = now + NEXT_POINT_DELAY_SECONDS;
+                        stage  = BroadcastStage.WaitingForPoint;
+                        return;
+                    }
+
+                    var destination = train.MonstersFound[Index];
+                    if (GameState.TerritoryType != destination.ZoneID ||
+                        (destination.Instance != 0 && InstancesManager.CurrentInstance != destination.Instance))
+                        return;
+
+                    if (!module.relay.Send(RelayType.Position, train, destination))
+                    {
+                        Stop();
+                        return;
+                    }
+
+                    stage = BroadcastStage.WaitingForDeath;
                     break;
                 case BroadcastStage.WaitingForDeath:
                     if (train.MonstersFound[Index].IsAlive)
@@ -186,7 +223,7 @@ public partial class AutoMarksFinder
                     if (now < nextAt)
                         return;
 
-                    Index = train.MonstersFound.FindIndex(monster => monster.IsAlive);
+                    Index = train.MonstersFound.FindIndex(candidate => candidate.IsAlive);
 
                     if (Index >= 0)
                     {

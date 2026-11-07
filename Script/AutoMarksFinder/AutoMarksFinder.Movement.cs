@@ -44,29 +44,42 @@ public partial class AutoMarksFinder
         public bool IsPathPending => pathTask is { IsCompleted: false };
         public bool IsPathRunning => ownsNavigation && vnavmeshIPC.IsPluginEnabled() && vnavmeshIPC.GetIsPathfindRunning();
 
-        public void NavigateToMonster(NotoriousMonsterFound monster)
+        public void NavigateToMonster(NotoriousMonsterFound monster, bool afterBroadcast = false)
         {
+            monster.OpenMap();
             var needsTravel = GameState.TerritoryType != monster.ZoneID ||
                               (monster.Instance != 0 && InstancesManager.CurrentInstance != monster.Instance);
+            var aetheryte = monster.NearestAetheryteRecord;
+
+            if (!needsTravel      &&
+                aetheryte != null &&
+                LocalPlayerState.Object is { } player)
+            {
+                var directCost   = MathF.Sqrt(HorizontalDistanceSquared(player.Position, monster.Position)) / MOUNT_SPEED;
+                var teleportCost = TELEPORT_DURATION + (MathF.Sqrt(HorizontalDistanceSquared(aetheryte.Position, monster.Position)) / MOUNT_SPEED);
+                if (teleportCost >= directCost)
+                    aetheryte = null;
+            }
+
             Travel
             (
                 monster.ZoneID,
                 monster.Instance,
-                needsTravel ?
-                    monster.NearestAetheryteRecord :
-                    null
+                aetheryte,
+                afterBroadcast
             );
 
             targetMonster  = monster;
             navigationMode = config.NavigationMode;
             nearbyDistance = Math.Max(1, config.NearbyDistance);
+            FrameworkManager.Instance().Reg(UpdateTarget, TARGET_INTERVAL_MS);
 
             tasks.Enqueue(Mount,    timeoutMS: 30_000,              timeoutAction: StopWithWarning, exceptionAction: StopWithWarning);
             tasks.Enqueue(FindPath, timeoutMS: 60_000,              timeoutAction: StopWithWarning, exceptionAction: StopWithWarning);
             tasks.Enqueue(Move,     timeoutAction: StopWithWarning, exceptionAction: StopWithWarning);
         }
 
-        public void Travel(uint zone, uint instance = 0, AetheryteRecord? aetheryte = null)
+        public void Travel(uint zone, uint instance = 0, AetheryteRecord? aetheryte = null, bool afterBroadcast = false)
         {
             Stop();
             stage = MovementStage.Travelling;
@@ -79,6 +92,9 @@ public partial class AutoMarksFinder
                  Vector3.DistanceSquared(player.Position, aetheryte.Position) > AETHERYTE_RADIUS * AETHERYTE_RADIUS))
             {
                 tasks.Enqueue(IsReadyToTeleport);
+                if (afterBroadcast)
+                    tasks.DelayNext(BROADCAST_TRAVEL_DELAY_MS);
+
                 tasks.Enqueue(aetheryte.TeleportTo);
                 tasks.DelayNext(500);
                 tasks.Enqueue
@@ -93,6 +109,9 @@ public partial class AutoMarksFinder
                  GameState.TerritoryType != zone))
             {
                 tasks.Enqueue(IsReadyToTeleport);
+                if (afterBroadcast)
+                    tasks.DelayNext(BROADCAST_TRAVEL_DELAY_MS);
+
                 tasks.Enqueue
                 (() =>
                     {
@@ -108,6 +127,11 @@ public partial class AutoMarksFinder
             if (instance != 0)
             {
                 tasks.Enqueue(IsReadyToTeleport);
+                if (afterBroadcast &&
+                    (GameState.TerritoryType          != zone ||
+                     InstancesManager.CurrentInstance != instance))
+                    tasks.DelayNext(BROADCAST_TRAVEL_DELAY_MS);
+
                 tasks.Enqueue
                 (() =>
                     {
@@ -177,6 +201,7 @@ public partial class AutoMarksFinder
 
         public void Stop()
         {
+            FrameworkManager.Instance().Unreg(UpdateTarget);
             tasks.Abort();
             StopNavigation();
 
@@ -304,7 +329,7 @@ public partial class AutoMarksFinder
                 destination = candidate;
                 if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, config.NearbyDistance, 10000) is { } queryResult)
                     destination = queryResult + new Vector3(0, FLIGHT_HEIGHT, 0);
-                
+
                 pathStartedAt = Environment.TickCount64;
                 BeginPath(destination, fly);
                 return false;
@@ -330,6 +355,7 @@ public partial class AutoMarksFinder
                  HorizontalDistanceSquared(position, targetMonster.Position) <= nearbyDistance * nearbyDistance))
             {
                 StopNavigation();
+                FrameworkManager.Instance().Unreg(UpdateTarget);
                 targetMonster = null;
                 candidates    = null;
                 return true;
@@ -352,6 +378,35 @@ public partial class AutoMarksFinder
         {
             Stop();
             NotifyHelper.Instance().ChatError(Lang.Get("AutoMarksFinder-NavigationInterrupted"));
+        }
+
+        private void UpdateTarget(IFramework framework)
+        {
+            if (!IsBusy)
+            {
+                FrameworkManager.Instance().Unreg(UpdateTarget);
+                return;
+            }
+
+            if (!IsInTargetArea() ||
+                !UIModule.IsScreenReady())
+                return;
+
+            var current = TargetManager.Target;
+            if (current is { IsTargetable: true }                                                         &&
+                current.DataID                                                    == targetMonster.DataID &&
+                Vector3.DistanceSquared(current.Position, targetMonster.Position) <= MONSTER_MATCH_RADIUS * MONSTER_MATCH_RADIUS)
+                return;
+
+            var target = IObjectTable.Instance().SearchObject
+            (
+                obj => obj.IsTargetable                                                                      &&
+                       obj.DataID                                                    == targetMonster.DataID &&
+                       Vector3.DistanceSquared(obj.Position, targetMonster.Position) <= MONSTER_MATCH_RADIUS * MONSTER_MATCH_RADIUS,
+                IObjectTable.CharactersRange
+            );
+            if (target != null)
+                TargetManager.Target = target;
         }
 
         private bool IsInTargetArea() =>
@@ -378,14 +433,19 @@ public partial class AutoMarksFinder
 
         #region 常量
 
-        private const float AETHERYTE_RADIUS     = 30;
-        private const float FLIGHT_HEIGHT        = 15;
-        private const float ARRIVAL_RADIUS       = 2;
-        private const float PROGRESS_DISTANCE    = 2;
-        private const int   CANDIDATE_DIRECTIONS = 8;
-        private const int   MOUNT_RETRY_MS       = 1000;
-        private const int   PATH_TIMEOUT_MS      = 15_000;
-        private const int   MOVEMENT_TIMEOUT_MS  = 15_000;
+        private const float AETHERYTE_RADIUS          = 30;
+        private const float MOUNT_SPEED               = 12;
+        private const float TELEPORT_DURATION         = 10;
+        private const float MONSTER_MATCH_RADIUS      = 200;
+        private const uint  TARGET_INTERVAL_MS        = 250;
+        private const float FLIGHT_HEIGHT             = 15;
+        private const float ARRIVAL_RADIUS            = 2;
+        private const float PROGRESS_DISTANCE         = 2;
+        private const int   CANDIDATE_DIRECTIONS      = 8;
+        private const int   MOUNT_RETRY_MS            = 1000;
+        private const int   PATH_TIMEOUT_MS           = 15_000;
+        private const int   MOVEMENT_TIMEOUT_MS       = 15_000;
+        private const int   BROADCAST_TRAVEL_DELAY_MS = 2000;
 
         #endregion
     }

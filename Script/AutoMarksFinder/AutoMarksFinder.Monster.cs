@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Numerics;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Info.Game.AetheryteRecord;
@@ -102,6 +103,13 @@ public partial class AutoMarksFinder
             LuminaGetter.GetRow<TerritoryType>(ZoneID) ?? default;
 
         public uint GetMapID() => GetZoneData().Map.RowId;
+
+        public unsafe void OpenMap()
+        {
+            var agent = AgentMap.Instance();
+            if (agent != null)
+                agent->SetMapFlagAndOpen(GetMapID(), Position, $"{GetBNPCName()}（{FormatZoneInfo(GetZoneName(), Instance)}）");
+        }
 
         public string GetBNPCName() => GetData().BNpcName.Value.Singular.ToString();
 

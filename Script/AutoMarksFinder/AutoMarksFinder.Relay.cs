@@ -1,5 +1,5 @@
 using System.Numerics;
-using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
@@ -8,7 +8,8 @@ public partial class AutoMarksFinder
 {
     private sealed unsafe class HuntRelay
     (
-        Config config
+        Config       config,
+        HuntMovement movement
     ) : IDisposable
     {
         private readonly TaskHelper tasks = new();
@@ -110,13 +111,28 @@ public partial class AutoMarksFinder
                 return false;
 
             if (type == RelayType.Position)
-                return RelayPosition(pattern, info.ZoneID, info.Position, info.GetBNPCName(), info.Instance, train);
+            {
+                info.OpenMap();
+                var sent = RelayPosition(pattern, info.ZoneID, info.Position, info.GetBNPCName(), info.Instance, train, markMap: false);
+                if (sent                                                             &&
+                    config is { MoveAfterBroadcast: true, RelayCommands.Count: > 0 } &&
+                    !string.IsNullOrWhiteSpace(pattern))
+                    movement.NavigateToMonster(info, afterBroadcast: true);
+
+                return sent;
+            }
 
             if (info.NearestAetherytePosition is not { } position ||
                 info.NearestAetheryte is not { } aetheryte)
                 return false;
 
-            return RelayPosition(pattern, aetheryte.Territory.RowId, position, aetheryte.PlaceName.Value.Name.ToString(), info.Instance, train);
+            var relayed = RelayPosition(pattern, aetheryte.Territory.RowId, position, aetheryte.PlaceName.Value.Name.ToString(), info.Instance, train);
+            if (relayed                                                          &&
+                config is { MoveAfterBroadcast: true, RelayCommands.Count: > 0 } &&
+                !string.IsNullOrWhiteSpace(pattern))
+                movement.Travel(info.ZoneID, info.Instance, info.NearestAetheryteRecord, afterBroadcast: true);
+
+            return relayed;
         }
 
         private bool RelayPosition
@@ -127,20 +143,22 @@ public partial class AutoMarksFinder
             string                name,
             uint                  instance,
             NotoriousMonsterList? train,
-            bool                  preview = false
+            bool                  preview = false,
+            bool                  markMap = true
         )
         {
-            if (string.IsNullOrWhiteSpace(pattern) ||
-                (!preview && config.RelayCommands.Count == 0))
-                return true;
-
             var agentMap = AgentMap.Instance();
             if (agentMap == null)
                 return false;
 
-            var message = FormatRelayMessage(pattern, train, name, instance);
+            if (markMap)
+                agentMap->SetMapFlagByZoneAndOpen(territoryType, worldPosition, name);
 
-            agentMap->SetMapFlagByZoneAndOpen(territoryType, worldPosition, name);
+            if (string.IsNullOrWhiteSpace(pattern) ||
+                (!preview && config.RelayCommands.Count == 0))
+                return true;
+
+            var message = FormatRelayMessage(pattern, train, name, instance);
 
             if (preview)
             {

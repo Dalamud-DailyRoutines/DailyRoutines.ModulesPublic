@@ -31,6 +31,7 @@ public partial class AutoMarksFinder
         WaitingForDeparture,
         Starting,
         WaitingForPoint,
+        WaitingForArrival,
         WaitingForDeath,
         WaitingForEnd,
         Finishing

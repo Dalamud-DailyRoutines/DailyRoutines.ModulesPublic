@@ -12,7 +12,18 @@ public partial class AutoMarksFinder
         using var tabSettings = ImRaii.TabItem(Lang.Get("Settings"));
         if (!tabSettings) return;
 
-        using var settingsDisabled = ImRaii.Disabled(autoBroadcast.IsRunning);
+        using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcastBehaviour")))
+        {
+            if (ImGui.Checkbox(Lang.Get("AutoMarksFinder-MoveAfterBroadcast"), ref config.MoveAfterBroadcast))
+                config.Save(this);
+
+            if (ImGui.Checkbox(Lang.Get("AutoMarksFinder-PreferAetheryteBroadcast"), ref config.PreferAetheryteBroadcast))
+                config.Save(this);
+
+            ImGuiOm.TextDisabledWrapped(Lang.Get("AutoMarksFinder-PreferAetheryteBroadcastHelp"));
+        }
+
+        ImGui.NewLine();
 
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-NavigationMode")))
         {
@@ -157,8 +168,7 @@ public partial class AutoMarksFinder
                (
                    string.IsNullOrWhiteSpace(content) ||
                    tooManyLines                       ||
-                   relay.IsBusy                       ||
-                   autoBroadcast.IsRunning
+                   relay.IsBusy
                ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))

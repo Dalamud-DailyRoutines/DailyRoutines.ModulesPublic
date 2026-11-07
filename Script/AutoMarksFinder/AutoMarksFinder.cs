@@ -27,27 +27,27 @@ public partial class AutoMarksFinder : ModuleBase
     {
         NeedAuth = true
     };
-    
+
     private NotoriousMonsterList? SelectedTrain => selection.Train;
 
     private Config config = null!;
-    
+
     private HuntRelay         relay         = null!;
     private HuntAutoBroadcast autoBroadcast = null!;
     private HuntMovement      movement      = null!;
     private MonsterScanner?   scanner;
-    
+
     private readonly HuntSelection selection           = new();
     private readonly HuntSelection scanResultSelection = new();
-    
+
     private MonsterAliveMonitor? aliveMonitor;
 
     protected override unsafe void Init()
     {
         config                       = Config.Load(this) ?? new();
         spawnPointUpdateCancellation = new();
-        relay                        = new(config);
         movement                     = new(config);
+        relay                        = new(config, movement);
         autoBroadcast                = new(this);
         selection.Select(config.Trains.FirstOrDefault());
 
@@ -117,7 +117,7 @@ public partial class AutoMarksFinder : ModuleBase
 
         scanner?.Dispose();
         scanner = null;
-        
+
         movement.Dispose();
 
         selection.Select(null);

@@ -20,6 +20,29 @@ public partial class AutoMarksFinder
 
         public event Action? Changed;
 
+        public void FollowAliveState(NotoriousMonsterFound changed)
+        {
+            if (Train == null)
+                return;
+
+            var index = Train.MonstersFound.IndexOf(changed);
+            if (index < 0)
+                return;
+
+            if (changed.IsAlive)
+            {
+                MonsterIndex = Math.Min(MonsterIndex, index);
+                return;
+            }
+
+            if (index != MonsterIndex)
+                return;
+
+            var next = Train.MonstersFound.FindIndex(index + 1, candidate => candidate.IsAlive);
+            if (next >= 0)
+                MonsterIndex = next;
+        }
+
         public void Select(NotoriousMonsterList? train)
         {
             if (ReferenceEquals(Train, train))

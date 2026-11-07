@@ -56,7 +56,7 @@ public partial class AutoMarksFinder
         if (!tabTrain) return;
 
         DrawTrainsSelectCombo(300f * GlobalUIScale, selection);
-        
+
         if (movement.IsBusy &&
             scanner?.IsRunning != true)
         {
@@ -64,7 +64,7 @@ public partial class AutoMarksFinder
             if (ImGuiOm.ButtonIcon("###StopMovement", FontAwesomeIcon.Stop, Lang.Get("Stop")))
                 movement.Stop();
         }
-        
+
         ImGui.Spacing();
 
         if (SelectedTrain == null) return;
@@ -233,6 +233,9 @@ public partial class AutoMarksFinder
                 if (train != null)
                 {
                     info.SetState(isAlive);
+                    if (!autoBroadcast.IsRunning &&
+                        ReferenceEquals(train, SelectedTrain))
+                        selection.FollowAliveState(info);
                 }
 
                 config.Save(this);
@@ -415,9 +418,7 @@ public partial class AutoMarksFinder
         if (info == null) return;
         using var id = ImRaii.PushId($"{info}");
 
-        var agentMap = AgentMap.Instance();
-
-        using (ImRaii.Disabled(autoBroadcast.IsRunning || relay.IsBusy))
+        using (ImRaii.Disabled(relay.IsBusy))
         {
             if (ImGuiOm.ButtonIcon
                 (
@@ -430,7 +431,7 @@ public partial class AutoMarksFinder
 
         ImGui.SameLine();
 
-        using (ImRaii.Disabled(scanner?.IsRunning == true|| !GameState.IsLoggedIn))
+        using (ImRaii.Disabled(scanner?.IsRunning == true || !GameState.IsLoggedIn))
         {
             if (movement.IsBusy)
             {
@@ -457,7 +458,7 @@ public partial class AutoMarksFinder
                 isItemHovered = true;
             if (ImGui.IsItemClicked())
                 isItemClicked = true;
-            
+
             ImGui.SameLine();
         }
 
@@ -466,17 +467,11 @@ public partial class AutoMarksFinder
             isItemHovered = true;
         if (ImGui.IsItemClicked())
             isItemClicked = true;
-        
+
         if (isItemHovered)
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
         if (isItemClicked)
-        {
-            var title =
-                $"{info.GetBNPCName()}" +
-                $"（{FormatZoneInfo(info.GetZoneName(), info.Instance)}）";
-
-            agentMap->SetMapFlagAndOpen(info.GetMapID(), info.Position, title);
-        }
+            info.OpenMap();
     }
 
     private void DrawAetheryteColumn
@@ -487,7 +482,7 @@ public partial class AutoMarksFinder
         if (info == null) return;
         using var id = ImRaii.PushId($"{info}");
 
-        using (ImRaii.Disabled(autoBroadcast.IsRunning || relay.IsBusy))
+        using (ImRaii.Disabled(relay.IsBusy))
         {
             if (ImGuiOm.ButtonIcon
                 (

@@ -207,7 +207,6 @@ public partial class AutoMarksFinder
         using var disabled = ImRaii.Disabled
         (
             relay.IsBusy                    ||
-            autoBroadcast.IsRunning         ||
             config.RelayCommands.Count == 0 ||
             string.IsNullOrWhiteSpace(pattern)
         );
