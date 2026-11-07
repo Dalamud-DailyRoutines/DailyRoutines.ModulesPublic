@@ -1,4 +1,5 @@
 using Lumina.Excel.Sheets;
+using Newtonsoft.Json;
 using OmenTools.Interop.Game.Lumina;
 using ItemSource = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData.ItemSource;
 using ItemSheet = Lumina.Excel.Sheets.Item;
@@ -223,6 +224,9 @@ public partial class UnifiedGlamourManager
     // 预设模版
     private sealed class PlatePreset
     {
+        [JsonIgnore]
+        public readonly string UIID = Guid.NewGuid().ToString();
+
         // 玩家设置的标题/备注
         public string Title = string.Empty;
         public string Note  = string.Empty;
@@ -248,7 +252,8 @@ public partial class UnifiedGlamourManager
     private readonly record struct PlateSlotDefinition
     (
         uint                          AddonTextID,
-        Func<EquipSlotCategory, bool> CanUse
+        Func<EquipSlotCategory, bool> CanUse,
+        Func<EquipSlotCategory, bool> IsBlocked
     );
 
     // 投影模板
@@ -258,5 +263,11 @@ public partial class UnifiedGlamourManager
         uint ItemID,
         byte Stain0ID,
         byte Stain1ID
+    );
+
+    private readonly record struct PresetItemCandidate
+    (
+        uint   ItemID,
+        string Name
     );
 }

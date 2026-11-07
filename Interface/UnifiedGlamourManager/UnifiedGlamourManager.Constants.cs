@@ -68,18 +68,18 @@ public partial class UnifiedGlamourManager
 
     private static readonly PlateSlotDefinition[] PlateSlotDefinitions =
     [
-        new(11960, static x => x.MainHand != 0),
-        new(11961, static x => x.OffHand != 0 && x.MainHand == 0),
-        new(11962, static x => x.Head   != 0),
-        new(11963, static x => x.Body   != 0),
-        new(11964, static x => x.Gloves != 0),
-        new(11965, static x => x.Legs   != 0),
-        new(11966, static x => x.Feet   != 0),
-        new(11968, static x => x.Ears   != 0),
-        new(11967, static x => x.Neck   != 0),
-        new(11969, static x => x.Wrists != 0),
-        new(750, static x => x.FingerL != 0 || x.FingerR != 0),
-        new(749, static x => x.FingerL != 0 || x.FingerR != 0)
+        new(11960, static x => x.MainHand > 0,                    static x => x.MainHand < 0),
+        new(11961, static x => x.OffHand  > 0 && x.MainHand == 0, static x => x.OffHand  < 0),
+        new(11962, static x => x.Head     > 0,                    static x => x.Head     < 0),
+        new(11963, static x => x.Body     > 0,                    static x => x.Body     < 0),
+        new(11964, static x => x.Gloves   > 0,                    static x => x.Gloves   < 0),
+        new(11965, static x => x.Legs     > 0,                    static x => x.Legs     < 0),
+        new(11966, static x => x.Feet     > 0,                    static x => x.Feet     < 0),
+        new(11968, static x => x.Ears     > 0,                    static x => x.Ears     < 0),
+        new(11967, static x => x.Neck     > 0,                    static x => x.Neck     < 0),
+        new(11969, static x => x.Wrists   > 0,                    static x => x.Wrists   < 0),
+        new(750,   static x => x.FingerL  > 0 || x.FingerR > 0,   static x => x.FingerL  < 0),
+        new(749,   static x => x.FingerL  > 0 || x.FingerR > 0,   static x => x.FingerR  < 0)
     ];
 
     private string[] SortModeNames
@@ -129,6 +129,9 @@ public partial class UnifiedGlamourManager
 
     #region 常量
 
+    private static readonly uint[] EmperorItemIDs =
+        [0, 0, 10032, 10033, 10034, 10035, 10036, 9293, 9292, 9294, 9295, 9295];
+
     private const byte FEMALE_SEX = 1;
 
     private const string COMMAND = "ugm";
@@ -149,6 +152,7 @@ public partial class UnifiedGlamourManager
     private const int MAX_EQUIP_LEVEL_INPUT        = 999;
     private const int VIRTUALIZED_LIST_BUFFER_ROWS = 3;
     private const int VIRTUALIZED_GRID_BUFFER_ROWS = 2;
+    private const int ITEM_INDEX_BATCH_SIZE        = 4096;
 
     private const uint MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW = 0;
     private const uint PRISM_BOX_CAPACITY                = 800;
