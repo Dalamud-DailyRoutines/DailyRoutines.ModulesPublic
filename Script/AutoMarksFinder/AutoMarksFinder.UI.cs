@@ -447,17 +447,29 @@ public partial class AutoMarksFinder
 
         ImGui.SameLine();
 
+        var isItemHovered = false;
+        var isItemClicked = false;
+
         if (includeZone)
         {
             ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
+            if (ImGui.IsItemHovered())
+                isItemHovered = true;
+            if (ImGui.IsItemClicked())
+                isItemClicked = true;
+            
             ImGui.SameLine();
         }
 
         ImGui.TextUnformatted($"[{info.Position.X:F1}, {info.Position.Y:F1}, {info.Position.Z:F1}]");
         if (ImGui.IsItemHovered())
+            isItemHovered = true;
+        if (ImGui.IsItemClicked())
+            isItemClicked = true;
+        
+        if (isItemHovered)
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+        if (isItemClicked)
         {
             var title =
                 $"{info.GetBNPCName()}" +
