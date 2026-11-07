@@ -1,3 +1,4 @@
+using System.Drawing.Drawing2D;
 using System.Numerics;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -21,13 +22,14 @@ public partial class AutoMarksFinder
         AutoMarksFinder module
     ) : IDisposable
     {
-        private readonly Dictionary<uint, List<Vector3>>     zones             = [];
-        private readonly HashSet<(uint Zone, uint Instance)> completedAreas    = [];
-        private readonly List<Vector3>                       candidates        = [];
-        private readonly List<Vector3>                       failedCandidates  = [];
-        private readonly List<Vector3>                       targetPoints      = [];
-        private readonly Queue<Vector3>                      retryTargets      = [];
-        private readonly List<Vector3>                       observedPositions = [];
+        private readonly Dictionary<uint, List<Vector3>>     zones            = [];
+        private readonly HashSet<(uint Zone, uint Instance)> completedAreas   = [];
+        private readonly List<Vector3>                       candidates       = [];
+        private readonly List<Vector3>                       failedCandidates = [];
+        private readonly HashSet<Vector3>                    targetPoints     = [];
+        private readonly Queue<Vector3>                      retryTargets     = [];
+        private readonly Region                              observedCoverage = new(RectangleF.Empty);
+        private readonly Region                              observedOutline  = new(RectangleF.Empty);
 
         private ScanState state;
         private long      stateStartedAt;
@@ -37,6 +39,7 @@ public partial class AutoMarksFinder
         private Vector3   target;
         private Vector3   anchor;
         private Vector3   observationPosition;
+        private Vector3   previousPosition;
         private Vector3   navigationTarget;
         private float     flightHeight;
         private uint?     originalAroundRangeMode;
@@ -53,7 +56,9 @@ public partial class AutoMarksFinder
 
         public List<Vector3> PendingPoints { get; } = [];
 
-        public IReadOnlyList<Vector3> ObservedPositions => observedPositions;
+        public IReadOnlyList<RectangleF> ObservedCoverage { get; private set; } = [];
+
+        public IReadOnlyList<RectangleF> ObservedBoundary { get; private set; } = [];
 
         public List<Vector3> ActivePath { get; } = [];
 
@@ -106,6 +111,8 @@ public partial class AutoMarksFinder
             FrameworkManager.Instance().Unreg(OnUpdate);
             CancelPath();
             module.movement.Stop();
+            observedCoverage.Dispose();
+            observedOutline.Dispose();
 
             if (originalAroundRangeMode is { } mode)
             {
@@ -259,11 +266,13 @@ public partial class AutoMarksFinder
             PendingPoints.AddRange(points);
             ScanPoints   = points;
             flightHeight = points.Max(point => point.Y) + FLIGHT_HEIGHT;
-            observedPositions.Clear();
+            observedCoverage.MakeEmpty();
+            observedOutline.MakeEmpty();
+            ObservedCoverage = [];
+            ObservedBoundary = [];
             ActivePath.Clear();
             failedCandidates.Clear();
             retryTargets.Clear();
-            BuildCandidates();
             ChangeState(ScanState.Observing);
             observationPosition = LocalPlayerState.Object.Position;
         }
@@ -276,9 +285,11 @@ public partial class AutoMarksFinder
                 return;
             }
 
+            BuildCandidates();
+
             var              position     = LocalPlayerState.Object.Position;
             var              bestCoverage = 0;
-            var              bestCost     = float.MaxValue;
+            var              bestScore    = float.MaxValue;
             AetheryteRecord? teleport     = null;
 
             foreach (var candidate in candidates)
@@ -286,30 +297,38 @@ public partial class AutoMarksFinder
                 if (failedCandidates.Any(failed => DistanceSquared(failed, candidate) < 1))
                     continue;
 
-                var coveredPoints = PendingPoints.Where(point => DistanceSquared(point, candidate) <= PLANNING_RADIUS * PLANNING_RADIUS).ToList();
-                var coverage      = coveredPoints.Count;
-                if (coverage == 0 ||
-                    coverage < bestCoverage)
+                if (!PendingPoints.Any(point => DistanceSquared(point, candidate) <= PLANNING_RADIUS * PLANNING_RADIUS))
                     continue;
 
-                var margin      = PLANNING_RADIUS - coveredPoints.Max(point => MathF.Sqrt(DistanceSquared(point, candidate)));
-                var cost        = MathF.Max(0, MathF.Sqrt(DistanceSquared(position,                              candidate)) - margin) / MOUNT_SPEED;
-                var aetheryte   = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, candidate);
+                var coverage    = PendingPoints.Count(point => DistanceSquared(point, position, candidate) <= DETECTION_RADIUS * DETECTION_RADIUS);
+                var cost        = (MathF.Sqrt(DistanceSquared(position, candidate)) / MOUNT_SPEED) + OBSERVATION_DURATION;
+                var score       = cost / coverage;
+                var aetheryte   = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, candidate, true);
                 var useTeleport = false;
 
                 if (aetheryte != null)
                 {
-                    var teleportCost = TELEPORT_DURATION + (MathF.Max(0, MathF.Sqrt(DistanceSquared(aetheryte.Position, candidate)) - margin) / MOUNT_SPEED);
+                    var teleportCoverage = PendingPoints.Count
+                        (point => DistanceSquared(point, aetheryte.Position, candidate) <= DETECTION_RADIUS * DETECTION_RADIUS);
+                    var teleportCost = TELEPORT_DURATION + (MathF.Sqrt(DistanceSquared(aetheryte.Position, candidate)) / MOUNT_SPEED) + (OBSERVATION_DURATION * 2);
+                    var teleportScore = teleportCost / teleportCoverage;
+                    var teleportComparison = teleportScore.CompareTo(score);
 
-                    if (teleportCost < cost)
+                    if (teleportComparison < 0 ||
+                        (teleportComparison == 0 &&
+                         teleportCoverage   > coverage))
                     {
-                        cost        = teleportCost;
+                        coverage    = teleportCoverage;
+                        score       = teleportScore;
                         useTeleport = true;
                     }
                 }
 
-                if (coverage == bestCoverage &&
-                    cost     >= bestCost)
+                var comparison = score.CompareTo(bestScore);
+
+                if (comparison > 0 ||
+                    (comparison == 0 &&
+                     coverage   <= bestCoverage))
                     continue;
 
                 var destination = candidate with { Y = MathF.Max(flightHeight, position.Y) };
@@ -317,7 +336,7 @@ public partial class AutoMarksFinder
                     continue;
 
                 bestCoverage = coverage;
-                bestCost     = cost;
+                bestScore    = score;
                 target       = destination;
                 teleport = useTeleport ?
                                aetheryte :
@@ -332,7 +351,7 @@ public partial class AutoMarksFinder
 
             anchor = PendingPoints.MinBy(point => DistanceSquared(point, target));
             targetPoints.Clear();
-            targetPoints.AddRange(PendingPoints.Where(point => DistanceSquared(point, target) <= PLANNING_RADIUS * PLANNING_RADIUS));
+            targetPoints.UnionWith(PendingPoints.Where(point => DistanceSquared(point, target) <= PLANNING_RADIUS * PLANNING_RADIUS));
 
             if (teleport != null)
             {
@@ -438,18 +457,23 @@ public partial class AutoMarksFinder
             ActivePath.Add(LocalPlayerState.Object.Position);
             ActivePath.AddRange(path);
             module.movement.FollowPath(path, true);
-            closestDistance = DistanceSquared(LocalPlayerState.Object.Position, navigationTarget);
-            lastProgressAt  = Environment.TickCount64;
+            previousPosition = LocalPlayerState.Object.Position;
+            closestDistance  = DistanceSquared(previousPosition, navigationTarget);
+            lastProgressAt   = Environment.TickCount64;
             ChangeState(ScanState.Moving);
         }
 
         private void UpdateMovement()
         {
             var position = LocalPlayerState.Object.Position;
+
+            if (DistanceSquared(previousPosition, position) > 0)
+                RecordCoverage(previousPosition, position);
+
+            previousPosition = position;
             var distance = DistanceSquared(position, navigationTarget);
 
-            if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS ||
-                targetPoints.All(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
+            if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS)
             {
                 module.movement.StopNavigation();
                 observationPosition = position;
@@ -468,7 +492,7 @@ public partial class AutoMarksFinder
             {
                 module.movement.StopNavigation();
 
-                if (PendingPoints.Any(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
+                if (DistanceSquared(position, anchor) <= PLANNING_RADIUS * PLANNING_RADIUS)
                 {
                     observationPosition = position;
                     ChangeState(ScanState.Observing);
@@ -498,10 +522,56 @@ public partial class AutoMarksFinder
                     ObserveMonster(obj.DataID, obj.Position);
             }
 
-            PendingPoints.RemoveAll(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS);
-            observedPositions.Add(position);
+            RecordCoverage(position, position, true);
             ActivePath.Clear();
             ChangeState(ScanState.SelectingPoint);
+        }
+
+        private void RecordCoverage(Vector3 start, Vector3 end, bool isObserving = false)
+        {
+            var direction     = new Vector2(end.X - start.X, end.Z - start.Z);
+            var lengthSquared = direction.LengthSquared();
+
+            PendingPoints.RemoveAll(IsCovered);
+
+            using var coverage = CreateCoverage(DETECTION_RADIUS);
+            using var outline  = CreateCoverage(DETECTION_RADIUS + 2);
+            observedCoverage.Union(coverage);
+            observedOutline.Union(outline);
+
+            using var transform = new Matrix();
+            ObservedCoverage = observedCoverage.GetRegionScans(transform);
+            using var boundary = observedOutline.Clone();
+            boundary.Exclude(observedCoverage);
+            ObservedBoundary = boundary.GetRegionScans(transform);
+            return;
+
+            bool IsCovered(Vector3 point)
+            {
+                if (!isObserving &&
+                    targetPoints.Contains(point))
+                    return false;
+
+                return DistanceSquared(point, start, end) <= DETECTION_RADIUS * DETECTION_RADIUS;
+            }
+
+            GraphicsPath CreateCoverage(float radius)
+            {
+                var path     = new GraphicsPath();
+                var diameter = radius * 2;
+
+                if (lengthSquared == 0)
+                    path.AddEllipse(start.X - radius, start.Z - radius, diameter, diameter);
+                else
+                {
+                    var angle = MathF.Atan2(direction.Y, direction.X) * 180 / MathF.PI;
+                    path.AddArc(start.X - radius, start.Z - radius, diameter, diameter, angle + 90, 180);
+                    path.AddArc(end.X   - radius, end.Z   - radius, diameter, diameter, angle - 90, 180);
+                    path.CloseFigure();
+                }
+
+                return path;
+            }
         }
 
         private bool HasEnoughMonsters() =>
@@ -525,7 +595,7 @@ public partial class AutoMarksFinder
                     continue;
 
                 Instance = instance;
-                var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, Vector3.Zero);
+                var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, Vector3.Zero, true);
 
                 if (aetheryte == null)
                 {
@@ -561,7 +631,10 @@ public partial class AutoMarksFinder
             ZoneID     = costs.MinBy(pair => pair.Value).Key;
             ScanPoints = [];
             PendingPoints.Clear();
-            observedPositions.Clear();
+            observedCoverage.MakeEmpty();
+            observedOutline.MakeEmpty();
+            ObservedCoverage = [];
+            ObservedBoundary = [];
             module.movement.Travel(ZoneID);
             ChangeState(ScanState.SwitchingZone);
         }
@@ -609,6 +682,17 @@ public partial class AutoMarksFinder
         private static float DistanceSquared(Vector3 first, Vector3 second) =>
             Vector2.DistanceSquared(new(first.X, first.Z), new(second.X, second.Z));
 
+        private static float DistanceSquared(Vector3 point, Vector3 start, Vector3 end)
+        {
+            var direction     = new Vector2(end.X   - start.X, end.Z   - start.Z);
+            var offset        = new Vector2(point.X - start.X, point.Z - start.Z);
+            var lengthSquared = direction.LengthSquared();
+            var progress = lengthSquared > 0 ?
+                               Math.Clamp(Vector2.Dot(offset, direction) / lengthSquared, 0, 1) :
+                               0;
+            return (offset - (direction * progress)).LengthSquared();
+        }
+
         private enum ScanState
         {
             Stopped,
@@ -630,6 +714,7 @@ public partial class AutoMarksFinder
         private const float ARRIVAL_RADIUS       = 20;
         private const float MOUNT_SPEED          = 12;
         private const float TELEPORT_DURATION    = 10;
+        private const float OBSERVATION_DURATION = OBSERVATION_DELAY_MS / 1000f;
         private const float FLIGHT_HEIGHT        = 100;
         private const float RETRY_DISTANCE       = 80;
         private const float PROGRESS_DISTANCE    = 2;

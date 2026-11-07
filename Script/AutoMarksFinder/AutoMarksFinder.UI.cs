@@ -367,14 +367,25 @@ public partial class AutoMarksFinder
 
         var coverageColor = KnownColor.GreenYellow.ToVector4();
         coverageColor.W = 0.12f;
+        var fillColor = ImGui.ColorConvertFloat4ToU32(coverageColor);
 
-        foreach (var position in scanner.ObservedPositions)
-        {
-            var center = renderer.WorldToScreen(position);
-            var radius = Vector2.Distance(center, renderer.WorldToScreen(position + new Vector3(MonsterScanner.DETECTION_RADIUS, 0, 0)));
-            drawList.AddCircleFilled(center, radius, ImGui.ColorConvertFloat4ToU32(coverageColor));
-            drawList.AddCircle(center, radius, ImGui.ColorConvertFloat4ToU32(KnownColor.GreenYellow.ToVector4()));
-        }
+        foreach (var rectangle in scanner.ObservedCoverage)
+            drawList.AddRectFilled
+            (
+                renderer.WorldToScreen(new(rectangle.Left, 0, rectangle.Top)),
+                renderer.WorldToScreen(new(rectangle.Right, 0, rectangle.Bottom)),
+                fillColor
+            );
+
+        var outlineColor = ImGui.ColorConvertFloat4ToU32(KnownColor.GreenYellow.ToVector4());
+
+        foreach (var rectangle in scanner.ObservedBoundary)
+            drawList.AddRectFilled
+            (
+                renderer.WorldToScreen(new(rectangle.Left, 0, rectangle.Top)),
+                renderer.WorldToScreen(new(rectangle.Right, 0, rectangle.Bottom)),
+                outlineColor
+            );
 
         for (var index = 1; index < scanner.ActivePath.Count; index++)
             drawList.AddLine
