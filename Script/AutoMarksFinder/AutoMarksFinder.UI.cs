@@ -420,15 +420,12 @@ public partial class AutoMarksFinder
 
         if (ImGuiOm.ButtonIcon("传送到以太之光", FontAwesomeIcon.Plane, Lang.Get("AutoMarksFinder-TeleportToMobsZone")))
         {
-            if (GameState.TerritoryType != info.ZoneID)
-            {
-                TaskHelper.Enqueue(IsAbleToTeleport, "等待停止移动");
-                TaskHelper.Enqueue
-                (
-                    () => info.NearestAetheryteRecord?.TeleportTo(),
-                    "传送至目标区域"
-                );
-            }
+            TaskHelper.Enqueue(IsAbleToTeleport, "等待停止移动");
+            TaskHelper.Enqueue
+            (
+                () => info.NearestAetheryteRecord?.TeleportTo(),
+                "传送至目标区域"
+            );
 
             if (info.Instance != 0)
             {
