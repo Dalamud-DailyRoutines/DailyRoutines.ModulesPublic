@@ -89,17 +89,30 @@ public partial class AutoMarksFinder
         ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-NearestAetheryte"), ImGuiTableColumnFlags.WidthStretch);
 
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
-        
+
         ImGui.TableNextColumn();
+
         if (ImGuiOm.ButtonSelectable($"{Lang.Get("AutoMarksFinder-IntendedStartingPoint")}"))
+        {
+            var zones = selected.MonstersFound.Select(monster => monster.ZoneID).ToHashSet();
+            startAetheryteCombo = new
+            (
+                "AutoMarksFinder.StartAetheryte",
+                LuminaGetter.Get<Aetheryte>().Where(aetheryte => aetheryte.IsAetheryte && zones.Contains(aetheryte.Territory.RowId))
+            );
+
+            if (selected.StartAetheryte is { } startAetheryte &&
+                !zones.Contains(startAetheryte.Territory.RowId))
+                selected.StartAetheryte = null;
+
             ImGui.OpenPopup("StartAetherytePopup");
+        }
 
         using (var popup = ImRaii.Popup("StartAetherytePopup"))
         {
             if (popup)
             {
-                startAetheryteCombo            ??= new("AutoMarksFinder.StartAetheryte");
-                startAetheryteCombo.SelectedID =   selected.StartAetheryte?.RowId ?? 0;
+                startAetheryteCombo.SelectedID = selected.StartAetheryte?.RowId ?? 0;
                 ImGui.SetNextItemWidth(260f * GlobalUIScale);
                 if (startAetheryteCombo.DrawRadio())
                     selected.StartAetheryte = startAetheryteCombo.SelectedID == 0 ?
@@ -405,7 +418,7 @@ public partial class AutoMarksFinder
         if (info == null) return;
         using var id = ImRaii.PushId(info.ToString());
 
-        if (ImGuiOm.ButtonIcon("传送到目标区域", FontAwesomeIcon.Plane, Lang.Get("AutoMarksFinder-TeleportToMobsZone")))
+        if (ImGuiOm.ButtonIcon("传送到以太之光", FontAwesomeIcon.Plane, Lang.Get("AutoMarksFinder-TeleportToMobsZone")))
         {
             if (GameState.TerritoryType != info.ZoneID)
             {
