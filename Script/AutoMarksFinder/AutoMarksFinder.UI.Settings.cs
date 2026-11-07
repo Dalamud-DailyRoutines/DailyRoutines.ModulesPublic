@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
 
 namespace DailyRoutines.ModulesPublic;
@@ -8,10 +8,10 @@ public partial class AutoMarksFinder
     private void DrawTabItemSettings()
     {
         using var itemWidth = ImRaii.ItemWidth(500f * GlobalUIScale);
-        
+
         using var tabSettings = ImRaii.TabItem(Lang.Get("Settings"));
         if (!tabSettings) return;
-        
+
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-RelayChatTypes")))
         using (var combo = ImRaii.Combo
                (
@@ -40,7 +40,7 @@ public partial class AutoMarksFinder
                 }
             }
         }
-        
+
         ImGui.NewLine();
 
         DrawRelaySettings(RelayType.Position, ref config.RelayPositionPattern);
@@ -56,27 +56,29 @@ public partial class AutoMarksFinder
         ImGui.NewLine();
 
         DrawRelaySettings(RelayType.AfterEnd, ref config.AutoRelayAfterEndPattern);
-        
+
         ImGui.NewLine();
-        
+
         using (ImRaii.Heading1(Lang.Get("Command")))
             ImGui.TextUnformatted($"{COMMAND} {Lang.Get("AutoMarksFinder-HelpMessage")}");
-        
+
         ImGui.NewLine();
 
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-Relay-Placeholders")))
         {
-            ImGuiOm.TextDisabledWrapped
+            ImGui.TextWrapped
             (
                 Lang.Get
                 (
                     "AutoMarksFinder-Relay-PlaceholderHelp",
                     new Dictionary<string, object>
                     {
-                        ["name"]         = "{name}",
-                        ["position"]     = "{position}",
-                        ["instance"]     = "{instance}",
-                        ["instanceText"] = "{instanceText}"
+                        ["name"]              = "{name}",
+                        ["position"]          = "{position}",
+                        ["instance"]          = "{instance}",
+                        ["instanceText"]      = "{instanceText}",
+                        ["routeName"]         = "{routeName}",
+                        ["routeMonsterCount"] = "{routeMonsterCount}"
                     }
                 )
             );

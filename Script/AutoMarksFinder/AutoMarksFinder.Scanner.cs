@@ -29,7 +29,7 @@ public partial class AutoMarksFinder
             Scanner?.Dispose();
             Scanner = null;
         }
-        
+
         private readonly Dictionary<uint, List<Vector3>>     zones             = [];
         private readonly HashSet<(uint Zone, uint Instance)> completedAreas    = [];
         private readonly List<Vector3>                       candidates        = [];
@@ -609,7 +609,15 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            ZoneID     = zones.Keys.Min();
+            var costs = TeleportCostCalculator.GetRouteCosts(GameState.TerritoryType, zones.Keys, applyTeleportDiscounts: false);
+
+            if (costs.Count == 0)
+            {
+                StopWithWarning("AutoMarksFinder-ScanInterrupted");
+                return;
+            }
+
+            ZoneID     = costs.MinBy(pair => pair.Value).Key;
             ScanPoints = [];
             PendingPoints.Clear();
             observedPositions.Clear();
@@ -682,7 +690,7 @@ public partial class AutoMarksFinder
 
         private static float DistanceSquared(Vector3 first, Vector3 second) =>
             Vector2.DistanceSquared(new(first.X, first.Z), new(second.X, second.Z));
-        
+
         private enum ScanState
         {
             Stopped,

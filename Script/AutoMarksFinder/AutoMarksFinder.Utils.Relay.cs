@@ -24,9 +24,9 @@ public unsafe partial class AutoMarksFinder
                 (!preview && config.RelayCommands.Count == 0))
                 return true;
 
-            var lines = text.ReplaceLineEndings("\n")
-                            .Split('\n')
-                            .Take(MAX_RELAY_LINES);
+            var lines = FormatRelayMessage(text).ReplaceLineEndings("\n")
+                                                .Split('\n')
+                                                .Take(MAX_RELAY_LINES);
 
             string[] commands = preview ?
                                     ["/e"] :
@@ -105,17 +105,7 @@ public unsafe partial class AutoMarksFinder
         if (agentMap == null)
             return false;
 
-        var message = string.FormatICUText
-        (
-            pattern.Replace("{instance}", Lang.Get("AutoMarksFinder-Relay-InstancePattern"), StringComparison.Ordinal),
-            new Dictionary<string, object>
-            {
-                ["name"]         = name,
-                ["position"]     = "<flag>",
-                ["instance"]     = instance,
-                ["instanceText"] = instance.ToSESquareCount()
-            }
-        );
+        var message = FormatRelayMessage(pattern, name, instance);
 
         agentMap->SetMapFlagByZoneAndOpen(territoryType, worldPosition, name);
 
@@ -129,6 +119,24 @@ public unsafe partial class AutoMarksFinder
             ChatManager.Instance().SendMessage($"{command} {message}");
 
         return true;
+    }
+
+    private string FormatRelayMessage(string pattern, string name = "", uint instance = 0)
+    {
+        var train = SelectedTrain;
+        return string.FormatICUText
+        (
+            pattern.Replace("{instance}", Lang.Get("AutoMarksFinder-Relay-InstancePattern"), StringComparison.Ordinal),
+            new Dictionary<string, object>
+            {
+                ["name"]              = name,
+                ["position"]          = "<flag>",
+                ["instance"]          = instance,
+                ["instanceText"]      = instance.ToSESquareCount(),
+                ["routeName"]         = train?.Name                ?? string.Empty,
+                ["routeMonsterCount"] = train?.MonstersFound.Count ?? 0
+            }
+        );
     }
 
     private enum RelayType

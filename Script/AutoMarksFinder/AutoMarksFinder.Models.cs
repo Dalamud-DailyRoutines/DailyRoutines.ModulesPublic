@@ -3,6 +3,7 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Info.Game.AetheryteRecord;
+using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
@@ -188,41 +189,50 @@ public partial class AutoMarksFinder
 
         public void Reorder()
         {
-            if (MonstersFound.Count <= 0 ||
-                StartAetheryte      == null)
+            if (MonstersFound.Count <= 0                 ||
+                StartAetheryte is not { } startAetheryte ||
+                AetheryteRecord.Parse(startAetheryte) is not { } startRecord)
                 return;
 
-            var orderedMonsters = MonstersFound
-                                  .OrderByDescending(x => x.ZoneID == StartAetheryte?.Map.Value.TerritoryType.RowId)
-                                  .ThenBy(monster => monster.ZoneID)
-                                  .ThenBy(monster => monster.Instance)
-                                  .ToList();
+            var remainingZones = MonstersFound.GroupBy(monster => monster.ZoneID)
+                                              .ToDictionary(group => group.Key, group => group.ToList());
+            var currentZone     = startAetheryte.Territory.RowId;
+            var currentPosition = startRecord.Position;
+            var reorderedList   = new List<NotoriousMonsterFound>(MonstersFound.Count);
 
-            List<NotoriousMonsterFound> reorderedList    = [];
-            var                         currentAetheryte = StartAetheryte;
-
-            foreach (var group in orderedMonsters.GroupBy(monster => (Zone: monster.ZoneID, monster.Instance)))
+            while (remainingZones.Count > 0)
             {
-                var zoneInstanceMonsters = group.ToList();
+                var costs = TeleportCostCalculator.GetRouteCosts(currentZone, remainingZones.Keys, applyTeleportDiscounts: false);
+                var nextZone = remainingZones.ContainsKey(currentZone) ?
+                                   currentZone :
+                                   remainingZones.Keys.MinBy(zone => costs.GetValueOrDefault(zone, uint.MaxValue));
+                var zoneMonsters = remainingZones[nextZone];
 
-                while (zoneInstanceMonsters.Count > 0)
+                if (nextZone != currentZone)
                 {
-                    var nearestMonster = zoneInstanceMonsters
-                                         .OrderBy
-                                         (monster => Vector2.Distance
-                                          (
-                                              currentAetheryte?.GetPositionMap()         ?? new(),
-                                              monster.NearestAetheryte?.GetPositionMap() ?? new()
-                                          )
-                                         )
-                                         .First();
-
-                    reorderedList.Add(nearestMonster);
-
-                    currentAetheryte = nearestMonster.NearestAetheryte ?? currentAetheryte;
-
-                    zoneInstanceMonsters.Remove(nearestMonster);
+                    var entry = zoneMonsters.MinBy
+                    (monster => monster.NearestAetheryte is { } aetheryte ?
+                                    TeleportCostCalculator.GetBaseTeleportCost(aetheryte, currentZone) :
+                                    uint.MaxValue
+                    );
+                    currentPosition = entry.NearestAetherytePosition ?? entry.Position;
                 }
+
+                foreach (var group in zoneMonsters.GroupBy(monster => monster.Instance).OrderBy(group => group.Key))
+                {
+                    var pending = group.ToList();
+
+                    while (pending.Count > 0)
+                    {
+                        var nearestMonster = pending.MinBy(monster => Vector3.DistanceSquared(currentPosition, monster.Position));
+                        reorderedList.Add(nearestMonster);
+                        currentPosition = nearestMonster.Position;
+                        pending.Remove(nearestMonster);
+                    }
+                }
+
+                currentZone = nextZone;
+                remainingZones.Remove(nextZone);
             }
 
             MonstersFound = reorderedList;

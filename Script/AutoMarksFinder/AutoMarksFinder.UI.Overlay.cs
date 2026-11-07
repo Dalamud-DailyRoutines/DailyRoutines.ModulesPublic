@@ -1,6 +1,3 @@
-﻿using DailyRoutines.Common.Extensions;
-using DailyRoutines.Extensions;
-
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
@@ -12,7 +9,7 @@ public partial class AutoMarksFinder
             selectedTrainIndex > config.Trains.Count - 1 ?
                 null :
                 config.Trains[selectedTrainIndex];
-        
+
         if (DrawTrainsSelectCombo(300f * GlobalUIScale, ref selectedTrainIndex))
         {
             smallCardMobIndex = 0;
@@ -30,6 +27,8 @@ public partial class AutoMarksFinder
 
         var source = selected.MonstersFound.ToList();
         if (source.Count == 0) return;
+
+        smallCardMobIndex = Math.Clamp(smallCardMobIndex, 0, source.Count - 1);
 
         using var table = ImRaii.Table("##SmallCardTable", 3, ImGuiTableFlags.Resizable);
         if (!table) return;
@@ -61,88 +60,74 @@ public partial class AutoMarksFinder
 
         ImGui.TableNextRow();
 
-        ImGui.TableNextColumn();
+        ImGui.TableSetColumnIndex(1);
+        DrawOverlayMonsterCard(selected, source[smallCardMobIndex], true);
+        var cardHeight = ImGui.GetItemRectSize().Y;
 
+        ImGui.TableSetColumnIndex(0);
         if (smallCardMobIndex > 0)
-        {
-            var info = source[smallCardMobIndex - 1];
+            DrawOverlayMonsterCard(selected, source[smallCardMobIndex - 1], false);
+        else
+            DrawOverlayRelayButton(RelayType.BeforeStart, cardHeight);
 
-            using (FontManager.Instance().UIFont120.Push())
-            {
-                ImGui.TextColored
-                (
-                    info.IsAlive ?
-                        KnownColor.LightGreen.ToVector4() :
-                        KnownColor.Red.ToVector4(),
-                    $"{info.GetBNPCName()}"
-                );
-            }
-
-            ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
-        }
-
-        ImGui.TableNextColumn();
-        {
-            var info = source[smallCardMobIndex];
-
-            using (FontManager.Instance().UIFont120.Push())
-            {
-                ImGui.TextColored
-                (
-                    info.IsAlive ?
-                        KnownColor.LightGreen.ToVector4() :
-                        KnownColor.Red.ToVector4(),
-                    $"{info.GetBNPCName()}"
-                );
-            }
-
-            ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
-        }
-
-        ImGui.TableNextColumn();
-
+        ImGui.TableSetColumnIndex(2);
         if (smallCardMobIndex < source.Count - 1)
+            DrawOverlayMonsterCard(selected, source[smallCardMobIndex + 1], true);
+        else
+            DrawOverlayRelayButton(RelayType.AfterEnd, cardHeight);
+    }
+
+    private void DrawOverlayMonsterCard(NotoriousMonsterList train, NotoriousMonsterFound info, bool showPosition)
+    {
+        using var group = ImRaii.Group();
+
+        using (FontManager.Instance().UIFont120.Push())
         {
-            var info = source[smallCardMobIndex + 1];
-
-            using (FontManager.Instance().UIFont120.Push())
-            {
-                ImGui.TextColored
-                (
-                    info.IsAlive ?
-                        KnownColor.LightGreen.ToVector4() :
-                        KnownColor.Red.ToVector4(),
-                    $"{info.GetBNPCName()}"
-                );
-            }
-
-            ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
+            ImGui.TextColored
+            (
+                info.IsAlive ?
+                    KnownColor.LightGreen.ToVector4() :
+                    KnownColor.Red.ToVector4(),
+                info.GetBNPCName()
+            );
         }
 
-        ImGui.TableNextRow();
+        ImGui.SameLine();
+        DrawMonsterStatusToggle(train, info);
 
-        ImGui.TableNextColumn();
+        ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
 
-        ImGui.TableNextColumn();
-        {
-            var info = source[smallCardMobIndex];
-            DrawPositionColumn(info);
+        if (!showPosition)
+            return;
 
-            DrawAetheryteColumn(info);
+        DrawPositionColumn(info);
+        DrawAetheryteColumn(info);
+    }
 
-            DrawMonsterStatusToggle(selected, info);
-        }
+    private void DrawOverlayRelayButton(RelayType type, float cardHeight)
+    {
+        var (pattern, label) = type == RelayType.BeforeStart ?
+                                   (config.AutoRelayBeforeStartPattern, "AutoMarksFinder-RelayTrainStart") :
+                                   (config.AutoRelayAfterEndPattern, "AutoMarksFinder-RelayTrainEnd");
 
-        ImGui.TableNextColumn();
+        var text  = Lang.Get(label);
+        var style = ImGui.GetStyle();
+        var buttonWidth = ImGui.CalcTextSize(FontAwesomeIcon.Microphone.ToIconString()).X +
+                          ImGui.CalcTextSize(text).X                                      +
+                          (style.FramePadding.X * 2)                                      +
+                          style.ItemSpacing.X;
+        ImGuiOm.CenterAlignFor(buttonWidth);
+        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + Math.Max(0, (cardHeight - ImGui.GetFrameHeight()) / 2));
 
-        if (smallCardMobIndex < source.Count - 1)
-        {
-            var info = source[smallCardMobIndex + 1];
-            DrawPositionColumn(info);
+        using var disabled = ImRaii.Disabled
+        (
+            relayTaskHelper.IsBusy          ||
+            autoBroadcast.On                ||
+            config.RelayCommands.Count == 0 ||
+            string.IsNullOrWhiteSpace(pattern)
+        );
 
-            DrawAetheryteColumn(info);
-
-            DrawMonsterStatusToggle(selected, info);
-        }
+        if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Microphone, text))
+            Relay(type);
     }
 }

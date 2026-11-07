@@ -5,7 +5,6 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Network;
 using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Interop.Game.Lumina;
 using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
@@ -29,12 +28,12 @@ public partial class AutoMarksFinder : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
-    private Config                   config = null!;
-    private MonsterAliveMonitor?     aliveMonitor;
-    private int                      smallCardMobIndex;
-    private int                      selectedTrainIndex;
-    private string                   newListNameInput    = string.Empty;
-    private string                   renameTrainInput    = string.Empty;
+    private Config               config = null!;
+    private MonsterAliveMonitor? aliveMonitor;
+    private int                  smallCardMobIndex;
+    private int                  selectedTrainIndex;
+    private string               newListNameInput = string.Empty;
+    private string               renameTrainInput = string.Empty;
 
     protected override unsafe void Init()
     {
@@ -75,7 +74,7 @@ public partial class AutoMarksFinder : ModuleBase
     protected override void Uninit()
     {
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
-        
+
         spawnPointUpdateCancellation?.Cancel();
         spawnPointUpdateCancellation?.Dispose();
         spawnPointUpdateCancellation = null;
@@ -84,10 +83,10 @@ public partial class AutoMarksFinder : ModuleBase
 
         FrameworkManager.Instance().Unreg(UpdateAutoBroadcast);
         StopAutoBroadcast();
-        
+
         relayTaskHelper?.Dispose();
         relayTaskHelper = null;
-        
+
         aliveMonitor?.Dispose();
         aliveMonitor = null;
 
@@ -100,7 +99,7 @@ public partial class AutoMarksFinder : ModuleBase
         selectedTrainIndex            = 0;
         smallCardMobIndex             = 0;
         newListNameInput              = string.Empty;
-        startAetheryteInput           = string.Empty;
+        startAetheryteCombo           = null;
         autoBroadcast.DepartTimeInput = string.Empty;
     }
 
