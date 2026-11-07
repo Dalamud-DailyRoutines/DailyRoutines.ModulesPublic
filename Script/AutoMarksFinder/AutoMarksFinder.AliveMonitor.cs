@@ -17,8 +17,6 @@ public partial class AutoMarksFinder
     {
         private readonly AutoMarksFinder module;
 
-        private readonly Dictionary<NotoriousMonsterList, Dictionary<NotoriousMonsterFound, AliveTrack>> aliveTracks = new(ReferenceEqualityComparer.Instance);
-        
         private readonly Dictionary<uint, FrozenSet<uint>>       territoryIdentities = [];
         private readonly Dictionary<uint, NotoriousMonsterFound> trackedMonsters     = [];
 
@@ -42,39 +40,9 @@ public partial class AutoMarksFinder
             GameState.Instance().WarpComplete        -= OnWarpCompleted;
             GameState.Instance().Logout              -= OnLogout;
 
-            aliveTracks.Clear();
             territoryIdentities.Clear();
             trackedMonsters.Clear();
         }
-
-        public void RemoveTrain
-        (
-            NotoriousMonsterList train
-        ) => aliveTracks.Remove(train);
-
-        public void InitializeTracks
-        (
-            NotoriousMonsterList train
-        )
-        {
-            var tracks = GetTrainTracks(train);
-
-            foreach (var monster in train.MonstersFound.Distinct())
-                tracks[monster] = new AliveTrack();
-        }
-
-        public void RemoveTrack
-        (
-            NotoriousMonsterList  train,
-            NotoriousMonsterFound monster
-        ) => GetTrainTracks(train).Remove(monster);
-
-        public void SetManualAlive
-        (
-            NotoriousMonsterList  train,
-            NotoriousMonsterFound monster,
-            bool                  manualAlive
-        ) => GetTrack(GetTrainTracks(train), monster).ManualAlive = manualAlive;
 
         public void RefreshTracking()
         {
@@ -88,7 +56,6 @@ public partial class AutoMarksFinder
 
             var zoneID     = GameState.TerritoryType;
             var instanceID = InstancesManager.CurrentInstance;
-            var tracks     = GetTrainTracks(activeTrain);
             var changed    = false;
 
             foreach (var obj in IObjectTable.Instance())
@@ -101,7 +68,7 @@ public partial class AutoMarksFinder
                     continue;
 
                 trackedMonsters[chara.EntityID] =  monster;
-                changed                         |= ApplyObservedState(monster, GetTrack(tracks, monster), chara.IsDead || chara.CurrentHp == 0);
+                changed                         |= monster.Observe(chara.IsDead || chara.CurrentHp == 0, false);
             }
 
             if (changed)
@@ -131,10 +98,10 @@ public partial class AutoMarksFinder
             if (!TrackSpawnedMonster(entityID, baseID, position))
                 return;
 
-            if (!TryResolveMonster(entityID, out var monster, out var track))
+            if (!TryResolveMonster(entityID, out var monster))
                 return;
 
-            if (ApplyNotifiedState(monster, track, isDead))
+            if (monster.Observe(isDead, true))
                 module.config.Save(module);
         }
 
@@ -143,10 +110,10 @@ public partial class AutoMarksFinder
             uint entityID
         )
         {
-            if (!TryResolveMonster(entityID, out var monster, out var track))
+            if (!TryResolveMonster(entityID, out var monster))
                 return;
 
-            if (ApplyNotifiedState(monster, track, true))
+            if (monster.Observe(true, true))
                 module.config.Save(module);
         }
 
@@ -155,13 +122,13 @@ public partial class AutoMarksFinder
             uint entityID
         )
         {
-            if (!TryResolveMonster(entityID, out var monster, out var track))
+            if (!TryResolveMonster(entityID, out var monster))
                 return;
 
             if (!TryReadObservedState(entityID, out var isDead))
                 return;
 
-            if (ApplyNotifiedState(monster, track, isDead))
+            if (monster.Observe(isDead, true))
                 module.config.Save(module);
         }
 
@@ -193,12 +160,10 @@ public partial class AutoMarksFinder
         private bool TryResolveMonster
         (
             uint                      entityID,
-            out NotoriousMonsterFound monster,
-            out AliveTrack            track
+            out NotoriousMonsterFound monster
         )
         {
             monster = null!;
-            track   = null!;
 
             if (!trackedMonsters.TryGetValue(entityID, out var found))
                 return false;
@@ -206,51 +171,10 @@ public partial class AutoMarksFinder
             if (module.SelectedTrain is not { } activeTrain)
                 return false;
 
-            if (!activeTrain.MonstersFound.Exists(entry => ReferenceEquals(entry, found)))
+            if (!activeTrain.MonstersFound.Any(entry => ReferenceEquals(entry, found)))
                 return false;
 
-            var tracks = GetTrainTracks(activeTrain);
             monster = found;
-            track   = GetTrack(tracks, found);
-            return true;
-        }
-
-        private static bool ApplyNotifiedState
-        (
-            NotoriousMonsterFound monster,
-            AliveTrack            track,
-            bool                  isDead
-        )
-        {
-            track.ManualAlive = false;
-            return ApplyObservedState(monster, track, isDead);
-        }
-
-        private static bool ApplyObservedState
-        (
-            NotoriousMonsterFound monster,
-            AliveTrack            track,
-            bool                  isDead
-        )
-        {
-            if (isDead)
-            {
-                if (track.ManualAlive)
-                    return false;
-
-                if (!monster.IsAlive)
-                    return false;
-
-                monster.SetState(false);
-                return true;
-            }
-
-            track.ManualAlive = false;
-
-            if (monster.IsAlive)
-                return false;
-
-            monster.SetState(true);
             return true;
         }
 
@@ -327,34 +251,6 @@ public partial class AutoMarksFinder
 
             territoryIdentities[zoneID] = identities;
             return identities;
-        }
-
-        private Dictionary<NotoriousMonsterFound, AliveTrack> GetTrainTracks
-        (
-            NotoriousMonsterList train
-        )
-        {
-            if (!aliveTracks.TryGetValue(train, out var tracks))
-            {
-                tracks             = [];
-                aliveTracks[train] = tracks;
-            }
-
-            return tracks;
-        }
-
-        private static AliveTrack GetTrack
-        (
-            Dictionary<NotoriousMonsterFound, AliveTrack> tracks,
-            NotoriousMonsterFound                         monster
-        )
-        {
-            if (tracks.TryGetValue(monster, out var track))
-                return track;
-
-            track           = new();
-            tracks[monster] = track;
-            return track;
         }
 
         private static bool IsMonsterObservable

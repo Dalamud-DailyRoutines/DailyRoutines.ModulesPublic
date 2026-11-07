@@ -12,6 +12,8 @@ public partial class AutoMarksFinder
         using var tabSettings = ImRaii.TabItem(Lang.Get("Settings"));
         if (!tabSettings) return;
 
+        using var settingsDisabled = ImRaii.Disabled(autoBroadcast.IsRunning);
+
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-RelayChatTypes")))
         using (var combo = ImRaii.Combo
                (
@@ -60,7 +62,7 @@ public partial class AutoMarksFinder
         ImGui.NewLine();
 
         using (ImRaii.Heading1(Lang.Get("Command")))
-            ImGui.TextUnformatted($"{COMMAND} {Lang.Get("AutoMarksFinder-HelpMessage")}");
+            ImGui.TextUnformatted($"/pdr {COMMAND} {Lang.Get("AutoMarksFinder-HelpMessage")}");
 
         ImGui.NewLine();
 
@@ -113,24 +115,24 @@ public partial class AutoMarksFinder
             config.Save(this);
 
         var lineCount    = content.AsSpan().Count('\n') + 1;
-        var tooManyLines = isMultiline && lineCount > MAX_RELAY_LINES;
+        var tooManyLines = isMultiline && lineCount > HuntRelay.MAX_RELAY_LINES;
 
         if (isMultiline)
         {
             ImGui.SameLine();
-            ImGui.TextDisabled($"{lineCount}/{MAX_RELAY_LINES}");
+            ImGui.TextDisabled($"{lineCount}/{HuntRelay.MAX_RELAY_LINES}");
         }
 
         using (ImRaii.Disabled
                (
                    string.IsNullOrWhiteSpace(content) ||
                    tooManyLines                       ||
-                   relayTaskHelper.IsBusy             ||
-                   autoBroadcast.On
+                   relay.IsBusy                       ||
+                   autoBroadcast.IsRunning
                ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
-                Relay(type, preview: true);
+                relay.Send(type, SelectedTrain, preview: true);
         }
     }
 }

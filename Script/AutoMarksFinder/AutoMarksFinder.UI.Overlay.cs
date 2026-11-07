@@ -1,34 +1,40 @@
+using System.Globalization;
+using DailyRoutines.Common.Extensions;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
+
 namespace DailyRoutines.ModulesPublic;
 
 public partial class AutoMarksFinder
 {
     protected override void OverlayUI()
     {
-        var selected =
-            selectedTrainIndex == -1 ||
-            selectedTrainIndex > config.Trains.Count - 1 ?
-                null :
-                config.Trains[selectedTrainIndex];
-
-        if (DrawTrainsSelectCombo(300f * GlobalUIScale, ref selectedTrainIndex))
-        {
-            smallCardMobIndex = 0;
-            StopAutoBroadcast();
-            selected = SelectedTrain;
-        }
+        DrawTrainsSelectCombo(300f * GlobalUIScale, selection);
+        var selected = SelectedTrain;
 
         ImGui.SameLine();
         if (ImGuiOm.ButtonIcon("设置", FontAwesomeIcon.Cog, Lang.Get("Settings")))
             ChatManager.Instance().SendMessage($"/pdr search {GetType().Name}");
 
+        if (movement.IsBusy &&
+            scanner?.IsRunning != true)
+        {
+            ImGui.SameLine();
+            if (ImGuiOm.ButtonIcon("###StopMovement", FontAwesomeIcon.Stop, Lang.Get("Stop")))
+                movement.Stop();
+        }
+
         ImGui.Spacing();
+
+        DrawAutoBroadcastControls();
+
+        ImGui.Separator();
 
         if (selected == null) return;
 
-        var source = selected.MonstersFound.ToList();
+        var source = selected.MonstersFound;
         if (source.Count == 0) return;
 
-        smallCardMobIndex = Math.Clamp(smallCardMobIndex, 0, source.Count - 1);
+        var monsterIndex = selection.MonsterIndex;
 
         using var table = ImRaii.Table("##SmallCardTable", 3, ImGuiTableFlags.Resizable);
         if (!table) return;
@@ -41,10 +47,10 @@ public partial class AutoMarksFinder
 
         ImGui.TableNextColumn();
 
-        if (smallCardMobIndex > 0)
+        if (monsterIndex > 0)
         {
             if (ImGuiOm.ButtonIcon("##FormerMob", FontAwesomeIcon.ArrowLeft))
-                smallCardMobIndex--;
+                selection.MonsterIndex--;
         }
 
         ImGui.TableNextColumn();
@@ -52,29 +58,101 @@ public partial class AutoMarksFinder
 
         ImGui.TableNextColumn();
 
-        if (smallCardMobIndex < source.Count - 1)
+        if (monsterIndex < source.Count - 1)
         {
             if (ImGuiOm.ButtonIcon("##NextMob", FontAwesomeIcon.ArrowRight))
-                smallCardMobIndex++;
+                selection.MonsterIndex++;
         }
 
         ImGui.TableNextRow();
 
         ImGui.TableSetColumnIndex(1);
-        DrawOverlayMonsterCard(selected, source[smallCardMobIndex], true);
+        monsterIndex = selection.MonsterIndex;
+        DrawOverlayMonsterCard(selected, source[monsterIndex], true);
         var cardHeight = ImGui.GetItemRectSize().Y;
 
         ImGui.TableSetColumnIndex(0);
-        if (smallCardMobIndex > 0)
-            DrawOverlayMonsterCard(selected, source[smallCardMobIndex - 1], false);
+        if (monsterIndex > 0)
+            DrawOverlayMonsterCard(selected, source[monsterIndex - 1], false);
         else
             DrawOverlayRelayButton(RelayType.BeforeStart, cardHeight);
 
         ImGui.TableSetColumnIndex(2);
-        if (smallCardMobIndex < source.Count - 1)
-            DrawOverlayMonsterCard(selected, source[smallCardMobIndex + 1], true);
+        if (monsterIndex < source.Count - 1)
+            DrawOverlayMonsterCard(selected, source[monsterIndex + 1], true);
         else
             DrawOverlayRelayButton(RelayType.AfterEnd, cardHeight);
+    }
+
+    private void DrawAutoBroadcastControls()
+    {
+        using var heading   = ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcast"));
+        var       serverNow = Framework.GetServerTime();
+        ImGui.TextUnformatted
+        (
+            Lang.Get
+            (
+                "AutoMarksFinder-AutoBroadcastServerTime",
+                new Dictionary<string, object>
+                {
+                    ["timeText"] = DateTimeOffset.FromUnixTimeSeconds(serverNow).ToString("HH:mm:ss", CultureInfo.InvariantCulture)
+                }
+            )
+        );
+
+        using (ImRaii.Disabled(autoBroadcast.IsRunning))
+        {
+            ImGui.SetNextItemWidth(120 * GlobalUIScale);
+            if (ImGui.InputTextWithHint("###Departure", "HH:mm:ss", ref autoBroadcast.DepartTimeInput, 16))
+                autoBroadcast.InvalidateDeparture();
+
+            ImGui.SameLine();
+            if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastApply")))
+                autoBroadcast.ApplyDeparture();
+
+            ImGui.SameLine();
+            if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastUseCurrentTime")))
+                autoBroadcast.ApplyDeparture(true);
+        }
+
+        if (autoBroadcast.DepartAt is { } departure)
+        {
+            ImGui.TextUnformatted
+            (
+                Lang.Get
+                (
+                    "AutoMarksFinder-AutoBroadcastDepartTimeSet",
+                    new Dictionary<string, object>
+                    {
+                        ["timeText"] = DateTimeOffset.FromUnixTimeSeconds(departure).ToString("MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+                    }
+                )
+            );
+        }
+
+        if (autoBroadcast.IsRunning)
+        {
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, Lang.Get("Stop")))
+                autoBroadcast.Stop();
+
+            ImGui.SameLine();
+            ImGui.TextUnformatted(autoBroadcast.Status);
+        }
+        else
+        {
+            using var disabled = ImRaii.Disabled
+            (
+                autoBroadcast.DepartAt == null                         ||
+                SelectedTrain is not { MonstersFound.Count: > 0 }      ||
+                config.RelayCommands.Count == 0                        ||
+                string.IsNullOrWhiteSpace(config.RelayPositionPattern) ||
+                scanner?.IsRunning == true                             ||
+                relay.IsBusy                                           ||
+                !GameState.IsLoggedIn
+            );
+            if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
+                autoBroadcast.Start();
+        }
     }
 
     private void DrawOverlayMonsterCard(NotoriousMonsterList train, NotoriousMonsterFound info, bool showPosition)
@@ -121,13 +199,13 @@ public partial class AutoMarksFinder
 
         using var disabled = ImRaii.Disabled
         (
-            relayTaskHelper.IsBusy          ||
-            autoBroadcast.On                ||
+            relay.IsBusy                    ||
+            autoBroadcast.IsRunning         ||
             config.RelayCommands.Count == 0 ||
             string.IsNullOrWhiteSpace(pattern)
         );
 
         if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Microphone, text))
-            Relay(type);
+            relay.Send(type, SelectedTrain);
     }
 }

@@ -8,9 +8,9 @@ public partial class AutoMarksFinder
 {
     private sealed class ScanZoneCombo : LuminaComboBase<TerritoryType>
     {
-        private readonly Config config;
+        private readonly AutoMarksFinderConfig config;
 
-        public ScanZoneCombo(Config config) : base("AutoMarksFinder.ScanZones", null)
+        public ScanZoneCombo(AutoMarksFinderConfig config) : base("AutoMarksFinder.ScanZones", null)
         {
             this.config = config;
             Searcher = new
@@ -75,7 +75,7 @@ public partial class AutoMarksFinder
         protected override bool DrawDataColumns(TerritoryType item, ComboSelectionMode mode, bool isSelected)
         {
             ImGui.TableNextColumn();
-            var changed = ImGui.Selectable(item.ExtractPlaceName(), isSelected, ImGuiSelectableFlags.DontClosePopups);
+            var changed = ImGui.Selectable(item.ExtractPlaceName(), isSelected, ImGuiSelectableFlags.DontClosePopups | ImGuiSelectableFlags.SpanAllColumns);
             ImGui.TableNextColumn();
             var points = config.ScanPoints[item.RowId];
             ImGui.TextUnformatted($"{points.Count}");

@@ -1,5 +1,4 @@
 using System.Numerics;
-using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Config;
@@ -22,14 +21,6 @@ public partial class AutoMarksFinder
         AutoMarksFinder module
     ) : IDisposable
     {
-        public static MonsterScanner? Scanner { get; set; }
-
-        public static void ClearScanner()
-        {
-            Scanner?.Dispose();
-            Scanner = null;
-        }
-
         private readonly Dictionary<uint, List<Vector3>>     zones             = [];
         private readonly HashSet<(uint Zone, uint Instance)> completedAreas    = [];
         private readonly List<Vector3>                       candidates        = [];
@@ -37,9 +28,6 @@ public partial class AutoMarksFinder
         private readonly List<Vector3>                       targetPoints      = [];
         private readonly Queue<Vector3>                      retryTargets      = [];
         private readonly List<Vector3>                       observedPositions = [];
-
-        private CancellationTokenSource? pathCancellation;
-        private Task<List<Vector3>>?     pathTask;
 
         private ScanState state;
         private long      stateStartedAt;
@@ -113,24 +101,11 @@ public partial class AutoMarksFinder
             if (disposed)
                 return;
 
-            var previousState = state;
             disposed = true;
             state    = ScanState.Stopped;
             FrameworkManager.Instance().Unreg(OnUpdate);
-            module.TaskHelper.Abort();
             CancelPath();
-            if (vnavmeshIPC.IsPluginEnabled())
-                vnavmeshIPC.StopPathfind();
-
-            switch (previousState)
-            {
-                case ScanState.SwitchingInstance:
-                    ChatManager.Instance().SendMessage("/pdr insc abort");
-                    break;
-                case ScanState.SwitchingZone:
-                    MovementManager.Instance().AbortTasks();
-                    break;
-            }
+            module.movement.Stop();
 
             if (originalAroundRangeMode is { } mode)
             {
@@ -142,10 +117,10 @@ public partial class AutoMarksFinder
 
         public void ObserveMonster(uint dataID, Vector3 position)
         {
-            if (!IsRunning                                                                  ||
-                !zones.ContainsKey(GameState.TerritoryType)                                 ||
-                !NotoriousMonsterFound.NotoriousMonsters.TryGetValue(dataID, out var rowID) ||
-                !LuminaGetter.TryGetRow<NotoriousMonster>(rowID, out var row)               ||
+            if (!IsRunning                                                                   ||
+                !zones.ContainsKey(GameState.TerritoryType)                                  ||
+                !NotoriousMonsterFound.NOTORIOUS_MONSTERS.TryGetValue(dataID, out var rowID) ||
+                !LuminaGetter.TryGetRow<NotoriousMonster>(rowID, out var row)                ||
                 row.Rank != 2)
                 return;
 
@@ -197,17 +172,20 @@ public partial class AutoMarksFinder
 
                 if (state is ScanState.SwitchingZone or ScanState.SwitchingInstance or ScanState.Teleporting)
                 {
-                    if (module.TaskHelper.IsBusy)
+                    if (module.movement.IsBusy)
                         return;
 
-                    if (GameState.TerritoryType          != ZoneID ||
-                        InstancesManager.CurrentInstance != Instance)
+                    if (!module.movement.HasArrived       ||
+                        GameState.TerritoryType != ZoneID ||
+                        (state                            != ScanState.SwitchingZone &&
+                         InstancesManager.CurrentInstance != Instance))
                     {
                         StopWithWarning("AutoMarksFinder-ScanInterrupted");
                         return;
                     }
 
                     observationPosition = LocalPlayerState.Object.Position;
+                    Instance            = InstancesManager.CurrentInstance;
                     ChangeState
                     (
                         state == ScanState.Teleporting ?
@@ -358,16 +336,7 @@ public partial class AutoMarksFinder
 
             if (teleport != null)
             {
-                var destination = teleport;
-                module.TaskHelper.Enqueue(IsAbleToTeleport,       "等待传送");
-                module.TaskHelper.Enqueue(destination.TeleportTo, "传送至以太之光");
-                module.TaskHelper.DelayNext(500, "等待传送开始");
-                module.TaskHelper.Enqueue
-                (
-                    () => UIModule.IsScreenReady() &&
-                          DistanceSquared(LocalPlayerState.Object.Position, destination.Position) <= AETHERYTE_RADIUS * AETHERYTE_RADIUS,
-                    "等待传送完成"
-                );
+                module.movement.Travel(ZoneID, Instance, teleport);
                 ChangeState(ScanState.Teleporting);
                 return;
             }
@@ -426,8 +395,7 @@ public partial class AutoMarksFinder
                     continue;
 
                 navigationTarget = candidate;
-                pathCancellation = new();
-                pathTask         = vnavmeshIPC.PathfindCancelable(LocalPlayerState.Object.Position, candidate, true, pathCancellation.Token);
+                module.movement.BeginPath(candidate, true);
                 ChangeState(ScanState.Pathfinding);
                 return;
             }
@@ -438,13 +406,7 @@ public partial class AutoMarksFinder
 
         private void UpdatePathfinding()
         {
-            if (pathTask == null)
-            {
-                StartPathfinding();
-                return;
-            }
-
-            if (!pathTask.IsCompleted)
+            if (module.movement.IsPathPending)
             {
                 if (Environment.TickCount64 - stateStartedAt >= PATHFIND_TIMEOUT_MS)
                     StartPathfinding();
@@ -452,13 +414,13 @@ public partial class AutoMarksFinder
                 return;
             }
 
-            if (!pathTask.IsCompletedSuccessfully)
+            var path = module.movement.TakePath();
+
+            if (path == null)
             {
                 StartPathfinding();
                 return;
             }
-
-            var path = pathTask.Result;
 
             if (path.Count                        == 0                                ||
                 DistanceSquared(path[^1], anchor) > PLANNING_RADIUS * PLANNING_RADIUS ||
@@ -475,8 +437,7 @@ public partial class AutoMarksFinder
 
             ActivePath.Add(LocalPlayerState.Object.Position);
             ActivePath.AddRange(path);
-            vnavmeshIPC.SetPathfindTolerance(2f);
-            vnavmeshIPC.PathfindWithPath(path, true);
+            module.movement.FollowPath(path, true);
             closestDistance = DistanceSquared(LocalPlayerState.Object.Position, navigationTarget);
             lastProgressAt  = Environment.TickCount64;
             ChangeState(ScanState.Moving);
@@ -490,7 +451,7 @@ public partial class AutoMarksFinder
             if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS ||
                 targetPoints.All(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
             {
-                vnavmeshIPC.StopPathfind();
+                module.movement.StopNavigation();
                 observationPosition = position;
                 ChangeState(ScanState.Observing);
                 return;
@@ -502,10 +463,10 @@ public partial class AutoMarksFinder
                 lastProgressAt  = Environment.TickCount64;
             }
 
-            if (!vnavmeshIPC.GetIsPathfindRunning() ||
+            if (!module.movement.IsPathRunning ||
                 Environment.TickCount64 - lastProgressAt > MOVEMENT_TIMEOUT_MS)
             {
-                vnavmeshIPC.StopPathfind();
+                module.movement.StopNavigation();
 
                 if (PendingPoints.Any(point => DistanceSquared(position, point) <= DETECTION_RADIUS * DETECTION_RADIUS))
                 {
@@ -553,7 +514,6 @@ public partial class AutoMarksFinder
         private void CompleteArea()
         {
             CancelPath();
-            vnavmeshIPC.StopPathfind();
             completedAreas.Add((ZoneID, Instance));
             var instanceCount = InstancesManager.IsInstancedArea ?
                                     InstancesManager.Instance().GetInstancesCount(ZoneID) :
@@ -565,7 +525,6 @@ public partial class AutoMarksFinder
                     continue;
 
                 Instance = instance;
-                module.TaskHelper.Enqueue(IsAbleToTeleport, "等待切换分线");
                 var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, Vector3.Zero);
 
                 if (aetheryte == null)
@@ -574,25 +533,7 @@ public partial class AutoMarksFinder
                     return;
                 }
 
-                if (DistanceSquared(LocalPlayerState.Object.Position, aetheryte.Position) > AETHERYTE_RADIUS * AETHERYTE_RADIUS)
-                {
-                    module.TaskHelper.Enqueue(aetheryte.TeleportTo, "传送至以太之光");
-                    module.TaskHelper.DelayNext(500, "等待传送开始");
-                    module.TaskHelper.Enqueue
-                    (
-                        () => UIModule.IsScreenReady() &&
-                              DistanceSquared(LocalPlayerState.Object.Position, aetheryte.Position) <= AETHERYTE_RADIUS * AETHERYTE_RADIUS,
-                        "等待靠近以太之光"
-                    );
-                }
-
-                module.TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage($"/pdr insc {Instance}"), "切换分线");
-                module.TaskHelper.Enqueue
-                (
-                    () => UIModule.IsScreenReady() &&
-                          InstancesManager.CurrentInstance == Instance,
-                    "等待分线切换完成"
-                );
+                module.movement.Travel(ZoneID, Instance, aetheryte);
                 ChangeState(ScanState.SwitchingInstance);
                 return;
             }
@@ -621,16 +562,7 @@ public partial class AutoMarksFinder
             ScanPoints = [];
             PendingPoints.Clear();
             observedPositions.Clear();
-            module.TaskHelper.Enqueue(IsAbleToTeleport,                                             "等待区域传送");
-            module.TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(ZoneID), "传送至扫描区域");
-            module.TaskHelper.DelayNext(500, "等待传送开始");
-            module.TaskHelper.Enqueue
-            (
-                () => GameState.TerritoryType == ZoneID &&
-                      UIModule.IsScreenReady(),
-                "等待区域传送完成"
-            );
-            module.TaskHelper.Enqueue(() => Instance = InstancesManager.CurrentInstance, "记录当前分线");
+            module.movement.Travel(ZoneID);
             ChangeState(ScanState.SwitchingZone);
         }
 
@@ -665,21 +597,7 @@ public partial class AutoMarksFinder
         private void CancelPath()
         {
             ActivePath.Clear();
-            pathCancellation?.Cancel();
-            pathCancellation?.Dispose();
-            pathCancellation = null;
-
-            if (pathTask != null)
-            {
-                _ = pathTask.ContinueWith
-                (
-                    completed => DLog.Error(completed.Exception),
-                    CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default
-                );
-                pathTask = null;
-            }
+            module.movement.StopNavigation();
         }
 
         private void StopWithWarning(string key)
@@ -712,7 +630,6 @@ public partial class AutoMarksFinder
         private const float ARRIVAL_RADIUS       = 20;
         private const float MOUNT_SPEED          = 12;
         private const float TELEPORT_DURATION    = 10;
-        private const float AETHERYTE_RADIUS     = 60;
         private const float FLIGHT_HEIGHT        = 100;
         private const float RETRY_DISTANCE       = 80;
         private const float PROGRESS_DISTANCE    = 2;
