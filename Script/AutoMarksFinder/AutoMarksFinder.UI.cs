@@ -31,6 +31,8 @@ public partial class AutoMarksFinder
     private Task?                    spawnPointUpdateTask;
     private CancellationTokenSource? spawnPointUpdateCancellation;
 
+    private string startAetheryteInput = string.Empty;
+
     private string trainSearchInput = string.Empty;
 
     protected override void ConfigUI()
@@ -119,34 +121,8 @@ public partial class AutoMarksFinder
 
             ImGui.SameLine(0, 8f * GlobalUIScale);
             DrawAutoBroadcastButton();
-
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            ImGui.TextDisabled("|");
-
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, Lang.Get("Export")))
-                ExportToClipboard(selected!);
         }
-
-        ImGui.SameLine();
-
-        if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, Lang.Get("Import")))
-        {
-            var imported = ImportFromClipboard<NotoriousMonsterList>();
-
-            if (imported != null)
-            {
-                foreach (var monster in imported.MonstersFound)
-                    monster.SetState(true);
-
-                config.Trains.Add(imported);
-
-                aliveMonitor?.InitializeTracks(imported);
-
-                config.Save(this);
-            }
-        }
-
+        
         ImGui.Spacing();
 
         if (selected == null) return;
@@ -896,18 +872,35 @@ public partial class AutoMarksFinder
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
         ImGui.InputTextWithHint("###TrainSearch", $"{Lang.Get("PleaseSearch")}……", ref trainSearchInput, 128);
 
-        ImGui.SetNextItemWidth(-ImGui.GetFrameHeightWithSpacing());
+        ImGui.SetNextItemWidth(-2 * ImGui.GetFrameHeightWithSpacing());
         var create = ImGui.InputTextWithHint
         (
             "###AddNewTrainList",
             Lang.Get("AutoMarksFinder-NewTrainListTip"),
             ref newListNameInput,
-            128,
+            256,
             ImGuiInputTextFlags.EnterReturnsTrue
         );
+        
         ImGui.SameLine();
         using (ImRaii.Disabled(string.IsNullOrWhiteSpace(newListNameInput)))
             create |= ImGuiOm.ButtonIcon("###CreateTrain", FontAwesomeIcon.Plus, Lang.Get("Add"));
+        
+        ImGui.SameLine();
+        if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, Lang.Get("Import")))
+        {
+            var imported = ImportFromClipboard<NotoriousMonsterList>();
+            if (imported != null)
+            {
+                foreach (var monster in imported.MonstersFound)
+                    monster.SetState(true);
+
+                config.Trains.Add(imported);
+                aliveMonitor?.InitializeTracks(imported);
+
+                config.Save(this);
+            }
+        }
 
         if (create &&
             !string.IsNullOrWhiteSpace(newListNameInput))
@@ -943,11 +936,11 @@ public partial class AutoMarksFinder
         if (!table)
             return changed;
 
-        ImGui.TableSetupColumn(Lang.Get("Name"),                         ImGuiTableColumnFlags.WidthStretch, 50);
-        ImGui.TableSetupColumn(Lang.Get("Zone"),                         ImGuiTableColumnFlags.WidthStretch, 10);
-        ImGui.TableSetupColumn(Lang.Get("Count"),                        ImGuiTableColumnFlags.WidthStretch, 10);
-        ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-CreationTime"), ImGuiTableColumnFlags.WidthStretch, 40);
-        ImGui.TableSetupColumn("###Actions",                             ImGuiTableColumnFlags.WidthFixed,   3   * ImGui.GetFrameHeightWithSpacing());
+        ImGui.TableSetupColumn(Lang.Get("Name"),                         ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("Zone"),                         ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("Count"),                        ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-CreationTime"), ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("###Actions",                             ImGuiTableColumnFlags.WidthFixed, 3 * ImGui.GetFrameHeightWithSpacing());
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableHeadersRow();
 
@@ -960,14 +953,20 @@ public partial class AutoMarksFinder
             train.GeneratedDateTime ??= train.GeneratedTime.ToUTCDateTimeFromUnixSeconds().ToLocalTime();
 
             using var rowID = ImRaii.PushId(i);
+            
             ImGui.TableNextRow();
+            
             ImGui.TableNextColumn();
-
-            if (ImGui.Selectable(train.Name, ReferenceEquals(selected, train)))
+            using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.LawnGreen.ToUInt(), ReferenceEquals(selected, train)))
             {
-                selectedIndex = i;
-                changed       = true;
-                selected      = train;
+                if (ImGui.Selectable(train.Name))
+                {
+                    selectedIndex = i;
+                    changed       = true;
+                    selected      = train;
+
+                    ImGui.CloseCurrentPopup();
+                }
             }
 
             ImGui.TableNextColumn();
@@ -982,10 +981,11 @@ public partial class AutoMarksFinder
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{train.MonstersFound.Count(monster => monster.IsAlive)}/{train.MonstersFound.Count}");
+            
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{train.GeneratedDateTime:g}");
+            
             ImGui.TableNextColumn();
-
             if (ImGuiOm.ButtonIcon("###RenameTrain", FontAwesomeIcon.Edit, Lang.Get("Rename")))
             {
                 renameTrainInput = train.Name;
@@ -1011,7 +1011,11 @@ public partial class AutoMarksFinder
                     }
                 }
             }
-
+            
+            ImGui.SameLine();
+            if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, Lang.Get("Export")))
+                ExportToClipboard(train);
+            
             ImGui.SameLine();
             if (ImGuiOm.ButtonIcon("###DeleteTrain", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
                 ImGui.OpenPopup("###DeleteTrainPopup");

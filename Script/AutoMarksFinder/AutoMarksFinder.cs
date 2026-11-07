@@ -34,7 +34,6 @@ public partial class AutoMarksFinder : ModuleBase
     private int                      smallCardMobIndex;
     private int                      selectedTrainIndex;
     private string                   newListNameInput    = string.Empty;
-    private string                   startAetheryteInput = string.Empty;
     private string                   renameTrainInput    = string.Empty;
 
     protected override unsafe void Init()

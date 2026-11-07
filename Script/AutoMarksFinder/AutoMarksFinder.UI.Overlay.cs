@@ -21,42 +21,6 @@ public partial class AutoMarksFinder
         }
 
         ImGui.SameLine();
-        ImGui.TextDisabled("|");
-
-        using (ImRaii.Disabled(selected == null))
-        {
-            ImGui.SameLine();
-
-            if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, Lang.Get("Export")))
-            {
-                if (selected != null)
-                    ExportToClipboard(selected);
-            }
-        }
-
-        ImGui.SameLine();
-
-        if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, Lang.Get("Import")))
-        {
-            var imported = ImportFromClipboard<NotoriousMonsterList>();
-
-            if (imported != null)
-            {
-                foreach (var monster in imported.MonstersFound)
-                    monster.SetState(true);
-
-                config.Trains.Add(imported);
-
-                aliveMonitor?.InitializeTracks(imported);
-
-                config.Save(this);
-            }
-        }
-
-        ImGui.SameLine();
-        ImGui.TextDisabled("|");
-
-        ImGui.SameLine();
         if (ImGuiOm.ButtonIcon("设置", FontAwesomeIcon.Cog, Lang.Get("Settings")))
             ChatManager.Instance().SendMessage($"/pdr search {GetType().Name}");
 
@@ -164,13 +128,9 @@ public partial class AutoMarksFinder
             var info = source[smallCardMobIndex];
             DrawPositionColumn(info);
 
-            ImGui.SameLine();
             DrawAetheryteColumn(info);
 
             DrawMonsterStatusToggle(selected, info);
-
-            ImGui.SameLine();
-            DrawTeleportToMonsterZone(info);
         }
 
         ImGui.TableNextColumn();
@@ -180,13 +140,9 @@ public partial class AutoMarksFinder
             var info = source[smallCardMobIndex + 1];
             DrawPositionColumn(info);
 
-            ImGui.SameLine();
             DrawAetheryteColumn(info);
 
             DrawMonsterStatusToggle(selected, info);
-
-            ImGui.SameLine();
-            DrawTeleportToMonsterZone(info);
         }
     }
 }
