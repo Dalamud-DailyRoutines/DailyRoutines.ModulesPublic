@@ -1,6 +1,8 @@
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
+using Dalamud.Interface.Textures;
+using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
@@ -21,8 +23,11 @@ public partial class AutoMarksFinder
         EnableDefaultMarkers = true
     };
 
-    private ScanZoneCombo? scanZoneCombo;
-    private bool           confirmClearScanResults;
+    private ScanZoneCombo?       scanZoneCombo;
+    private bool                 confirmClearScanResults;
+    private MonsterScanner?      scanCoverageSource;
+    private int                  scanCoverageVersion;
+    private IDalamudTextureWrap? scanCoverageTexture;
 
     private Task?                    spawnPointUpdateTask;
     private CancellationTokenSource? spawnPointUpdateCancellation;
@@ -365,27 +370,30 @@ public partial class AutoMarksFinder
         if (scanner == null)
             return;
 
-        var coverageColor = KnownColor.GreenYellow.ToVector4();
-        coverageColor.W = 0.12f;
-        var fillColor = ImGui.ColorConvertFloat4ToU32(coverageColor);
+        scanner.UpdateCoverageImage();
 
-        foreach (var rectangle in scanner.ObservedCoverage)
-            drawList.AddRectFilled
+        if (!ReferenceEquals(scanCoverageSource, scanner)  ||
+            scanCoverageVersion != scanner.CoverageVersion ||
+            scanCoverageTexture == null)
+        {
+            var texture = ITextureProvider.Instance().CreateFromRaw
             (
-                renderer.WorldToScreen(new(rectangle.Left, 0, rectangle.Top)),
-                renderer.WorldToScreen(new(rectangle.Right, 0, rectangle.Bottom)),
-                fillColor
+                RawImageSpecification.Bgra32(MonsterScanner.COVERAGE_SIZE, MonsterScanner.COVERAGE_SIZE),
+                scanner.CoveragePixels
             );
+            scanCoverageTexture?.Dispose();
+            scanCoverageTexture = texture;
+            scanCoverageSource  = scanner;
+            scanCoverageVersion = scanner.CoverageVersion;
+        }
 
-        var outlineColor = ImGui.ColorConvertFloat4ToU32(KnownColor.GreenYellow.ToVector4());
-
-        foreach (var rectangle in scanner.ObservedBoundary)
-            drawList.AddRectFilled
-            (
-                renderer.WorldToScreen(new(rectangle.Left, 0, rectangle.Top)),
-                renderer.WorldToScreen(new(rectangle.Right, 0, rectangle.Bottom)),
-                outlineColor
-            );
+        var bounds = scanner.CoverageBounds;
+        drawList.AddImage
+        (
+            scanCoverageTexture.Handle,
+            renderer.WorldToScreen(new(bounds.Left, 0, bounds.Top)),
+            renderer.WorldToScreen(new(bounds.Right, 0, bounds.Bottom))
+        );
 
         for (var index = 1; index < scanner.ActivePath.Count; index++)
             drawList.AddLine
@@ -603,6 +611,9 @@ public partial class AutoMarksFinder
             {
                 scanner?.Dispose();
                 scanner = new(this);
+                scanCoverageTexture?.Dispose();
+                scanCoverageTexture = null;
+                scanCoverageSource  = null;
                 scanner.StartScan();
             }
         }
@@ -639,6 +650,9 @@ public partial class AutoMarksFinder
             {
                 scanner?.Dispose();
                 scanner = null;
+                scanCoverageTexture?.Dispose();
+                scanCoverageTexture = null;
+                scanCoverageSource  = null;
                 ImGui.CloseCurrentPopup();
             }
         }

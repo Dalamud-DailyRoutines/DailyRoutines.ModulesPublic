@@ -1,5 +1,5 @@
-using System.Drawing.Drawing2D;
 using System.Numerics;
+using System.Runtime.InteropServices;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.Config;
@@ -28,8 +28,8 @@ public partial class AutoMarksFinder
         private readonly List<Vector3>                       failedCandidates = [];
         private readonly HashSet<Vector3>                    targetPoints     = [];
         private readonly Queue<Vector3>                      retryTargets     = [];
-        private readonly Region                              observedCoverage = new(RectangleF.Empty);
-        private readonly Region                              observedOutline  = new(RectangleF.Empty);
+        private readonly bool[]                              coverageMask     = new bool[COVERAGE_SIZE * COVERAGE_SIZE];
+        private readonly uint[]                              coveragePixels   = new uint[COVERAGE_SIZE * COVERAGE_SIZE];
 
         private ScanState state;
         private long      stateStartedAt;
@@ -43,6 +43,9 @@ public partial class AutoMarksFinder
         private Vector3   navigationTarget;
         private float     flightHeight;
         private uint?     originalAroundRangeMode;
+        private float     coverageScale;
+        private bool      coverageDirty;
+        private long      coverageUpdatedAt;
 
         private bool disposed;
 
@@ -56,9 +59,11 @@ public partial class AutoMarksFinder
 
         public List<Vector3> PendingPoints { get; } = [];
 
-        public IReadOnlyList<RectangleF> ObservedCoverage { get; private set; } = [];
+        public RectangleF CoverageBounds { get; private set; }
 
-        public IReadOnlyList<RectangleF> ObservedBoundary { get; private set; } = [];
+        public int CoverageVersion { get; private set; }
+
+        public ReadOnlySpan<byte> CoveragePixels => MemoryMarshal.AsBytes(coveragePixels.AsSpan());
 
         public List<Vector3> ActivePath { get; } = [];
 
@@ -111,8 +116,6 @@ public partial class AutoMarksFinder
             FrameworkManager.Instance().Unreg(OnUpdate);
             CancelPath();
             module.movement.Stop();
-            observedCoverage.Dispose();
-            observedOutline.Dispose();
 
             if (originalAroundRangeMode is { } mode)
             {
@@ -266,10 +269,17 @@ public partial class AutoMarksFinder
             PendingPoints.AddRange(points);
             ScanPoints   = points;
             flightHeight = points.Max(point => point.Y) + FLIGHT_HEIGHT;
-            observedCoverage.MakeEmpty();
-            observedOutline.MakeEmpty();
-            ObservedCoverage = [];
-            ObservedBoundary = [];
+            Array.Clear(coverageMask);
+            Array.Clear(coveragePixels);
+            coverageDirty = false;
+            CoverageVersion++;
+            var position = LocalPlayerState.Object.Position;
+            var minX     = MathF.Min(points.Min(point => point.X), position.X)    - DETECTION_RADIUS;
+            var minZ     = MathF.Min(points.Min(point => point.Z), position.Z)    - DETECTION_RADIUS;
+            var maxX     = MathF.Max(points.Max(point => point.X), position.X)    + DETECTION_RADIUS;
+            var maxZ     = MathF.Max(points.Max(point => point.Z), position.Z)    + DETECTION_RADIUS;
+            coverageScale  = MathF.Max(maxX - minX, maxZ - minZ) / (COVERAGE_SIZE - 2);
+            CoverageBounds = new(minX - coverageScale, minZ - coverageScale, coverageScale * COVERAGE_SIZE, coverageScale * COVERAGE_SIZE);
             ActivePath.Clear();
             failedCandidates.Clear();
             retryTargets.Clear();
@@ -285,9 +295,17 @@ public partial class AutoMarksFinder
                 return;
             }
 
+            var position = LocalPlayerState.Object.Position;
+
+            if (PendingPoints.All(point => DistanceSquared(position, point) <= PLANNING_RADIUS * PLANNING_RADIUS))
+            {
+                observationPosition = position;
+                ChangeState(ScanState.Observing);
+                return;
+            }
+
             BuildCandidates();
 
-            var              position     = LocalPlayerState.Object.Position;
             var              bestCoverage = 0;
             var              bestScore    = float.MaxValue;
             AetheryteRecord? teleport     = null;
@@ -473,7 +491,8 @@ public partial class AutoMarksFinder
             previousPosition = position;
             var distance = DistanceSquared(position, navigationTarget);
 
-            if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS)
+            if (distance <= ARRIVAL_RADIUS * ARRIVAL_RADIUS ||
+                targetPoints.All(point => DistanceSquared(position, point) <= PLANNING_RADIUS * PLANNING_RADIUS))
             {
                 module.movement.StopNavigation();
                 observationPosition = position;
@@ -529,21 +548,34 @@ public partial class AutoMarksFinder
 
         private void RecordCoverage(Vector3 start, Vector3 end, bool isObserving = false)
         {
-            var direction     = new Vector2(end.X - start.X, end.Z - start.Z);
-            var lengthSquared = direction.LengthSquared();
-
             PendingPoints.RemoveAll(IsCovered);
 
-            using var coverage = CreateCoverage(DETECTION_RADIUS);
-            using var outline  = CreateCoverage(DETECTION_RADIUS + 2);
-            observedCoverage.Union(coverage);
-            observedOutline.Union(outline);
+            var direction     = new Vector2(end.X - start.X, end.Z - start.Z);
+            var lengthSquared = direction.LengthSquared();
+            var minX          = Math.Clamp((int)((MathF.Min(start.X, end.X) - DETECTION_RADIUS - CoverageBounds.Left) / coverageScale), 0, COVERAGE_SIZE - 1);
+            var minZ          = Math.Clamp((int)((MathF.Min(start.Z, end.Z) - DETECTION_RADIUS - CoverageBounds.Top) / coverageScale), 0, COVERAGE_SIZE - 1);
+            var maxX          = Math.Clamp((int)((MathF.Max(start.X, end.X) + DETECTION_RADIUS - CoverageBounds.Left) / coverageScale), 0, COVERAGE_SIZE - 1);
+            var maxZ          = Math.Clamp((int)((MathF.Max(start.Z, end.Z) + DETECTION_RADIUS - CoverageBounds.Top) / coverageScale), 0, COVERAGE_SIZE - 1);
 
-            using var transform = new Matrix();
-            ObservedCoverage = observedCoverage.GetRegionScans(transform);
-            using var boundary = observedOutline.Clone();
-            boundary.Exclude(observedCoverage);
-            ObservedBoundary = boundary.GetRegionScans(transform);
+            for (var row = minZ; row <= maxZ; row++)
+            for (var column = minX; column <= maxX; column++)
+            {
+                var index = (row * COVERAGE_SIZE) + column;
+                if (coverageMask[index])
+                    continue;
+
+                var offset = new Vector2
+                    (CoverageBounds.Left + ((column + 0.5f) * coverageScale) - start.X, CoverageBounds.Top + ((row + 0.5f) * coverageScale) - start.Z);
+                var progress = lengthSquared > 0 ?
+                                   Math.Clamp(Vector2.Dot(offset, direction) / lengthSquared, 0, 1) :
+                                   0;
+                if ((offset - (direction * progress)).LengthSquared() > DETECTION_RADIUS * DETECTION_RADIUS)
+                    continue;
+
+                coverageMask[index] = true;
+                coverageDirty       = true;
+            }
+
             return;
 
             bool IsCovered(Vector3 point)
@@ -554,24 +586,39 @@ public partial class AutoMarksFinder
 
                 return DistanceSquared(point, start, end) <= DETECTION_RADIUS * DETECTION_RADIUS;
             }
+        }
 
-            GraphicsPath CreateCoverage(float radius)
+        public void UpdateCoverageImage()
+        {
+            if (!coverageDirty ||
+                (IsRunning &&
+                 Environment.TickCount64 - coverageUpdatedAt < COVERAGE_UPDATE_INTERVAL_MS))
+                return;
+
+            var color = COVERAGE_FILL_COLOR & 0x00FFFFFF;
+
+            for (var row = 0; row < COVERAGE_SIZE; row++)
+            for (var column = 0; column < COVERAGE_SIZE; column++)
             {
-                var path     = new GraphicsPath();
-                var diameter = radius * 2;
-
-                if (lengthSquared == 0)
-                    path.AddEllipse(start.X - radius, start.Z - radius, diameter, diameter);
+                var index = (row * COVERAGE_SIZE) + column;
+                if (coverageMask[index])
+                    coveragePixels[index] = COVERAGE_FILL_COLOR;
+                else if ((column > 0 &&
+                          coverageMask[index - 1]) ||
+                         (column < COVERAGE_SIZE - 1 &&
+                          coverageMask[index + 1]) ||
+                         (row > 0 &&
+                          coverageMask[index - COVERAGE_SIZE]) ||
+                         (row < COVERAGE_SIZE - 1 &&
+                          coverageMask[index + COVERAGE_SIZE]))
+                    coveragePixels[index] = COVERAGE_OUTLINE_COLOR;
                 else
-                {
-                    var angle = MathF.Atan2(direction.Y, direction.X) * 180 / MathF.PI;
-                    path.AddArc(start.X - radius, start.Z - radius, diameter, diameter, angle + 90, 180);
-                    path.AddArc(end.X   - radius, end.Z   - radius, diameter, diameter, angle - 90, 180);
-                    path.CloseFigure();
-                }
-
-                return path;
+                    coveragePixels[index] = color;
             }
+
+            coverageDirty     = false;
+            coverageUpdatedAt = Environment.TickCount64;
+            CoverageVersion++;
         }
 
         private bool HasEnoughMonsters() =>
@@ -631,10 +678,10 @@ public partial class AutoMarksFinder
             ZoneID     = costs.MinBy(pair => pair.Value).Key;
             ScanPoints = [];
             PendingPoints.Clear();
-            observedCoverage.MakeEmpty();
-            observedOutline.MakeEmpty();
-            ObservedCoverage = [];
-            ObservedBoundary = [];
+            Array.Clear(coverageMask);
+            Array.Clear(coveragePixels);
+            coverageDirty = false;
+            CoverageVersion++;
             module.movement.Travel(ZoneID);
             ChangeState(ScanState.SwitchingZone);
         }
@@ -709,24 +756,29 @@ public partial class AutoMarksFinder
 
         #region 常量
 
-        public const  float DETECTION_RADIUS     = 400;
-        private const float PLANNING_RADIUS      = 280;
-        private const float ARRIVAL_RADIUS       = 20;
-        private const float MOUNT_SPEED          = 12;
-        private const float TELEPORT_DURATION    = 10;
-        private const float OBSERVATION_DURATION = OBSERVATION_DELAY_MS / 1000f;
-        private const float FLIGHT_HEIGHT        = 100;
-        private const float RETRY_DISTANCE       = 80;
-        private const float PROGRESS_DISTANCE    = 2;
-        private const int   RETRY_RINGS          = 2;
-        private const int   RETRY_DIRECTIONS     = 8;
-        private const int   UPDATE_INTERVAL_MS   = 250;
-        private const int   STATE_TIMEOUT_MS     = 180_000;
-        private const int   PATHFIND_TIMEOUT_MS  = 15_000;
-        private const int   MOVEMENT_TIMEOUT_MS  = 15_000;
-        private const int   MOUNT_TIMEOUT_MS     = 20_000;
-        private const int   MOUNT_RETRY_MS       = 1000;
-        private const int   OBSERVATION_DELAY_MS = 1500;
+        public const  float DETECTION_RADIUS            = 400;
+        private const float PLANNING_RADIUS             = 300;
+        private const float ARRIVAL_RADIUS              = 20;
+        private const float MOUNT_SPEED                 = 12;
+        private const float TELEPORT_DURATION           = 10;
+        private const float OBSERVATION_DURATION        = OBSERVATION_DELAY_MS / 1000f;
+        private const float FLIGHT_HEIGHT               = 100;
+        private const float RETRY_DISTANCE              = 80;
+        private const float PROGRESS_DISTANCE           = 2;
+        private const int   RETRY_RINGS                 = 2;
+        private const int   RETRY_DIRECTIONS            = 8;
+        private const int   UPDATE_INTERVAL_MS          = 250;
+        private const int   STATE_TIMEOUT_MS            = 180_000;
+        private const int   PATHFIND_TIMEOUT_MS         = 15_000;
+        private const int   MOVEMENT_TIMEOUT_MS         = 15_000;
+        private const int   MOUNT_TIMEOUT_MS            = 20_000;
+        private const int   MOUNT_RETRY_MS              = 1000;
+        private const int   OBSERVATION_DELAY_MS        = 1500;
+        public const  int   COVERAGE_SIZE               = 1024;
+        private const int   COVERAGE_UPDATE_INTERVAL_MS = 1000;
+
+        private static readonly uint COVERAGE_OUTLINE_COLOR = (uint)Color.FromKnownColor(KnownColor.GreenYellow).ToArgb();
+        private static readonly uint COVERAGE_FILL_COLOR    = (COVERAGE_OUTLINE_COLOR & 0x00FFFFFF) | 0x1F000000;
 
         #endregion
     }

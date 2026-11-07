@@ -117,6 +117,10 @@ public partial class AutoMarksFinder : ModuleBase
 
         scanner?.Dispose();
         scanner = null;
+        
+        scanCoverageTexture?.Dispose();
+        scanCoverageTexture = null;
+        scanCoverageSource  = null;
 
         movement.Dispose();
 
