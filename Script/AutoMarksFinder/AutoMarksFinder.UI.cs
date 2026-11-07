@@ -91,12 +91,7 @@ public partial class AutoMarksFinder
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         
         ImGui.TableNextColumn();
-        ImGuiOm.TextCentered($"{Lang.Get("AutoMarksFinder-IntendedStartingPoint")}");
-
-        if (ImGui.IsItemHovered())
-            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-
-        if (ImGui.IsItemClicked())
+        if (ImGuiOm.ButtonSelectable($"{Lang.Get("AutoMarksFinder-IntendedStartingPoint")}"))
             ImGui.OpenPopup("StartAetherytePopup");
 
         using (var popup = ImRaii.Popup("StartAetherytePopup"))
