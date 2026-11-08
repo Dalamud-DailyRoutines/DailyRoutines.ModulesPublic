@@ -14,7 +14,7 @@ using AgentId = Dalamud.Game.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastCustomDeliveriesInfo : ModuleBase
+internal unsafe class FastCustomDeliveriesInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class FastCustomDeliveriesInfo : ModuleBase
         Description = Lang.Get("FastCustomDeliveriesInfoDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(FastCustomDeliveriesInfo);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

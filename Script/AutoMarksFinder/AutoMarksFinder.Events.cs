@@ -6,7 +6,7 @@ using GameObjectId = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private Hook<PacketDispatcher.Delegates.HandleSpawnNpcPacket>?     OnSpawnNPCHook;
     private Hook<PacketDispatcher.Delegates.HandleActorControlPacket>? OnActorControlHook;

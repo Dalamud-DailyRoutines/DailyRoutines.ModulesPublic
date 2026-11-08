@@ -14,11 +14,10 @@ using OmenTools.Info.Game.AetheryteRecord;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class BetterTeleport : ModuleBase
+internal unsafe partial class BetterTeleport : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +28,8 @@ public unsafe partial class BetterTeleport : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(BetterTeleport);
 
     private static uint TicketUsageType
     {
@@ -572,7 +573,8 @@ public unsafe partial class BetterTeleport : ModuleBase
 
     private enum PageType
     {
-        Search, Full
+        Search,
+        Full
     }
 
     private class Config : ModuleConfig

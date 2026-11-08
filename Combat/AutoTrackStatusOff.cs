@@ -11,7 +11,7 @@ using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoTrackStatusOff : ModuleBase
+internal class AutoTrackStatusOff : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class AutoTrackStatusOff : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Fragile"]
     };
+
+    public override string ModuleName => nameof(AutoTrackStatusOff);
 
     private Config config = null!;
 
@@ -73,6 +75,7 @@ public class AutoTrackStatusOff : ModuleBase
             }
 
             ImGui.SameLine();
+
             using (ImRaii.Disabled(config.StatusToMonitor.Count > 0))
             {
                 if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.FileExport, Lang.Get("Export")))

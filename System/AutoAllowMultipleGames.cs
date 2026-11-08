@@ -6,7 +6,7 @@ using DailyRoutines.Common.Module.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoAllowMultipleGames : ModuleBase
+internal unsafe class AutoAllowMultipleGames : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public unsafe class AutoAllowMultipleGames : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Fragile"]
     };
+
+    public override string ModuleName => nameof(AutoAllowMultipleGames);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

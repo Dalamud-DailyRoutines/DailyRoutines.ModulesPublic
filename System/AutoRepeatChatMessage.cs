@@ -16,7 +16,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRepeatChatMessage : ModuleBase
+internal unsafe class AutoRepeatChatMessage : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,6 +26,8 @@ public unsafe class AutoRepeatChatMessage : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoRepeatChatMessage);
 
     private Config config = null!;
 

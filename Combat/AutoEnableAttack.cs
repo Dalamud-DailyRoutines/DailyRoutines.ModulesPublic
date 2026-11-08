@@ -11,7 +11,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoEnableAttack : ModuleBase
+internal class AutoEnableAttack : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public class AutoEnableAttack : ModuleBase
         Description = Lang.Get("AutoEnableAttackDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(AutoEnableAttack);
 
     private MemoryPatch autoAttackPatch = null!;
 

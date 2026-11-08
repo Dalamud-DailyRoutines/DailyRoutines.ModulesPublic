@@ -1,6 +1,6 @@
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private enum HuntNavigationMode
     {

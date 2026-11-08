@@ -4,11 +4,10 @@ using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Common.Lua;
 using OmenTools.Interop.Game.Models;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSnipeQuest : ModuleBase
+internal unsafe class AutoSnipeQuest : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +17,8 @@ public unsafe class AutoSnipeQuest : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoSnipeQuest);
 
     private static readonly CompSig EnqueueSnipeTaskSig = new
         ("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B F9 48 8D 4C 24 ?? E8 ?? ?? ?? ?? 48 8B 4C 24");

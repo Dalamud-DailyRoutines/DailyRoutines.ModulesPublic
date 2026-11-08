@@ -8,7 +8,7 @@ using TimeAgo;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyLeveUpdate : ModuleBase
+internal unsafe class AutoNotifyLeveUpdate : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class AutoNotifyLeveUpdate : ModuleBase
         Category    = ModuleCategory.Notification,
         Author      = ["HSS"]
     };
+
+    public override string ModuleName => nameof(AutoNotifyLeveUpdate);
 
     private Config config = null!;
 

@@ -12,7 +12,7 @@ using Lumina.Text.ReadOnly;
 namespace DailyRoutines.ModulesPublic;
 
 // TODO: 可以加个备注, 以后的 KPI
-public unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
+internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["status102"]
     };
+
+    public override string ModuleName => nameof(AutoRecordPartyFinderSetting);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

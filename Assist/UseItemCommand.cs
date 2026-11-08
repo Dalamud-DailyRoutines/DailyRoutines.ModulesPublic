@@ -4,13 +4,11 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using TinyPinyin;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class UseItemCommand : ModuleBase
+internal class UseItemCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +16,8 @@ public class UseItemCommand : ModuleBase
         Description = Lang.Get("UseItemCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(UseItemCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

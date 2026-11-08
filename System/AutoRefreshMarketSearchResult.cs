@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRefreshMarketSearchResult : ModuleBase
+internal unsafe class AutoRefreshMarketSearchResult : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
         Description = Lang.Get("AutoRefreshMarketSearchResultDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoRefreshMarketSearchResult);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -59,7 +61,7 @@ public unsafe class AutoRefreshMarketSearchResult : ModuleBase
     {
         if (ICondition.Instance()[ConditionFlag.OnFreeTrial])
             return;
-        
+
         TaskHelper.Abort();
         TaskHelper.DelayNext(500, 1000);
         TaskHelper.Enqueue(() => InfoProxyItemSearch.Instance()->RequestData());

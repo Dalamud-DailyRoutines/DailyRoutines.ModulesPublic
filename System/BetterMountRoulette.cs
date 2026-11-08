@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BetterMountRoulette : ModuleBase
+internal class BetterMountRoulette : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public class BetterMountRoulette : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["XSZYYS"]
     };
+
+    public override string ModuleName => nameof(BetterMountRoulette);
 
     private Config config = null!;
 

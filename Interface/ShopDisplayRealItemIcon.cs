@@ -6,11 +6,10 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ShopDisplayRealItemIcon : ModuleBase
+internal unsafe class ShopDisplayRealItemIcon : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +22,8 @@ public unsafe class ShopDisplayRealItemIcon : ModuleBase
             "OptimizedFreeShop"
         ]
     };
+
+    public override string ModuleName => nameof(ShopDisplayRealItemIcon);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

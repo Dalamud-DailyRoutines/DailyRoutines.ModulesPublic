@@ -15,7 +15,7 @@ using Exception = System.Exception;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoShopPurchase : ModuleBase
+internal class AutoShopPurchase : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class AutoShopPurchase : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoShopPurchase);
 
     private Config config = null!;
 

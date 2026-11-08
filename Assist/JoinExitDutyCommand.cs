@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class JoinExitDutyCommand : ModuleBase
+internal unsafe class JoinExitDutyCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class JoinExitDutyCommand : ModuleBase
         Category            = ModuleCategory.Assist,
         ModulesPrerequisite = ["AutoCommenceDuty"]
     };
+
+    public override string ModuleName => nameof(JoinExitDutyCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

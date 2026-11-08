@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class CopyItemNameContextMenu : ModuleBase
+internal class CopyItemNameContextMenu : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class CopyItemNameContextMenu : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Nukoooo"]
     };
+
+    public override string ModuleName => nameof(CopyItemNameContextMenu);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -51,7 +53,7 @@ public class CopyItemNameContextMenu : ModuleBase
     ) : ContextMenuEntry
     {
         public override string Identifier => nameof(CopyItemNameContextMenu);
-        
+
         public override unsafe ContextMenuItem? Create
         (
             ContextMenuOpenedArgs args

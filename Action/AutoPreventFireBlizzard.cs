@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -11,7 +11,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoPreventFireBlizzard : ModuleBase
+internal class AutoPreventFireBlizzard : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,6 +27,8 @@ public class AutoPreventFireBlizzard : ModuleBase
         ),
         Category = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoPreventFireBlizzard);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

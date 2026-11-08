@@ -8,7 +8,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class PetSizeContextMenu : ModuleBase
+internal unsafe class PetSizeContextMenu : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class PetSizeContextMenu : ModuleBase
         Description = Lang.Get("PetSizeContextMenuDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(PetSizeContextMenu);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

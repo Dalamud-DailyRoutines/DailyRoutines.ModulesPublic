@@ -9,7 +9,7 @@ using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastBLUSpellbookSearchBar : ModuleBase
+internal unsafe class FastBLUSpellbookSearchBar : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class FastBLUSpellbookSearchBar : ModuleBase
         Description = Lang.Get("FastBLUSpellbookSearchBarDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(FastBLUSpellbookSearchBar);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoFateSync : ModuleBase
+internal class AutoFateSync : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public class AutoFateSync : ModuleBase
         Description = Lang.Get("AutoFateSyncDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(AutoFateSync);
 
     private Config config = null!;
 

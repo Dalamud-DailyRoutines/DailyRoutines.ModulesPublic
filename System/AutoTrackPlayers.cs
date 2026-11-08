@@ -17,7 +17,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoTrackPlayers : ModuleBase
+internal class AutoTrackPlayers : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public class AutoTrackPlayers : ModuleBase
         ModulesConflict = ["AutoHighlightFlagMarker"]
     };
 
+    public override string ModuleName => nameof(AutoTrackPlayers);
+
     private readonly Dictionary<ulong, (FieldMarkerPoint? Marker, string Name, uint World)> trackedPlayers = [];
 
     private TrackPlayerMenuItem     trackPlayerMenuItem = null!;
@@ -36,9 +38,9 @@ public class AutoTrackPlayers : ModuleBase
     protected override void Init()
     {
         trackPlayerMenuItem = new(this);
-        
-        PlayersManager.Instance().ReceivePlayersAround   += OnReceivePlayers;
-        IClientState.Instance().TerritoryChanged         += OnZoneChanged;
+
+        PlayersManager.Instance().ReceivePlayersAround += OnReceivePlayers;
+        IClientState.Instance().TerritoryChanged       += OnZoneChanged;
 
         ContextMenuManager.Instance().Reg(trackPlayerMenuItem);
 
@@ -192,7 +194,7 @@ public class AutoTrackPlayers : ModuleBase
                                 ["player"] = playerPayload
                             }
                         );
-                        
+
                         NotifyHelper.Instance().Chat(message);
                         NotifyHelper.Toast(message);
                     }
@@ -205,7 +207,7 @@ public class AutoTrackPlayers : ModuleBase
                 OnClicked = _ =>
                 {
                     module.trackedPlayers.Add(contentID, (null, playerName, homeWorldID));
-                        
+
                     if (!module.trackAddon.IsOpen)
                         module.trackAddon.Open();
                     else
@@ -220,7 +222,7 @@ public class AutoTrackPlayers : ModuleBase
                             ["command"] = COMMAND
                         }
                     );
-                        
+
                     NotifyHelper.Instance().Chat(message);
                     NotifyHelper.Toast(message);
                 }
@@ -301,9 +303,9 @@ public class AutoTrackPlayers : ModuleBase
                         {
                             if (!module.trackedPlayers.Remove(contentID))
                                 return;
-                            
+
                             RebuildList();
-                            
+
                             var message = Lang.GetSe
                             (
                                 "AutoTrackPlayers-Notification-NotToTrack",
@@ -312,7 +314,7 @@ public class AutoTrackPlayers : ModuleBase
                                     ["player"] = ReadOnlySeString.CreatePlayerLink(name, world)
                                 }
                             );
-                        
+
                             NotifyHelper.Instance().Chat(message);
                             NotifyHelper.Toast(message);
                         },

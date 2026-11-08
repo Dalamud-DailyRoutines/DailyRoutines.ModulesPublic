@@ -14,7 +14,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class MoreMessageFilterPresets : ModuleBase
+internal class MoreMessageFilterPresets : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,29 +24,35 @@ public class MoreMessageFilterPresets : ModuleBase
         Author      = ["Ponta"]
     };
 
+    public override string ModuleName => nameof(MoreMessageFilterPresets);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
     private static readonly CompSig ApplyMessageFilterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 4C 24 ?? 56 57 41 54 41 56 41 57 48 83 EC ?? 45 33 E4");
+
     private delegate int ApplyMessageFilterDelegate
     (
         nint filters
     );
+
     private ApplyMessageFilterDelegate ApplyMessageFilter = null!;
 
     private static readonly CompSig ReloadLogTabSig = new("48 63 C2 48 69 D0 28 09 00 00 48 81 C2 30 05 00 00 48 03 D1");
+
     private delegate void ReloadLogTabDelegate
     (
         nint logModule,
         int  tabIndex
     );
+
     private ReloadLogTabDelegate ReloadLogTab = null!;
 
     private static readonly        CompSig MessageFilterSizeSig = new("FF C5 81 FD ?? ?? ?? ?? 0F 82 ?? ?? ?? ?? 48 8B 0D");
     private static readonly unsafe int     MessageFilterSize    = ReadCMPImmediateValue((nint)((byte*)MessageFilterSizeSig.ScanText() + 2));
-    
+
     private static List<(int Index, string Name)>? OrderedFilters;
 
     private Config                 config   = null!;
@@ -60,7 +66,7 @@ public class MoreMessageFilterPresets : ModuleBase
         config = Config.Load(this) ?? new();
 
         menuItem = new(this);
-        
+
         ApplyMessageFilter = ApplyMessageFilterSig.GetDelegate<ApplyMessageFilterDelegate>();
         ReloadLogTab       = ReloadLogTabSig.GetDelegate<ReloadLogTabDelegate>();
 
@@ -82,17 +88,17 @@ public class MoreMessageFilterPresets : ModuleBase
         var tabNames   = GetLogTabNames();
         var currentTab = GetSelectedTabIndex();
         if (currentTab == -1) return;
-        
+
         var style = ImGui.GetStyle();
 
         var       tableSize = (ImGui.GetContentRegionAvail() - ScaledVector2(100f)) with { Y = 0 };
         using var table     = ImRaii.Table("MessageFilterPreset", 4, ImGuiTableFlags.Borders, tableSize);
         if (!table) return;
 
-        ImGui.TableSetupColumn("Add", ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing() + (style.FramePadding.X * 2f));
-        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 28);
-        ImGui.TableSetupColumn("Enabled", ImGuiTableColumnFlags.None, 10);
-        ImGui.TableSetupColumn("Operation", ImGuiTableColumnFlags.None, 26);
+        ImGui.TableSetupColumn("Add",       ImGuiTableColumnFlags.WidthFixed, ImGui.GetTextLineHeightWithSpacing() + (style.FramePadding.X * 2f));
+        ImGui.TableSetupColumn("Name",      ImGuiTableColumnFlags.None,       28);
+        ImGui.TableSetupColumn("Enabled",   ImGuiTableColumnFlags.None,       10);
+        ImGui.TableSetupColumn("Operation", ImGuiTableColumnFlags.None,       26);
 
         ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
         ImGui.TableNextColumn();
@@ -125,9 +131,9 @@ public class MoreMessageFilterPresets : ModuleBase
                 ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), Lang.Get("Name"));
 
                 var defaultName = $"{Lang.Get("Preset")} {config.Presets.Count + 1}";
-                var name        = inputPresetName.IsNullOrEmpty() ?
-                                      defaultName :
-                                      inputPresetName;
+                var name = inputPresetName.IsNullOrEmpty() ?
+                               defaultName :
+                               inputPresetName;
 
                 using (ImRaii.PushIndent())
                 {
@@ -190,7 +196,7 @@ public class MoreMessageFilterPresets : ModuleBase
             ImGuiOm.Text($"{enabledCount} / {totalCount}");
 
             ImGui.TableNextColumn();
-            
+
             if (ImGui.Button($"{FontAwesomeIcon.List.ToIconString()} {Lang.Get("Details")}"))
                 ImGui.OpenPopup("PresetDetailsPopup");
 
@@ -226,12 +232,18 @@ public class MoreMessageFilterPresets : ModuleBase
         foreach (var (index, name) in GetOrderedFilters())
         {
             var enabled = preset.PresetValue[index] == 1;
-            var color   = enabled ?
-                              KnownColor.LightGreen.ToVector4() :
-                              KnownColor.Gray.ToVector4();
+            var color = enabled ?
+                            KnownColor.LightGreen.ToVector4() :
+                            KnownColor.Gray.ToVector4();
 
             using (ImRaii.PushFont(UiBuilder.IconFont))
-                ImGui.TextColored(color, (enabled ? FontAwesomeIcon.Check : FontAwesomeIcon.Times).ToIconString());
+                ImGui.TextColored
+                (
+                    color,
+                    (enabled ?
+                         FontAwesomeIcon.Check :
+                         FontAwesomeIcon.Times).ToIconString()
+                );
 
             ImGui.SameLine();
             ImGui.TextColored(color, name);
@@ -289,7 +301,7 @@ public class MoreMessageFilterPresets : ModuleBase
     }
 
     #region 工具
-    
+
     private static unsafe string[] GetLogTabNames()
     {
         var names = new string[LOG_TAB_COUNT];
@@ -313,18 +325,22 @@ public class MoreMessageFilterPresets : ModuleBase
 
         var index = addon->TabIndex;
 
-        return index < LOG_TAB_COUNT ? index : -1;
+        return index < LOG_TAB_COUNT ?
+                   index :
+                   -1;
     }
 
     private static unsafe int GetContextMenuTabIndex()
     {
         var agent = AgentChatLog.Instance();
-        if (agent == null) 
+        if (agent == null)
             return -1;
 
         var index = agent->ContextTabIndex;
 
-        return index is >= 0 and < LOG_TAB_COUNT ? index : -1;
+        return index is >= 0 and < LOG_TAB_COUNT ?
+                   index :
+                   -1;
     }
 
     private static nint GetMessageFilter

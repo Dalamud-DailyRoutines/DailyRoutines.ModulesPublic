@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoUmbralSoul : ModuleBase
+internal class AutoUmbralSoul : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoUmbralSoul : ModuleBase
         Description = Lang.Get("AutoUmbralSoulDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoUmbralSoul);
 
     protected override void Init()
     {

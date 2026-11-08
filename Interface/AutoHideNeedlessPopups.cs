@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHideNeedlessPopups : ModuleBase
+internal unsafe class AutoHideNeedlessPopups : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class AutoHideNeedlessPopups : ModuleBase
         Description = Lang.Get("AutoHideNeedlessPopupsDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoHideNeedlessPopups);
 
     protected override void Init()
     {

@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisableBattleBGM : ModuleBase
+internal unsafe class AutoDisableBattleBGM : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class AutoDisableBattleBGM : ModuleBase
         Description = Lang.Get("AutoDisableBattleBGMDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(AutoDisableBattleBGM);
 
     private static readonly CompSig IsInBattleStateSig = new("E8 ?? ?? ?? ?? 38 87 ?? ?? ?? ?? 75 09");
     private delegate byte IsInBattleDelegate

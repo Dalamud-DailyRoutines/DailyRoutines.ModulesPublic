@@ -12,7 +12,7 @@ using AgentWorldTravel = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Agen
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class RealQueuePosition : ModuleBase
+internal unsafe class RealQueuePosition : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class RealQueuePosition : ModuleBase
         Author      = ["逆光", "Nukoooo"]
     };
 
+    public override string ModuleName => nameof(RealQueuePosition);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -30,7 +32,7 @@ public unsafe class RealQueuePosition : ModuleBase
     private Hook<AgentWorldTravel.Delegates.UpdateAddons> UpdateAddonsHook;
 
     private Hook<AgentWorldTravel.Delegates.OnWorldTravelStatusPacket> OnWorldTravelStatusPacketHook;
-    
+
     private Hook<ContentsFinderQueueInfo.Delegates.ProcessInfoState>? ContentFinderQueuePositionDataHook;
 
     private uint     worldTravelPosition;
@@ -53,7 +55,7 @@ public unsafe class RealQueuePosition : ModuleBase
             (AgentWorldTravel.Delegates.OnWorldTravelStatusPacket)UpdateWorldTravelDataDetour
         );
         OnWorldTravelStatusPacketHook.Enable();
-        
+
         ContentFinderQueuePositionDataHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(ContentsFinderQueueInfo.MemberFunctionPointers),
@@ -97,7 +99,7 @@ public unsafe class RealQueuePosition : ModuleBase
 
         if (numberArray->IntArray[5] > 0)
             index = 6;
-        
+
         using var builder = new RentedSeStringBuilder();
         builder.Append(LuminaWrapper.GetAddonText(12522))
                .Append(ISeStringEvaluator.Instance().EvaluateFromAddon(10039, [worldTravelPosition]));

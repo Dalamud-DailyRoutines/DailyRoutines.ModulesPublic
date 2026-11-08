@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoHandleTeleportStuck : ModuleBase
+internal class AutoHandleTeleportStuck : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public class AutoHandleTeleportStuck : ModuleBase
         ),
         Category = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoHandleTeleportStuck);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

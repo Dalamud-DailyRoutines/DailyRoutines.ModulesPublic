@@ -10,7 +10,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoMessageScheduler : ModuleBase
+internal class AutoMessageScheduler : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public class AutoMessageScheduler : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Wotou"]
     };
+
+    public override string ModuleName => nameof(AutoMessageScheduler);
 
     private Config?       config;
     private EditingState? editingData;

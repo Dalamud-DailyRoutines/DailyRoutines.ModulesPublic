@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedKTGHudGauge : ModuleBase
+internal unsafe class OptimizedKTGHudGauge : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class OptimizedKTGHudGauge : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedKTGHudGauge/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedKTGHudGauge);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

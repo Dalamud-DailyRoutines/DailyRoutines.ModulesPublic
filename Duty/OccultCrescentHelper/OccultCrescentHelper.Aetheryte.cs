@@ -14,7 +14,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OccultCrescentHelper
+internal partial class OccultCrescentHelper
 {
     private class AetheryteManager
     (
@@ -159,8 +159,8 @@ public partial class OccultCrescentHelper
             CrescentAetheryte aetheryte
         )
         {
-            if (aetheryte == null                                            ||
-                moveTaskHelper is not { } taskHelper                         ||
+            if (aetheryte == null                    ||
+                moveTaskHelper is not { } taskHelper ||
                 IObjectTable.Instance().LocalPlayer is not { } localPlayer)
                 return false;
 

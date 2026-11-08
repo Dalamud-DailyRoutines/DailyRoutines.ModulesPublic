@@ -4,7 +4,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot
+internal partial class AutoReplyChatBot
 {
     #region Guard Types
 

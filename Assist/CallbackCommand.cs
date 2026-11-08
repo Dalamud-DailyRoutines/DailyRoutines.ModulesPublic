@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class CallbackCommand : ModuleBase
+internal unsafe class CallbackCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class CallbackCommand : ModuleBase
         Description = Lang.Get("CallbackCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(CallbackCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

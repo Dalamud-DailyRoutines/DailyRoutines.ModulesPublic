@@ -12,7 +12,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoIgnoreLoginLock : ModuleBase
+internal unsafe class AutoIgnoreLoginLock : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,13 +21,15 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(AutoIgnoreLoginLock);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
     private Hook<AgentLobby.Delegates.Update> AgentLobbyUpdateHook;
-    
+
     private Hook<AgentLobby.Delegates.OpenLoginWaitDialog> OpenLoginWaitDialogHook;
 
     private delegate byte TimerDelegate
@@ -42,7 +44,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
     private static readonly CompSig             Timer1Sig = new("40 53 57 48 83 EC ?? 48 8B F9 41 8B D8");
     private                 Hook<TimerDelegate> Timer1Hook;
-    
+
     private Hook<SoundManager.Delegates.PlaySystemSound> PlaySystemSoundHook;
 
     private MemoryPatch loginFallbackPatch = null!;
@@ -73,7 +75,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
             (AgentLobby.Delegates.Update)AgentLobbyUpdateDetour
         );
         AgentLobbyUpdateHook.Enable();
-        
+
         OpenLoginWaitDialogHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(AgentLobby.MemberFunctionPointers),
@@ -111,7 +113,7 @@ public unsafe class AutoIgnoreLoginLock : ModuleBase
 
         agent->TemporaryLocked = false;
     }
-    
+
     private void OpenLoginWaitDialogDetour
     (
         AgentLobby* thisPtr,

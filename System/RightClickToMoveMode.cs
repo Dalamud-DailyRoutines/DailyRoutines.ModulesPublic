@@ -16,7 +16,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class RightClickToMoveMode : ModuleBase
+internal partial class RightClickToMoveMode : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public partial class RightClickToMoveMode : ModuleBase
         Description = Lang.Get("RightClickToMoveModeDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(RightClickToMoveMode);
 
     private Config moduleConfig = null!;
 

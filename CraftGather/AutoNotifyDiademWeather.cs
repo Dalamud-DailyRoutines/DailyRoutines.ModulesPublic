@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyDiademWeather : ModuleBase
+internal class AutoNotifyDiademWeather : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoNotifyDiademWeather : ModuleBase
         Description = Lang.Get("AutoNotifyDiademWeatherDescription"),
         Category    = ModuleCategory.CraftGather
     };
+
+    public override string ModuleName => nameof(AutoNotifyDiademWeather);
 
     private Config config = null!;
 
@@ -42,7 +44,7 @@ public class AutoNotifyDiademWeather : ModuleBase
     protected override void ConfigUI()
     {
         using var heading = ImRaii.Heading1(LuminaWrapper.GetAddonText(8555));
-        
+
         var weathers = string.Join
         (
             ',',
@@ -118,7 +120,7 @@ public class AutoNotifyDiademWeather : ModuleBase
                 ["weather"] = weather.Name
             }
         );
-        
+
         NotifyHelper.Toast(message);
         NotifyHelper.Instance().Chat(message, false);
         NotifyHelper.Instance().TrayInfo(message);

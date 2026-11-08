@@ -7,7 +7,7 @@ using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoRevealKeyboundBrawlerScores : ModuleBase
+internal class AutoRevealKeyboundBrawlerScores : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoRevealKeyboundBrawlerScores : ModuleBase
         Description = Lang.Get("AutoRevealKeyboundBrawlerScoresDescription"),
         Category    = ModuleCategory.GoldSaucer
     };
+
+    public override string ModuleName => nameof(AutoRevealKeyboundBrawlerScores);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

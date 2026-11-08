@@ -20,7 +20,7 @@ using OmenTools.Threading;
 namespace DailyRoutines.ModulesPublic;
 
 // TODO：之后重写成新模块，现在并不需要自己维护一个 ImGui 界面了
-public class BetterFateProgressUI : ModuleBase
+internal class BetterFateProgressUI : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public class BetterFateProgressUI : ModuleBase
         Description = Lang.Get("BetterFateProgressUIDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(BetterFateProgressUI);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

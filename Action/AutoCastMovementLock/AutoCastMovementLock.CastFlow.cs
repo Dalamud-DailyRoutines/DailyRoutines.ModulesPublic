@@ -2,7 +2,7 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCastMovementLock
+internal unsafe partial class AutoCastMovementLock
 {
     private sealed class CastFlow
     {

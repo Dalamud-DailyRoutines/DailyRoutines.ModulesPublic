@@ -11,7 +11,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class PlaceFurnitureAnywhere : ModuleBase
+internal unsafe class PlaceFurnitureAnywhere : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class PlaceFurnitureAnywhere : ModuleBase
         Description = Lang.Get("PlaceFurnitureAnywhereDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(PlaceFurnitureAnywhere);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -14,7 +14,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayTreasureMapLocation : ModuleBase
+internal unsafe class AutoDisplayTreasureMapLocation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoDisplayTreasureMapLocation : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(AutoDisplayTreasureMapLocation);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -30,6 +32,7 @@ public unsafe class AutoDisplayTreasureMapLocation : ModuleBase
 
     private static readonly CompSig ShowTreasureMapSig = new
         ("4C 8B DC 55 53 56 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 49 89 7B ?? 48 8D 45");
+
     private delegate void ShowTreasureMapDelegate
     (
         nint   agent,
@@ -37,6 +40,7 @@ public unsafe class AutoDisplayTreasureMapLocation : ModuleBase
         ushort subRowID,
         byte   isJustOpened
     );
+
     private Hook<ShowTreasureMapDelegate>? ShowTreasureMapHook;
 
     private Config config = null!;
@@ -157,7 +161,7 @@ public unsafe class AutoDisplayTreasureMapLocation : ModuleBase
         var name = rank.KeyItemName.Value.Singular.ToString();
         if (rank.InstanceMap.IsValid)
             name += $"（{rank.InstanceMap.Value.Singular}）";
-        
+
         treasureMap = new
         (
             name,

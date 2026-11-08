@@ -13,7 +13,7 @@ using NativeScheduleAgent = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMJICra
 
 namespace DailyRoutines.ModulesPublic.OptimizedMJICraftSchedule;
 
-public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
+internal unsafe partial class OptimizedMJICraftSchedule : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe partial class OptimizedMJICraftSchedule : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedMJICraftSchedule/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedMJICraftSchedule);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

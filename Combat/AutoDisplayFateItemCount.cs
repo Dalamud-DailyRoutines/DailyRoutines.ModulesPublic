@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 namespace DailyRoutines.ModulesPublic;
 
 // TODO: 需要重构，在部分场景下会出现文字重叠的问题
-public unsafe class AutoDisplayFateItemCount : ModuleBase
+internal unsafe class AutoDisplayFateItemCount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +29,8 @@ public unsafe class AutoDisplayFateItemCount : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
+
+    public override string ModuleName => nameof(AutoDisplayFateItemCount);
 
     private OverlayController? controller;
 

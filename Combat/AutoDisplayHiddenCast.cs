@@ -5,7 +5,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDisplayHiddenCast : ModuleBase
+internal class AutoDisplayHiddenCast : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoDisplayHiddenCast : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
+
+    public override string ModuleName => nameof(AutoDisplayHiddenCast);
 
     private MemoryPatch nameplateCastBarCastingPatch = null!;
     private MemoryPatch nameplateCastBarCastedPatch  = null!;

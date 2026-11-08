@@ -11,7 +11,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoPreserveCollectable : ModuleBase
+internal class AutoPreserveCollectable : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public class AutoPreserveCollectable : ModuleBase
         Description = Lang.Get("AutoPreserveCollectableDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoPreserveCollectable);
 
     protected override void Init() =>
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);

@@ -17,7 +17,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OccultCrescentHelper
+internal partial class OccultCrescentHelper
 {
     private unsafe class OthersManager
     (
@@ -150,7 +150,7 @@ public partial class OccultCrescentHelper
                             }
                         }
                     }
-                    
+
                     ImGui.NewLine();
 
                     ImGui.TextColored
@@ -202,8 +202,9 @@ public partial class OccultCrescentHelper
                             mapButton = null;
                         }
                     }
+
                     ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-ModifyInfoHUD-Help"));
-                    
+
                     if (ImGui.Checkbox
                         (
                             Lang.Get("OccultCrescentHelper-OthersManager-HideDutyCommand"),
@@ -211,7 +212,7 @@ public partial class OccultCrescentHelper
                         ))
                         MainModule.config.Save(MainModule);
                     ImGuiOm.HelpMarker(Lang.Get("OccultCrescentHelper-OthersManager-HideDutyCommand-Help"));
-                    
+
                     if (ImGui.Checkbox
                         (
                             Lang.Get("OccultCrescentHelper-OthersManager-FastUseKnowledgeCrystal"),
@@ -231,7 +232,7 @@ public partial class OccultCrescentHelper
         )
         {
             ImGui.TextUnformatted(label);
-            
+
             ImGui.SetNextItemWidth(-1f);
             ImGui.InputTextMultiline(inputID, ref commands, 4096, new(-1f, 120f * GlobalUIScale));
 
@@ -260,8 +261,8 @@ public partial class OccultCrescentHelper
                 overlayController = null;
 
                 isJustLogin = false;
-                
-                if (GameState.TerritoryType == PHANTOM_VILLIAGE_TERRITORY_ID &&
+
+                if (GameState.TerritoryType == PHANTOM_VILLIAGE_TERRITORY_ID        &&
                     !string.IsNullOrWhiteSpace(MainModule.config.LeaveDutyCommands) &&
                     Throttler.Shared.Throttle("OccultCrescentHelper.OthersManager.Leave", 3_000))
                     ChatManager.Instance().ExecuteMacro(MainModule.config.LeaveDutyCommands);

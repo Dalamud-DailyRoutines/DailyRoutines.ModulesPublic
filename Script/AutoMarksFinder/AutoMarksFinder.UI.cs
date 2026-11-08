@@ -15,7 +15,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private readonly ImGuiMapRenderer scanMapRenderer = new()
     {

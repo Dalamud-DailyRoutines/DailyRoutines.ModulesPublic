@@ -17,7 +17,7 @@ using InfoProxyFreeCompany = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Info.I
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FCMemberManagePanel : ModuleBase
+internal unsafe class FCMemberManagePanel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe class FCMemberManagePanel : ModuleBase
         Description = Lang.Get("FCMemberManagePanelDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(FCMemberManagePanel);
 
     private readonly Dictionary<ulong, MemberRecord> members            = [];
     private readonly HashSet<ulong>                  selectedContentIDs = [];

@@ -8,7 +8,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedFriendList
+internal unsafe partial class OptimizedFriendList
 {
     private class DRFriendlistSearchSetting
     (

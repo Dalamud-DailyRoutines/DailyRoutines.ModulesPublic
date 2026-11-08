@@ -22,7 +22,7 @@ using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedFreeShop : ModuleBase
+internal unsafe class OptimizedFreeShop : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -31,12 +31,15 @@ public unsafe class OptimizedFreeShop : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(OptimizedFreeShop);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
     private static readonly CompSig CheckItemBarterSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 54 41 56 41 57 48 83 EC ?? 0F B7 C2");
+
     private delegate byte CheckItemBarterDelegate
     (
         nint       checker,
@@ -44,6 +47,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
         Character* character,
         nint       trade
     );
+
     private Hook<CheckItemBarterDelegate>? CheckItemBarterHook;
 
     private static readonly CompSig FreeShopCheckerSig = new
@@ -69,7 +73,7 @@ public unsafe class OptimizedFreeShop : ModuleBase
             Title        = Info.Title,
             Size         = new(230f, 128f)
         };
-        
+
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "FreeShop", OnFreeShop);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,  "FreeShop", OnFreeShop);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRefresh, "FreeShop", OnFreeShop);
@@ -78,11 +82,11 @@ public unsafe class OptimizedFreeShop : ModuleBase
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnFreeShop);
-        
+
         addon?.Dispose();
         addon = null;
     }
-    
+
     private static void OnFreeShop
     (
         AddonEvent type,

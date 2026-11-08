@@ -11,7 +11,7 @@ using AgentTryon = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTryon
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoTryOnPlayerOutfit : ModuleBase
+internal unsafe class AutoTryOnPlayerOutfit : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["ErxCharlotte"]
     };
+
+    public override string ModuleName => nameof(AutoTryOnPlayerOutfit);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -44,7 +46,7 @@ public unsafe class AutoTryOnPlayerOutfit : ModuleBase
         var agent = AgentTryon.Instance();
         if (agent == null)
             return false;
-        
+
         if (GetInspectItems() is not { Count: > 0 } entries)
         {
             TaskHelper.Abort();

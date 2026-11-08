@@ -5,7 +5,7 @@ using ItemSheet = Lumina.Excel.Sheets.Item;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager
+internal partial class UnifiedGlamourManager
 {
     private enum SourceFilter
     {
@@ -26,13 +26,16 @@ public partial class UnifiedGlamourManager
 
     private enum SetRelationFilter
     {
-        All, SetRelatedOnly, NonSetOnly
+        All,
+        SetRelatedOnly,
+        NonSetOnly
     }
 
     // 模版来源
     private enum PresetSource
     {
-        Self, OtherPlayer
+        Self,
+        OtherPlayer
     }
 
     private sealed class UnifiedItem : IEquatable<UnifiedItem>

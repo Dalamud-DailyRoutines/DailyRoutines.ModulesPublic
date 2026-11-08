@@ -31,7 +31,7 @@ using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoRetainerWork
+internal unsafe partial class AutoRetainerWork
 {
     [IPCSubscriber("DailyRoutines.Modules.BetterMarketBoard.SearchItem")]
     private static IPCSubscriber<uint, bool> SearchItemIPC;

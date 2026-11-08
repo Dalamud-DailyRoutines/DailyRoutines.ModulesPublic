@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using DailyRoutines.Common.RemoteInteraction.Helpers;
 using DailyRoutines.RemoteInteraction.PlayerInfo;
 using DailyRoutines.RemoteInteraction.PlayerInfo.Models;
@@ -14,7 +14,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedFriendList
+internal unsafe partial class OptimizedFriendList
 {
     private static void ReplaceAtkString
     (

@@ -12,7 +12,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ScrollableTabs : ModuleBase
+internal unsafe class ScrollableTabs : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public unsafe class ScrollableTabs : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Cyf5119"]
     };
+
+    public override string ModuleName => nameof(ScrollableTabs);
 
     private bool IsNext =>
         wheelState ==
@@ -47,7 +49,7 @@ public unsafe class ScrollableTabs : ModuleBase
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-        
+
         InitUINameMapping();
         InitUIHandlerMapping();
 
@@ -205,7 +207,7 @@ public unsafe class ScrollableTabs : ModuleBase
         }
 
         // InventoryCrystalGrid
-        if (originalName == "InventoryCrystalGrid"                                                                            &&
+        if (originalName == "InventoryCrystalGrid"                                                                    &&
             IGameConfig.Instance().UiConfig.TryGet("ItemInventryWindowSizeType", out uint itemInventryWindowSizeType) &&
             itemInventryWindowSizeType == 2)
             mappedName = "InventoryExpansion";
@@ -704,7 +706,7 @@ public unsafe class ScrollableTabs : ModuleBase
     (
         AtkUnitBase* unitBase
     );
-    
+
     #region 常量
 
     private const int NUM_ARMOURY_BOARD_TABS            = 12;

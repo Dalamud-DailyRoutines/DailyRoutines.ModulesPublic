@@ -9,7 +9,7 @@ using OmenTools.Interop.Game.AddonEvent;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoJumboCactpot : ModuleBase
+internal class AutoJumboCactpot : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoJumboCactpot : ModuleBase
         Description = Lang.Get("AutoJumboCactpotDescription"),
         Category    = ModuleCategory.GoldSaucer
     };
+
+    public override string ModuleName => nameof(AutoJumboCactpot);
 
     private Config config = null!;
 

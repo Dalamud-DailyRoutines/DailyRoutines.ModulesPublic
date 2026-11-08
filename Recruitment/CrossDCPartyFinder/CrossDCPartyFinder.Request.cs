@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using Dalamud.Game.Gui.PartyFinder.Types;
@@ -11,7 +11,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class CrossDCPartyFinder
+internal partial class CrossDCPartyFinder
 {
     private void SendRequest
     (

@@ -45,7 +45,7 @@ using AgentRecipeNoteEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Age
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OptimizedRecipeNote : ModuleBase
+internal partial class OptimizedRecipeNote : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -59,6 +59,8 @@ public partial class OptimizedRecipeNote : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedRecipeNote/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedRecipeNote);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -256,6 +258,7 @@ public partial class OptimizedRecipeNote : ModuleBase
             config.Save(this);
             RemoveAllNodes();
         }
+
         ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedRecipeNote-Config-CategoryButtons-Help"));
 
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton"), ref config.IsCaculateRecipeButton))
@@ -263,6 +266,7 @@ public partial class OptimizedRecipeNote : ModuleBase
             config.Save(this);
             RemoveAllNodes();
         }
+
         ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedRecipeNote-Config-CaculateRecipeButton-Help"));
 
         if (ImGui.Checkbox(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality"), ref config.IsMorePraticeQuality))
@@ -271,6 +275,7 @@ public partial class OptimizedRecipeNote : ModuleBase
 
             RecipeNotePraticeSettingSetupHook.Toggle(config.IsMorePraticeQuality);
         }
+
         ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedRecipeNote-Config-MorePraticeQuality-Help"));
     }
 

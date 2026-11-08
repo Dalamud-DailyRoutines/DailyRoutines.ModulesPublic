@@ -13,7 +13,7 @@ using Mount = Lumina.Excel.Sheets.Mount;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseMountAction : ModuleBase
+internal unsafe class AutoUseMountAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoUseMountAction : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["逆光", "Bill"]
     };
+
+    public override string ModuleName => nameof(AutoUseMountAction);
 
     private Config config = null!;
 

@@ -14,7 +14,7 @@ using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.A
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHighlightFlagMarker : ModuleBase
+internal unsafe class AutoHighlightFlagMarker : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         Category        = ModuleCategory.System,
         ModulesConflict = ["MultiTargetTracker"]
     };
+
+    public override string ModuleName => nameof(AutoHighlightFlagMarker);
 
     private delegate void SetFlagMarkerDelegate
     (
@@ -33,6 +35,7 @@ public unsafe class AutoHighlightFlagMarker : ModuleBase
         float     worldZ,
         uint      iconID = 60561
     );
+
     private Hook<SetFlagMarkerDelegate>? SetFlagMarkerHook;
 
     private Hook<AgentReceiveEventDelegate>? AgentMapReceiveEventHook;

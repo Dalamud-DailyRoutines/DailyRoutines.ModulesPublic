@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class CrossDCPartyFinder
+internal partial class CrossDCPartyFinder
 {
     private readonly Dictionary<string, float> cardHeights = new();
 

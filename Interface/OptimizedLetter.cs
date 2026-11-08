@@ -19,7 +19,7 @@ using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class OptimizedLetter : ModuleBase
+internal class OptimizedLetter : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,6 +27,8 @@ public class OptimizedLetter : ModuleBase
         Description = Lang.Get("OptimizedLetterDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(OptimizedLetter);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
+internal unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,7 +16,9 @@ public unsafe class AutoClaimItemIgnoringMismatchJobAndLevel : ModuleBase
         Description = Lang.Get("AutoClaimItemIgnoringMismatchJobAndLevelDescription"),
         Category    = ModuleCategory.Interface
     };
-    
+
+    public override string ModuleName => nameof(AutoClaimItemIgnoringMismatchJobAndLevel);
+
     protected override void Init()
     {
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "SelectYesno", OnAddon);

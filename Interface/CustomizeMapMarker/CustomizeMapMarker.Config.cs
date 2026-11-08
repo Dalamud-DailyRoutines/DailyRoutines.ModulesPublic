@@ -4,7 +4,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class CustomizeMapMarker
+internal partial class CustomizeMapMarker
 {
     private sealed class Config : ModuleConfig
     {

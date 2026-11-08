@@ -21,7 +21,7 @@ using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoPreviewColorsInDye : ModuleBase
+internal unsafe class AutoPreviewColorsInDye : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe class AutoPreviewColorsInDye : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["ErxCharlotte"]
     };
+
+    public override string ModuleName => nameof(AutoPreviewColorsInDye);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

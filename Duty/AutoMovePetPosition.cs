@@ -16,7 +16,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoMovePetPosition : ModuleBase
+internal class AutoMovePetPosition : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class AutoMovePetPosition : ModuleBase
         Category    = ModuleCategory.Duty,
         Author      = ["Wotou"]
     };
+
+    public override string ModuleName => nameof(AutoMovePetPosition);
 
     private Config config = null!;
 

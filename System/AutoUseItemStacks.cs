@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseItemStacks : ModuleBase
+internal unsafe class AutoUseItemStacks : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class AutoUseItemStacks : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Cindy-Master"]
     };
+
+    public override string ModuleName => nameof(AutoUseItemStacks);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

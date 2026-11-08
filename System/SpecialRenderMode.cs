@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class SpecialRenderMode : ModuleBase
+internal unsafe class SpecialRenderMode : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,8 +19,11 @@ public unsafe class SpecialRenderMode : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(SpecialRenderMode);
+
     private static readonly CompSig ToggleFadeSig =
         new("E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 8F ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 4C 24");
+
     private delegate void ToggleFadeDelegate
     (
         EnvironmentManager* manager,
@@ -28,6 +31,7 @@ public unsafe class SpecialRenderMode : ModuleBase
         float               fadeDuration,
         Vector4*            fadeColor
     );
+
     private ToggleFadeDelegate ToggleFade = null!;
 
     private Config config = null!;

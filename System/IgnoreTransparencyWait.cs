@@ -3,11 +3,10 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using OmenTools.Interop.Game.Models;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class IgnoreTransparencyWait : ModuleBase
+internal unsafe class IgnoreTransparencyWait : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +14,8 @@ public unsafe class IgnoreTransparencyWait : ModuleBase
         Description = Lang.Get("IgnoreTransparencyWaitDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(IgnoreTransparencyWait);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -37,7 +38,8 @@ public unsafe class IgnoreTransparencyWait : ModuleBase
         var baseAddress = WaitForBaseSig.ScanText();
 
         WaitForTransparencyHook ??=
-            IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>(baseAddress.GetLuaFunctionByName("WaitForTransparency"), EventSceneScriptDetour);
+            IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>
+                (baseAddress.GetLuaFunctionByName("WaitForTransparency"), EventSceneScriptDetour);
         WaitForTransparencyHook.Enable();
 
         WaitForMoveHook ??= IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>

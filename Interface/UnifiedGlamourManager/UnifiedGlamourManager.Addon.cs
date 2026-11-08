@@ -4,7 +4,7 @@ using OmenTools.KamiToolKit.Nodes.CircleButton;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager
+internal unsafe partial class UnifiedGlamourManager
 {
     private CircleButtonNode? inspectSaveButtonNode;
     private CircleButtonNode? plateSaveButtonNode;
@@ -25,9 +25,9 @@ public unsafe partial class UnifiedGlamourManager
         switch (type)
         {
             case AddonEvent.PostRefresh:
-                if (MiragePrismMiragePlate == null) 
+                if (MiragePrismMiragePlate == null)
                     return;
-                
+
                 if (TryGetReadyPlateEditor(out var agent) &&
                     agent->Data->OpenMode == MIRAGE_PLATE_OPEN_MODE_AGENT_SHOW)
                 {
@@ -48,7 +48,7 @@ public unsafe partial class UnifiedGlamourManager
 
                     plateSaveButtonNode.AttachNode(MiragePrismMiragePlate->RootNode);
                 }
-                
+
                 plateSaveButtonNode.IsEnabled = GetCurrentPlateItems().Count > 0;
 
                 break;
@@ -56,7 +56,7 @@ public unsafe partial class UnifiedGlamourManager
             case AddonEvent.PreFinalize:
                 plateSaveButtonNode = null;
                 TaskHelper?.Abort();
-                
+
                 Overlay.IsOpen = false;
                 break;
         }
@@ -86,7 +86,7 @@ public unsafe partial class UnifiedGlamourManager
 
                     inspectSaveButtonNode.AttachNode(CharacterInspect->RootNode);
                 }
-                
+
                 inspectSaveButtonNode.IsEnabled = GetInspectPlateItems().Count > 0;
 
                 break;

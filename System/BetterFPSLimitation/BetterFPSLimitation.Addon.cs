@@ -8,10 +8,10 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterFPSLimitation
+internal partial class BetterFPSLimitation
 {
     private AddonDRBetterFPSLimitation? addon;
-    
+
     private void ToggleAddon()
     {
         if (addon is { IsOpen: true })
@@ -80,10 +80,10 @@ public partial class BetterFPSLimitation
 
             FPSInputNode = new NumericInputNode
             {
-                Size      = new(200f, 28f),
-                Min       = 1,
-                Max       = short.MaxValue,
-                Step      = 10,
+                Size = new(200f, 28f),
+                Min  = 1,
+                Max  = short.MaxValue,
+                Step = 10,
                 OnValueUpdate = newValue =>
                 {
                     module.config.Limitation = (short)newValue;
@@ -189,13 +189,13 @@ public partial class BetterFPSLimitation
         )
         {
             if (!Throttler.Shared.Throttle("BetterFPSLimitation.Addon.Update", 1000)) return;
-            
+
             FPSDisplayNumberNode?.String = ISeStringEvaluator.Instance().EvaluateFromAddon(4002, [(int)MathF.Round(module.currentFPS)]);
             FPSDisplayNumberNode.Width   = FPSDisplayNumberNode.GetTextDrawSize(false).X;
             FPSDisplayNumberNode.X       = 200f - 6f - FPSDisplayNumberNode.Width;
 
             IsEnabledNode?.IsChecked = module.config.IsEnabled;
-            FPSInputNode?.Value = module.config.Limitation;
+            FPSInputNode?.Value      = module.config.Limitation;
         }
     }
 }

@@ -9,7 +9,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager
+internal unsafe partial class UnifiedGlamourManager
 {
     private PlatePreset? editingPreset;
     private string       editPresetTitleInput = string.Empty;
@@ -179,7 +179,7 @@ public unsafe partial class UnifiedGlamourManager
             ImGuiWindowFlags.NoScrollbar
         );
         if (!child) return;
-        
+
         if (ImGui.Button(Lang.Get("Refresh")))
             StartRefreshAll();
 

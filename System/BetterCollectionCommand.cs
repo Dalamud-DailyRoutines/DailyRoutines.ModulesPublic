@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BetterCollectionCommand : ModuleBase
+internal unsafe class BetterCollectionCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,13 +18,15 @@ public unsafe class BetterCollectionCommand : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(BetterCollectionCommand);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
     private string[] validCommands;
-    
+
     protected override void Init()
     {
         var row = LuminaGetter.GetRowOrDefault<TextCommand>(24);
@@ -38,7 +40,7 @@ public unsafe class BetterCollectionCommand : ModuleBase
                 row.ShortAlias.ToString()
             }.Where(x => !string.IsNullOrEmpty(x))
         ];
-        
+
         ChatManager.Instance().RegPreExecuteCommandInner(OnCommand);
     }
 
@@ -57,8 +59,8 @@ public unsafe class BetterCollectionCommand : ModuleBase
             2,
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
         );
-        
-        if (splited.Length != 2) 
+
+        if (splited.Length != 2)
             return;
 
         var command = splited[0];
@@ -66,7 +68,7 @@ public unsafe class BetterCollectionCommand : ModuleBase
 
         foreach (var validCommand in validCommands)
         {
-            if (command != validCommand) 
+            if (command != validCommand)
                 continue;
 
             foreach (var row in LuminaGetter.Get<McGuffin>())
@@ -77,11 +79,11 @@ public unsafe class BetterCollectionCommand : ModuleBase
                 var mcGuffinName = row.UIData.Value.Name.ToString();
                 if (string.IsNullOrEmpty(mcGuffinName))
                     continue;
-                
+
                 if (!mcGuffinName.Contains(param, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                
+
                 AgentMcGuffin.Instance()->OpenMcGuffin(row.RowId);
                 isPrevented = true;
                 return;

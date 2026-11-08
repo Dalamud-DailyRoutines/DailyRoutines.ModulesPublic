@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyBonusFate : ModuleBase
+internal class AutoNotifyBonusFate : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public class AutoNotifyBonusFate : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Due"]
     };
+
+    public override string ModuleName => nameof(AutoNotifyBonusFate);
 
     private Config config = null!;
 
@@ -82,17 +84,17 @@ public class AutoNotifyBonusFate : ModuleBase
 
     private void UpdateAndNotify()
     {
-        if (!ValidTerritories.Contains(GameState.TerritoryType) || 
-            GameState.Map == 0) 
+        if (!ValidTerritories.Contains(GameState.TerritoryType) ||
+            GameState.Map == 0)
             return;
 
         var fateTable = IFateTable.Instance();
 
         if (fateTable.Length == 0)
         {
-            if (notifiedFates.Count > 0) 
+            if (notifiedFates.Count > 0)
                 notifiedFates.Clear();
-            
+
             return;
         }
 
@@ -129,7 +131,7 @@ public class AutoNotifyBonusFate : ModuleBase
                 ),
             }
         );
-        
+
         NotifyHelper.Instance().Chat(message, false);
         NotifyHelper.Toast(message);
 

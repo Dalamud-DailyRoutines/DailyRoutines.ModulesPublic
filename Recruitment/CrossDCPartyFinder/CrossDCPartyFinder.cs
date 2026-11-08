@@ -12,7 +12,7 @@ using AgentId = Dalamud.Game.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class CrossDCPartyFinder : ModuleBase
+internal partial class CrossDCPartyFinder : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public partial class CrossDCPartyFinder : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CrossDCPartyFinder/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(CrossDCPartyFinder);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

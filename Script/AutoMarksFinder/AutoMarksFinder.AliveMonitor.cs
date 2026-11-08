@@ -11,7 +11,7 @@ using ObjectKindNative = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private sealed class MonsterAliveMonitor : IDisposable
     {

@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoSummonPet : ModuleBase
+internal class AutoSummonPet : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoSummonPet : ModuleBase
         Description = Lang.Get("AutoSummonPetDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoSummonPet);
 
     protected override void Init()
     {

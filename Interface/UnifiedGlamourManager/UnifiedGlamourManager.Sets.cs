@@ -5,7 +5,7 @@ using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlat
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager
+internal partial class UnifiedGlamourManager
 {
     private readonly Dictionary<uint, List<SetPartInfo>> setPartsCache = [];
 

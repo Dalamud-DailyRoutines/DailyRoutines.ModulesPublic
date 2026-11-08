@@ -2,14 +2,11 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoVeryEasyQuestBattle : ModuleBase
+internal unsafe class AutoVeryEasyQuestBattle : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +14,8 @@ public unsafe class AutoVeryEasyQuestBattle : ModuleBase
         Description = Lang.Get("AutoVeryEasyQuestBattleDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoVeryEasyQuestBattle);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -32,20 +31,20 @@ public unsafe class AutoVeryEasyQuestBattle : ModuleBase
         uint               command
     );
     private Hook<HandleStartOrEndCommandDelegate>? HandleStartOrEndCommandHook;
-    
+
     private bool needToNotifyThisTime;
 
     protected override void Init()
     {
         HandleStartOrEndCommandHook = HandleStartOrEndCommandSig.GetHook<HandleStartOrEndCommandDelegate>(HandleStartOrEndCommandDetour);
         HandleStartOrEndCommandHook.Enable();
-        
+
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);
     }
 
     protected override void Uninit() =>
         ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
-    
+
     private unsafe void HandleStartOrEndCommandDetour
     (
         QuestEventHandler* thisPtr,
@@ -74,7 +73,7 @@ public unsafe class AutoVeryEasyQuestBattle : ModuleBase
         if (!needToNotifyThisTime) return;
 
         var message = Lang.Get("AutoVeryEasyQuestBattle-Notification");
-        
+
         NotifyHelper.Instance().Chat(message);
         NotifyHelper.Toast(message);
     }

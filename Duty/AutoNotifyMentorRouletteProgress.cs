@@ -12,7 +12,7 @@ using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
+internal unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoNotifyMentorRouletteProgress/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoNotifyMentorRouletteProgress);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

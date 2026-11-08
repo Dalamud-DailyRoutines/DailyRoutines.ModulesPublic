@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoHolmgangSelf : ModuleBase
+internal class AutoHolmgangSelf : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class AutoHolmgangSelf : ModuleBase
         Description = Lang.Get("AutoHolmgangSelfDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoHolmgangSelf);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

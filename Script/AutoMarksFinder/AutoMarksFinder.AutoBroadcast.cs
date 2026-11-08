@@ -3,7 +3,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private sealed class HuntAutoBroadcast : IDisposable
     {

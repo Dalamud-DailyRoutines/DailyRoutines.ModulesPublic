@@ -1,7 +1,6 @@
 using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Memory;
@@ -14,13 +13,11 @@ using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
 using Camera = FFXIVClientStructs.FFXIV.Client.Game.Camera;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedInteraction : ModuleBase
+internal unsafe class OptimizedInteraction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +25,8 @@ public unsafe class OptimizedInteraction : ModuleBase
         Description = Lang.Get("OptimizedInteractionDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(OptimizedInteraction);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -306,7 +305,7 @@ public unsafe class OptimizedInteraction : ModuleBase
             TaskHelper.Enqueue
             (() =>
                 {
-                    if (MovementManager.Instance().IsManagerBusy             ||
+                    if (MovementManager.Instance().IsManagerBusy     ||
                         ICondition.Instance()[ConditionFlag.Mounted] ||
                         ICondition.Instance()[ConditionFlag.Jumping]) return false;
                     new EventStartPackt(localPlayer.GameObjectID, eventID).Send();

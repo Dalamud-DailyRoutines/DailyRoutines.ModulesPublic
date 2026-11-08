@@ -16,7 +16,7 @@ using GameObjectStruct = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class CustomizeGameObject : ModuleBase
+internal unsafe class CustomizeGameObject : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,12 +28,16 @@ public unsafe class CustomizeGameObject : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
-    private static readonly CompSig CharacterUpdateSig = 
+    public override string ModuleName => nameof(CustomizeGameObject);
+
+    private static readonly CompSig CharacterUpdateSig =
         new("4C 8B DC 53 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 80 89");
+
     private delegate void* CharacterUpdateDelegate
     (
         Character* character
     );
+
     private Hook<CharacterUpdateDelegate>? CharacterUpdateHook;
 
     private Config config = null!;

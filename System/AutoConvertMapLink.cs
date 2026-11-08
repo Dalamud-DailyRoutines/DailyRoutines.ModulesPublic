@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Models;
 namespace DailyRoutines.ModulesPublic;
 
 // From Asvel
-public partial class AutoConvertMapLink : ModuleBase
+internal partial class AutoConvertMapLink : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,12 +25,16 @@ public partial class AutoConvertMapLink : ModuleBase
         Author      = ["KirisameVanilla"]
     };
 
+    public override string ModuleName => nameof(AutoConvertMapLink);
+
     private static readonly CompSig MessageParseSig = new("E8 ?? ?? ?? ?? 48 8B D0 48 8D 4D D0 E8 ?? ?? ?? ?? 49 8B 07");
+
     private delegate nint MessageParseDelegate
     (
         nint a,
         nint b
     );
+
     private Hook<MessageParseDelegate>? MessageParseHook;
 
     protected override void Init()

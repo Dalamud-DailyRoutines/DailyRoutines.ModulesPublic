@@ -13,7 +13,7 @@ using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHideGameObjects : ModuleBase
+internal unsafe class AutoHideGameObjects : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,11 +22,15 @@ public unsafe class AutoHideGameObjects : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(AutoHideGameObjects);
+
     private static readonly CompSig UpdateObjectArraysSig = new("40 57 48 83 EC ?? 48 89 5C 24 ?? 33 DB");
+
     private delegate void* UpdateObjectArraysDelegate
     (
         GameObjectManager* objectManager
     );
+
     private Hook<UpdateObjectArraysDelegate> UpdateObjectArraysHook;
 
     private Config config = null!;

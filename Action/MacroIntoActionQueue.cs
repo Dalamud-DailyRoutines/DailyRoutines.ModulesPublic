@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class MacroIntoActionQueue : ModuleBase
+internal unsafe class MacroIntoActionQueue : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public unsafe class MacroIntoActionQueue : ModuleBase
         Description = Lang.Get("MacroIntoActionQueueDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(MacroIntoActionQueue);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

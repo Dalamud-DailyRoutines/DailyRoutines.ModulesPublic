@@ -10,7 +10,7 @@ using OmenTools.Info.Game.AetheryteRecord.Enums;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class BetterTeleport
+internal unsafe partial class BetterTeleport
 {
     private string searchWord = string.Empty;
 

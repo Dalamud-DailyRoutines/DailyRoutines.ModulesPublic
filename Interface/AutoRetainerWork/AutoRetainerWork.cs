@@ -20,7 +20,7 @@ using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoRetainerWork : ModuleBase
+internal unsafe partial class AutoRetainerWork : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -34,6 +34,8 @@ public unsafe partial class AutoRetainerWork : ModuleBase
             "BetterMarketBoard"
         ]
     };
+
+    public override string ModuleName => nameof(AutoRetainerWork);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

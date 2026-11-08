@@ -27,7 +27,7 @@ using MapMarkerBase = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.MapMark
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedMapAetheryte : ModuleBase
+internal unsafe class OptimizedMapAetheryte : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -35,6 +35,8 @@ public unsafe class OptimizedMapAetheryte : ModuleBase
         Description = Lang.Get("OptimizedMapAetheryteDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(OptimizedMapAetheryte);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

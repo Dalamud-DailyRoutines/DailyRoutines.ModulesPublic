@@ -11,7 +11,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager
+internal unsafe partial class UnifiedGlamourManager
 {
     // 用于记录用户当前没有的幻化
     private readonly List<PlateItemInfo> missingApplyItems = [];

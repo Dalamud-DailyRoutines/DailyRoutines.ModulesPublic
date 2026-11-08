@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BetterBlueSetLoad : ModuleBase
+internal unsafe class BetterBlueSetLoad : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe class BetterBlueSetLoad : ModuleBase
         ),
         Category = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(BetterBlueSetLoad);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

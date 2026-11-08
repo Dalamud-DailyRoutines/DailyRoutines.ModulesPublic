@@ -18,7 +18,7 @@ using TinyPinyin;
 
 namespace DailyRoutines.ModulesPublic.AutoSupportKeyboundBrawlerPinyin;
 
-public unsafe partial class AutoSupportKeyboundBrawlerPinyin : ModuleBase
+internal unsafe partial class AutoSupportKeyboundBrawlerPinyin : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe partial class AutoSupportKeyboundBrawlerPinyin : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoSupportKeyboundBrawlerPinyin/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoSupportKeyboundBrawlerPinyin);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

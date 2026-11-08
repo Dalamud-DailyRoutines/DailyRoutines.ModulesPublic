@@ -9,13 +9,12 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using KamiToolKit.Classes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService.ZoneIndicator;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 using DObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class SastashaHelper : ModuleBase
+internal unsafe class SastashaHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +22,8 @@ public unsafe class SastashaHelper : ModuleBase
         Description = Lang.Get("SastashaHelperDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(SastashaHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

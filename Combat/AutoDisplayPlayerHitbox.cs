@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayPlayerHitbox : ModuleBase
+internal unsafe class AutoDisplayPlayerHitbox : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoDisplayPlayerHitbox : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Due"]
     };
+
+    public override string ModuleName => nameof(AutoDisplayPlayerHitbox);
 
     private Config            config     = null!;
     private OverlayController controller = null!;

@@ -11,7 +11,7 @@ using TimeAgo;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterMarketBoard
+internal partial class BetterMarketBoard
 {
     private void OnItemTooltipUpdate
     (

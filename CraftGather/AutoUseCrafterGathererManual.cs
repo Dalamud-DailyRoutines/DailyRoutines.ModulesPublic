@@ -14,7 +14,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseCrafterGathererManual : ModuleBase
+internal unsafe class AutoUseCrafterGathererManual : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
         Category    = ModuleCategory.CraftGather,
         Author      = ["Shiyuvi", "AtmoOmen"]
     };
+
+    public override string ModuleName => nameof(AutoUseCrafterGathererManual);
 
     private Config config = null!;
 
@@ -93,7 +95,7 @@ public unsafe class AutoUseCrafterGathererManual : ModuleBase
                 if (ICondition.Instance().IsBetweenAreas    ||
                     ICondition.Instance().IsOccupiedInEvent ||
                     ICondition.Instance().IsCasting         ||
-                    !UIModule.IsScreenReady()                       ||
+                    !UIModule.IsScreenReady()               ||
                     ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) != 0)
                     return false;
 

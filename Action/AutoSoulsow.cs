@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoSoulsow : ModuleBase
+internal class AutoSoulsow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoSoulsow : ModuleBase
         Description = Lang.Get("AutoSoulsowDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoSoulsow);
 
     protected override void Init()
     {

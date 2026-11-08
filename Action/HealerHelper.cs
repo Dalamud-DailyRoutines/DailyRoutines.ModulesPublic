@@ -26,7 +26,7 @@ using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class HealerHelper : ModuleBase
+internal class HealerHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -35,6 +35,8 @@ public class HealerHelper : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["HaKu"]
     };
+
+    public override string ModuleName => nameof(HealerHelper);
 
     private Config              config = null!;
     private EasyHealManager     easyHealService;

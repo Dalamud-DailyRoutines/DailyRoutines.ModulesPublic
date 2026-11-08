@@ -7,13 +7,11 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using TinyPinyin;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BaitSwitchCommand : ModuleBase
+internal class BaitSwitchCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,11 +19,13 @@ public class BaitSwitchCommand : ModuleBase
         Description = Lang.Get("BaitSwitchCommandDescription"),
         Category    = ModuleCategory.Assist
     };
-    
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
+
+    public override string ModuleName => nameof(BaitSwitchCommand);
 
     protected override void Init() =>
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("BaitSwitchCommand-CommandHelp") });

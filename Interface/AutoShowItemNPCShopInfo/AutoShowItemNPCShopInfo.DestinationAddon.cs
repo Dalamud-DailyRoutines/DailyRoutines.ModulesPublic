@@ -7,7 +7,7 @@ using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoShowItemNPCShopInfo
+internal unsafe partial class AutoShowItemNPCShopInfo
 {
     private class AddonNPCShopsDestination : AddonNPCShopsBase<AddonNPCShopsDestination.SectionSlot>
     {
@@ -173,7 +173,7 @@ public unsafe partial class AutoShowItemNPCShopInfo
                     ContextMenuManager.Instance().OpenItem(slot.CostIcons[indexCopy].ItemID, AddonId);
                 };
                 slot.CostRow.AddNode(slot.CostIcons[i]);
-                
+
                 slot.CostTexts[i] = new TextNode
                 {
                     FontSize      = 14,

@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
+internal class AutoBlockAgelessWordsAndSolidReason : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
         Description = Lang.Get("AutoBlockAgelessWordsAndSolidReasonDescription"),
         Category    = ModuleCategory.CraftGather
     };
+
+    public override string ModuleName => nameof(AutoBlockAgelessWordsAndSolidReason);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -39,12 +41,12 @@ public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
         ref byte       a7
     )
     {
-        if (type != ActionType.Action) 
+        if (type != ActionType.Action)
             return;
-        
+
         if (actionID != SOLID_REASON_ACTION_ID && actionID != AGELESS_WORDS_ACTION_ID)
             return;
-        
+
         if (!LocalPlayerState.HasStatus(EUREKA_MOMENT_STATUS_ID, out _))
             return;
 
@@ -62,8 +64,8 @@ public class AutoBlockAgelessWordsAndSolidReason : ModuleBase
     #region 常量
 
     // 石工之理
-    private const uint SOLID_REASON_ACTION_ID  = 232;
-    
+    private const uint SOLID_REASON_ACTION_ID = 232;
+
     // 农夫之智
     private const uint AGELESS_WORDS_ACTION_ID = 215;
 

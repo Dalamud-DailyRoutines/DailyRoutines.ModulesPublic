@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastRetainerStore : ModuleBase
+internal unsafe class FastRetainerStore : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class FastRetainerStore : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["YLCHEN"]
     };
+
+    public override string ModuleName => nameof(FastRetainerStore);
 
     private ItemMoveMenu menuItem = null!;
 

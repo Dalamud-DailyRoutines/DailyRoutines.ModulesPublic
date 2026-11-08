@@ -2,7 +2,7 @@ using DailyRoutines.Common.Module.Abstractions;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private sealed class Config : ModuleConfig
     {

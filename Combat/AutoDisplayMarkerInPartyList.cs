@@ -20,7 +20,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayMarkerInPartyList : ModuleBase
+internal unsafe class AutoDisplayMarkerInPartyList : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +29,8 @@ public unsafe class AutoDisplayMarkerInPartyList : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["status102"]
     };
+
+    public override string ModuleName => nameof(AutoDisplayMarkerInPartyList);
 
     private static readonly CompSig UpdateMarkerLocalSig = new("E8 ?? ?? ?? ?? 4C 8B C5 8B D7 48 8B CB E8");
     private delegate void UpdateMarkerLocalDelegate

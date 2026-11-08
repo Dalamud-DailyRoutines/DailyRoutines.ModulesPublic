@@ -11,7 +11,7 @@ using PlayerController = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCastMovementLock : ModuleBase
+internal unsafe partial class AutoCastMovementLock : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe partial class AutoCastMovementLock : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["逆光"]
     };
+
+    public override string ModuleName => nameof(AutoCastMovementLock);
 
     private Config config = null!;
 

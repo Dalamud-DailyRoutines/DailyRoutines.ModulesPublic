@@ -9,7 +9,7 @@ using OmenTools.OmenService.ZoneIndicator;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class StrikingTreeHelper : ModuleBase
+internal unsafe class StrikingTreeHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class StrikingTreeHelper : ModuleBase
         Description = Lang.Get("StrikingTreeHelperDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(StrikingTreeHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -52,7 +54,7 @@ public unsafe class StrikingTreeHelper : ModuleBase
     protected override void Uninit()
     {
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
-        
+
         handle?.Unreg();
         handle = null;
 

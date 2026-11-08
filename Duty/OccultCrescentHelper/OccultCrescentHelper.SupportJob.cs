@@ -14,7 +14,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OccultCrescentHelper
+internal partial class OccultCrescentHelper
 {
     private class SupportJobManager
     (
@@ -463,12 +463,12 @@ public partial class OccultCrescentHelper
         {
             var statusManager = player.ToStruct()->StatusManager;
             var statusIndex   = statusManager.GetStatusIndex(STATUS_OFFENSIVE_ARIA);
-            return statusIndex == -1 || 
+            return statusIndex                                 == -1 ||
                    statusManager.GetRemainingTime(statusIndex) <= OFFENSIVE_ARIA_REFRESH_THRESHOLD;
         }
 
         #endregion
-        
+
         #region 常量
 
         private const string COMMAND_BUFF                     = "pbuff";

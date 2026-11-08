@@ -16,7 +16,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoOpenMapLinks : ModuleBase
+internal class AutoOpenMapLinks : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class AutoOpenMapLinks : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["KirisameVanilla"]
     };
+
+    public override string ModuleName => nameof(AutoOpenMapLinks);
 
     private Config config = null!;
 
@@ -91,11 +93,11 @@ public class AutoOpenMapLinks : ModuleBase
         IHandleableChatMessage message
     )
     {
-        if (!ValidChatTypes.Contains(message.LogKind)) 
+        if (!ValidChatTypes.Contains(message.LogKind))
             return;
-        if (message.Message.Payloads.OfType<MapLinkPayload>().FirstOrDefault() is not { } mapPayload) 
+        if (message.Message.Payloads.OfType<MapLinkPayload>().FirstOrDefault() is not { } mapPayload)
             return;
-        
+
         var territoryID = mapPayload.TerritoryType.RowId;
         var mapID       = mapPayload.Map.RowId;
         var position    = new Vector3(mapPayload.RawX / 1000f, 0, mapPayload.RawY / 1000f);
@@ -106,13 +108,13 @@ public class AutoOpenMapLinks : ModuleBase
                 AgentMap.Instance()->SetMapFlagAndOpen(mapID, position);
             else
                 AgentMap.Instance()->SetFlagMapMarker(territoryID, mapID, position);
-                
+
             return;
         }
-        
+
         if (config.WhitelistChannel.Count == 0)
             return;
-        if (message.Sender.Payloads.Count == 0) 
+        if (message.Sender.Payloads.Count == 0)
             return;
 
         foreach (var payload in message.Sender.Payloads)
@@ -127,7 +129,7 @@ public class AutoOpenMapLinks : ModuleBase
                         AgentMap.Instance()->SetMapFlagAndOpen(mapID, position);
                     else
                         AgentMap.Instance()->SetFlagMapMarker(territoryID, mapID, position);
-                    
+
                     return;
                 }
             }
@@ -154,7 +156,7 @@ public class AutoOpenMapLinks : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName == null || 
+            if (args.AddonName == null ||
                 ValidAddonNames.Contains(args.AddonName))
             {
                 if (string.IsNullOrEmpty(args.TargetName) ||
@@ -174,7 +176,7 @@ public class AutoOpenMapLinks : ModuleBase
                     OnClicked = _ =>
                     {
                         var playerPayload = new PlayerPayload(args.TargetName, (uint)args.TargetHomeWorldID);
-                        
+
                         if (module.config.WhitelistPlayer.Add(player))
                         {
                             var message = Lang.GetSe
@@ -182,10 +184,10 @@ public class AutoOpenMapLinks : ModuleBase
                                 "AutoOpenMapLinks-Notification-PlayerAdded",
                                 playerPayload
                             );
-                            
+
                             NotifyHelper.Instance().Chat(message);
                             NotifyHelper.Toast(message);
-                            
+
                             module.config.Save(module);
                         }
                         else if (module.config.WhitelistPlayer.Remove(player))
@@ -195,10 +197,10 @@ public class AutoOpenMapLinks : ModuleBase
                                 "AutoOpenMapLinks-Notification-PlayerRemoved",
                                 playerPayload
                             );
-                            
+
                             NotifyHelper.Instance().Chat(message);
                             NotifyHelper.Toast(message);
-                            
+
                             module.config.Save(module);
                         }
                     }

@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot
+internal partial class AutoReplyChatBot
 {
     private Config             config = null!;
     private ConversationStore? conversationStore;

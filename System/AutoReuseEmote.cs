@@ -15,7 +15,7 @@ using AgentEmote = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentEmote
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoReuseEmote : ModuleBase
+internal class AutoReuseEmote : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -31,6 +31,8 @@ public class AutoReuseEmote : ModuleBase
         Category = ModuleCategory.System,
         Author   = ["Xww"]
     };
+
+    public override string ModuleName => nameof(AutoReuseEmote);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -94,7 +96,8 @@ public class AutoReuseEmote : ModuleBase
         var repeatInterval = config.DefaultInterval;
 
         var intervalStartIndex = args.LastIndexOf(' ');
-        if (intervalStartIndex > 0                                                  &&
+
+        if (intervalStartIndex > 0 &&
             uint.TryParse(args[(intervalStartIndex + 1)..], out var parsedInterval))
         {
             if (parsedInterval <= 0)
@@ -150,17 +153,17 @@ public class AutoReuseEmote : ModuleBase
         foreach (var emote in LuminaGetter.Get<Emote>())
         {
             var textCommand = emote.TextCommand;
-            if (textCommand.ValueNullable is null) 
+            if (textCommand.ValueNullable is null)
                 continue;
 
             var emoteName = emote.Name.ToString().AsSpan().Trim();
-            if (emoteName.IsEmpty) 
+            if (emoteName.IsEmpty)
                 continue;
 
             if (!emoteName.Equals(query, StringComparison.OrdinalIgnoreCase))
             {
                 var commandName = textCommand.Value.Command.ToString().AsSpan().Trim('/');
-                if (!commandName.Equals(query, StringComparison.OrdinalIgnoreCase)) 
+                if (!commandName.Equals(query, StringComparison.OrdinalIgnoreCase))
                     continue;
             }
 

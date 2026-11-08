@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Extensions;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService;
@@ -6,7 +6,7 @@ using ItemSheet = Lumina.Excel.Sheets.Item;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager
+internal partial class UnifiedGlamourManager
 {
     private Config config = null!;
 

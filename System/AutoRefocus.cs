@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoRefocus : ModuleBase
+internal class AutoRefocus : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoRefocus : ModuleBase
         Description = Lang.Get("AutoRefocusDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoRefocus);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -28,14 +30,14 @@ public class AutoRefocus : ModuleBase
         focusTarget = 0xE000_0000;
 
         TargetManager.Instance().RegPostSetFocusTarget(OnSetFocusTarget);
-        IClientState.Instance().TerritoryChanged += OnZoneChange;
-        PlayersManager.Instance().ReceivePlayersAround   += OnReceivePlayerAround;
+        IClientState.Instance().TerritoryChanged       += OnZoneChange;
+        PlayersManager.Instance().ReceivePlayersAround += OnReceivePlayerAround;
     }
 
     protected override void Uninit()
     {
-        PlayersManager.Instance().ReceivePlayersAround   -= OnReceivePlayerAround;
-        IClientState.Instance().TerritoryChanged -= OnZoneChange;
+        PlayersManager.Instance().ReceivePlayersAround -= OnReceivePlayerAround;
+        IClientState.Instance().TerritoryChanged       -= OnZoneChange;
         TargetManager.Instance().Unreg(OnSetFocusTarget);
     }
 

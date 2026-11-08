@@ -11,7 +11,7 @@ using WindowNative = OmenTools.Interop.Windows.WindowNative;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class NoRenderWhenBackground : ModuleBase
+internal unsafe class NoRenderWhenBackground : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe class NoRenderWhenBackground : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Siren"]
     };
+
+    public override string ModuleName => nameof(NoRenderWhenBackground);
 
     private static readonly CompSig WindowProcSig =
         new("40 55 53 56 57 41 54 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 E0");

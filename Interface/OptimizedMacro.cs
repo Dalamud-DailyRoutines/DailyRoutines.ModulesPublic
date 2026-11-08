@@ -19,7 +19,7 @@ using ExpansionAtkResNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.Atk
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedMacro : ModuleBase
+internal unsafe class OptimizedMacro : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public unsafe class OptimizedMacro : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Rorinnn"]
     };
+
+    public override string ModuleName => nameof(OptimizedMacro);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

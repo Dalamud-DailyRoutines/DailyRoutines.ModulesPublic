@@ -9,7 +9,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoGuardChatMessage : ModuleBase
+internal class AutoGuardChatMessage : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoGuardChatMessage : ModuleBase
         Description = Lang.Get("AutoGuardChatMessageDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoGuardChatMessage);
 
     private DalamudLinkPayload payload = null!;
 

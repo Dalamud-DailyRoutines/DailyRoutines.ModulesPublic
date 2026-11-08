@@ -16,14 +16,13 @@ using Markdig.Syntax.Inlines;
 using OmenTools.ImGuiOm.Markdown;
 using OmenTools.ImGuiOm.Markdown.Layout;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using GameAction = Lumina.Excel.Sheets.Action;
 using GameItem = Lumina.Excel.Sheets.Item;
 using GameStatus = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoShowDutyGuide
+internal partial class AutoShowDutyGuide
 {
     public sealed partial class DutyGuideMarkdownExtension : InlineParser, IImGuiMarkdownExtension
     {

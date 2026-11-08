@@ -3,11 +3,10 @@ using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using OmenTools.OmenService.ZoneIndicator;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDisplayMTQObject : ModuleBase
+internal class AutoDisplayMTQObject : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +14,8 @@ public class AutoDisplayMTQObject : ModuleBase
         Description = Lang.Get("AutoDisplayMTQObjectDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoDisplayMTQObject);
 
     private static readonly List<IGameObject> QuestObjects = [];
 

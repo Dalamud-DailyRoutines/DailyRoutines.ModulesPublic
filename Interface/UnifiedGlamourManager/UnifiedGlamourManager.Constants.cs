@@ -3,7 +3,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager
+internal partial class UnifiedGlamourManager
 {
     private static readonly SourceFilter[] SourceFilters =
     [

@@ -1,11 +1,11 @@
-﻿using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoEnableDLSSSupport : ModuleBase
+internal class AutoEnableDLSSSupport : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoEnableDLSSSupport : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { CNOnly = true, KROnly = true, TCOnly = true };
+
+    public override string ModuleName => nameof(AutoEnableDLSSSupport);
 
     protected override void Init()
     {

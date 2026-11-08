@@ -13,7 +13,7 @@ using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedFriendList
+internal unsafe partial class OptimizedFriendList
 {
     private class DRFriendlistRemarkEdit
     (
@@ -33,13 +33,13 @@ public unsafe partial class OptimizedFriendList
         private TextMultiLineInputNode remarkInputNode;
 
         private TextNode remarkNode;
-        
+
         private ulong  ContentID { get; set; }
         private string Name      { get; set; } = string.Empty;
         private string WorldName { get; set; } = string.Empty;
 
         private OptimizedFriendList Instance                  { get; } = instance;
-        private SelectYesnoAddon?      ClearConfirmationInstance { get; set; }
+        private SelectYesnoAddon?   ClearConfirmationInstance { get; set; }
 
         public static DRFriendlistRemarkEdit Open
         (
@@ -237,7 +237,7 @@ public unsafe partial class OptimizedFriendList
             ContentID = 0;
             Name      = string.Empty;
             WorldName = string.Empty;
-            
+
             ClearConfirmationInstance?.Dispose();
             ClearConfirmationInstance = null;
         }

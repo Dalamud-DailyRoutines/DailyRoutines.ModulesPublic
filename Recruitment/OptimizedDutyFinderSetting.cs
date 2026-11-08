@@ -14,7 +14,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedDutyFinderSetting : ModuleBase
+internal unsafe class OptimizedDutyFinderSetting : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class OptimizedDutyFinderSetting : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["Mizami", "Cyf5119"]
     };
+
+    public override string ModuleName => nameof(OptimizedDutyFinderSetting);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

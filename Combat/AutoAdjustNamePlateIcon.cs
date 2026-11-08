@@ -11,7 +11,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoAdjustNamePlateIcon : ModuleBase
+internal unsafe class AutoAdjustNamePlateIcon : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,7 +20,9 @@ public unsafe class AutoAdjustNamePlateIcon : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Marsh"]
     };
-    
+
+    public override string ModuleName => nameof(AutoAdjustNamePlateIcon);
+
     private static readonly CompSig AtkUldManagerUpdateFromParentNodeSig = new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 41 0F B6 F1");
     private delegate void AtkUldManagerUpdateFromParentNodeDelegate
     (
@@ -34,7 +36,7 @@ public unsafe class AutoAdjustNamePlateIcon : ModuleBase
     private readonly Vector2[] basePositions    = new Vector2[AddonNamePlate.NumNamePlateObjects];
     private readonly Vector2[] appliedPositions = new Vector2[AddonNamePlate.NumNamePlateObjects];
     private readonly bool[]    applied          = new bool[AddonNamePlate.NumNamePlateObjects];
-    
+
     private Config config = null!;
 
     protected override void Init()

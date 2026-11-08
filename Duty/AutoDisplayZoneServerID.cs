@@ -10,7 +10,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDisplayZoneServerID : ModuleBase
+internal class AutoDisplayZoneServerID : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,18 +19,20 @@ public class AutoDisplayZoneServerID : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
+    public override string ModuleName => nameof(AutoDisplayZoneServerID);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
-    private Config config = null!;
+    private Config        config = null!;
     private IDtrBarEntry? entry;
 
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-        
+
         entry         = IDtrBar.Instance().Get("DailyRoutines-AutoDisplayZoneServerID");
         entry.Tooltip = Lang.Get("AutoDisplayZoneServerID-DTR-Tooltip");
 
@@ -48,7 +50,7 @@ public class AutoDisplayZoneServerID : ModuleBase
                         }
                     );
                     break;
-                
+
                 case MouseClickType.Right:
                     Util.OpenLink($"https://ce-crowdsource.atmoomen.top/dc/{GameState.CurrentDataCenter}/instance/{GameState.ZoneServerID}");
                     break;

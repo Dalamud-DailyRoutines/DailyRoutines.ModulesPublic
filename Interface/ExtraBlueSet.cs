@@ -12,7 +12,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ExtraBlueSet : ModuleBase
+internal unsafe class ExtraBlueSet : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public unsafe class ExtraBlueSet : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Marsh"]
     };
+
+    public override string ModuleName => nameof(ExtraBlueSet);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -13,18 +13,15 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.Threading;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastInstanceZoneChange : ModuleBase
+internal unsafe class FastInstanceZoneChange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -34,6 +31,8 @@ public unsafe class FastInstanceZoneChange : ModuleBase
         Author      = ["AtmoOmen", "KirisameVanilla"],
         ModulesPair = ["InstantTeleport"]
     };
+
+    public override string ModuleName => nameof(FastInstanceZoneChange);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -298,11 +297,7 @@ public unsafe class FastInstanceZoneChange : ModuleBase
                 entry ??= IDtrBar.Instance().Get("DailyRoutines-FastInstanceZoneChange");
                 entry.OnClick = _ =>
                 {
-                    Overlay ??= new(this)
-                    {
-                        WindowName = Lang.Get("FastInstanceZoneChangeTitle")
-                    };
-
+                    Overlay ??= new(this, Lang.Get("FastInstanceZoneChangeTitle"));
                     Overlay.IsOpen ^= true;
                 };
                 entry.Shown   = false;

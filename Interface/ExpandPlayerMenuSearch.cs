@@ -21,7 +21,7 @@ using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class ExpandPlayerMenuSearch : ModuleBase
+internal class ExpandPlayerMenuSearch : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +29,8 @@ public class ExpandPlayerMenuSearch : ModuleBase
         Description = Lang.Get("ExpandPlayerMenuSearchDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(ExpandPlayerMenuSearch);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -60,8 +62,8 @@ public class ExpandPlayerMenuSearch : ModuleBase
         }
     }
 
-    private          Config                  config          = null!;
-    private readonly CancellationTokenSource cancelSource    = new();
+    private          Config                  config       = null!;
+    private readonly CancellationTokenSource cancelSource = new();
     private          CharacterSearchInfo?    targetChara;
     private          LodestoneSearcher       lodestoneSearch = null!;
 
@@ -72,7 +74,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
     {
         menu         = new(this);
         clickAllMenu = new(this);
-        
+
         config          = Config.Load(this) ?? new();
         lodestoneSearch = new(HTTPClientHelper.Instance().Get(), cancelSource.Token);
 
@@ -92,7 +94,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
     protected override void ConfigUI()
     {
         using var heading = ImRaii.Heading1(Lang.Get("SearchPlatform"));
-        
+
         foreach (var searchMenuItem in SearchMenuItems)
         {
             var value = config.SearchMenuEnabledStates
@@ -241,7 +243,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
         protected readonly ExpandPlayerMenuSearch module = module;
 
         public override string Identifier => nameof(ExpandPlayerMenuSearch);
-        
+
         public abstract string PlatformName   { get; }
         public abstract string ConfigKey      { get; }
         public virtual  bool   DefaultEnabled => false;
@@ -313,7 +315,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
     ) : ContextMenuEntry
     {
         public override string Identifier => nameof(ExpandPlayerMenuSearch);
-        
+
         public override ContextMenuItem? Create
         (
             ContextMenuOpenedArgs args
@@ -355,7 +357,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
         public override string Identifier => nameof(ExpandPlayerMenuSearch);
 
         public override int? Priority => 1000;
-        
+
         public override ContextMenuItem Create
         (
             ContextMenuOpenedArgs args
@@ -369,7 +371,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
                    .Append(Lang.Get("ExpandPlayerMenuSearch-ContextMenu-SearchAll"))
                    .PopColorType()
                    .PopEdgeColorType();
-            
+
             return new ContextMenuItem
             {
                 Name = builder.ToReadOnlySeString(),
@@ -439,7 +441,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
         private const string SearchAPI =
             "https://apiff14risingstones.web.sdo.com/api/common/search?type=6&keywords={0}&page={1}&limit=50";
 
-        private const string PlayerInfoURL = 
+        private const string PlayerInfoURL =
             "https://ff14risingstones.web.sdo.com/pc/index.html#/me/info?uuid={0}";
 
         #endregion
@@ -464,7 +466,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://tieba.baidu.com/f/search/res?ie=utf-8&kw=ff14&qw={0}";
 
         #endregion
@@ -517,7 +519,7 @@ public class ExpandPlayerMenuSearch : ModuleBase
 
         #region 常量
 
-        private const string URL = 
+        private const string URL =
             "https://{3}.fflogs.com/character/{0}/{1}/{2}";
 
         #endregion
@@ -592,10 +594,10 @@ public class ExpandPlayerMenuSearch : ModuleBase
         public override string PlatformName   => "Lalachievements";
         public override string ConfigKey      => nameof(LalachievementsItem);
         public override bool   DefaultEnabled => GameState.IsGL;
-        
+
         protected override string GetPlayerURL(string characterID, CharacterSearchInfo targetChara) =>
             $"https://www.lalachievements.com{GetVariant()}/char/{characterID}/";
-        
+
         private static string GetVariant() =>
             GameState.ClientLanguage switch
             {

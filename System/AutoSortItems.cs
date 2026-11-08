@@ -17,7 +17,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSortItems : ModuleBase
+internal unsafe class AutoSortItems : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,21 +27,27 @@ public unsafe class AutoSortItems : ModuleBase
         Author      = ["那年雪落"]
     };
 
+    public override string ModuleName => nameof(AutoSortItems);
+
     private static readonly CompSig AddSortConditionSig = new("40 55 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 83 79");
+
     private delegate byte AddSortConditionDelegate
     (
         ItemOrderModuleSorter* sorter,
         int                    condition,
         byte                   descending
     );
+
     private AddSortConditionDelegate AddSortCondition = null!;
 
     private static readonly CompSig StartSortSig = new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 48 83 EC ?? 48 8B 41 ?? 0F B6 EA");
+
     private delegate void StartSortDelegate
     (
         ItemOrderModuleSorter* sorter,
         byte                   savePreviousOrder
     );
+
     private StartSortDelegate StartSort = null!;
 
     private static readonly CompSig SeparateTabsSig =

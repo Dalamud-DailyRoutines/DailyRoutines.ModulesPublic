@@ -12,7 +12,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoInDutySelectYes : ModuleBase
+internal class AutoInDutySelectYes : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class AutoInDutySelectYes : ModuleBase
         Description = Lang.Get("AutoInDutySelectYesDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoInDutySelectYes);
 
     protected override void Init()
     {

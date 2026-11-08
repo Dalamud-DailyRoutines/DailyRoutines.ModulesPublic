@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -10,7 +10,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class OrnamentActionCommand : ModuleBase
+internal class OrnamentActionCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class OrnamentActionCommand : ModuleBase
         Description = Lang.Get("OrnamentActionCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(OrnamentActionCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

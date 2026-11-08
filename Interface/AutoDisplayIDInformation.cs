@@ -22,7 +22,7 @@ using AgentHUD = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentHUD;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayIDInformation : ModuleBase
+internal unsafe class AutoDisplayIDInformation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -31,7 +31,9 @@ public unsafe class AutoDisplayIDInformation : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Middo"]
     };
-    
+
+    public override string ModuleName => nameof(AutoDisplayIDInformation);
+
     private Hook<AgentHUD.Delegates.GetStatusTooltipText>? GetStatusTooltipTextHook;
 
     private Config        config = null!;

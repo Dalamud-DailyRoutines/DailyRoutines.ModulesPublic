@@ -13,7 +13,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoLucidDreaming : ModuleBase
+internal unsafe class AutoLucidDreaming : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoLucidDreaming : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["qingsiweisan"]
     };
+
+    public override string ModuleName => nameof(AutoLucidDreaming);
 
     private Config config = null!;
 
@@ -45,9 +47,9 @@ public unsafe class AutoLucidDreaming : ModuleBase
         ImGui.SetNextItemWidth(250f * GlobalUIScale);
         if (ImGui.DragInt($"{Lang.Get("LowerLimit")}##MPThresholdSlider", ref config.MPThreshold, 100f, 3000, 9000, $"{LuminaWrapper.GetAddonText(233)}: %d"))
             config.Save(this);
-        
+
         ImGui.NewLine();
-        
+
         if (ImGui.Checkbox(Lang.Get("OnlyInDuty"), ref config.OnlyInDuty))
             config.Save(this);
     }

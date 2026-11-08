@@ -21,7 +21,7 @@ using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoPreventDuplicateStatus : ModuleBase
+internal unsafe class AutoPreventDuplicateStatus : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +29,8 @@ public unsafe class AutoPreventDuplicateStatus : ModuleBase
         Description = Lang.Get("AutoPreventDuplicateStatusDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoPreventDuplicateStatus);
 
     private Config config = null!;
 

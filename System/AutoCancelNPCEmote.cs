@@ -3,11 +3,10 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using OmenTools.Interop.Game.Models;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCancelNPCEmote : ModuleBase
+internal unsafe class AutoCancelNPCEmote : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +16,8 @@ public unsafe class AutoCancelNPCEmote : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoCancelNPCEmote);
 
     private CompSig waitForBaseSig = null!;
 
@@ -39,11 +40,13 @@ public unsafe class AutoCancelNPCEmote : ModuleBase
         var baseAddress = waitForBaseSig.ScanText();
 
         WaitForActionTimelineHook ??=
-            IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>(baseAddress.GetLuaFunctionByName("WaitForActionTimeline"), EventSceneScriptDetour);
+            IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>
+                (baseAddress.GetLuaFunctionByName("WaitForActionTimeline"), EventSceneScriptDetour);
         WaitForActionTimelineHook.Enable();
 
         PlayActionTimelineHook ??=
-            IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>(baseAddress.GetLuaFunctionByName("PlayActionTimeline"), EventSceneScriptDetour);
+            IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>
+                (baseAddress.GetLuaFunctionByName("PlayActionTimeline"), EventSceneScriptDetour);
         PlayActionTimelineHook.Enable();
 
         WaitForActionTimelineLoadHook ??=
@@ -51,7 +54,8 @@ public unsafe class AutoCancelNPCEmote : ModuleBase
                 (baseAddress.GetLuaFunctionByName("WaitForActionTimelineLoad"), EventSceneScriptDetour);
         WaitForActionTimelineLoadHook.Enable();
 
-        PlayEmoteHook ??= IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>(baseAddress.GetLuaFunctionByName("PlayEmote"), EventSceneScriptDetour);
+        PlayEmoteHook ??= IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>
+            (baseAddress.GetLuaFunctionByName("PlayEmote"), EventSceneScriptDetour);
         PlayEmoteHook.Enable();
 
         CancelEmoteHook ??= IGameInteropProvider.Instance().HookFromAddress<EventSceneScriptDelegate>

@@ -19,7 +19,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedFriendList : ModuleBase
+internal unsafe partial class OptimizedFriendList : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public unsafe partial class OptimizedFriendList : ModuleBase
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["FastWorldTravel"]
     };
+
+    public override string ModuleName => nameof(OptimizedFriendList);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -258,15 +260,16 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName != "FriendList") 
+            if (args.AddonName != "FriendList")
                 return null;
-            
+
             var contentID = AgentFriendlist.Instance()->SelectedContentId;
-            if (contentID == 0) 
+            if (contentID == 0)
                 return null;
-            
+
             var name    = args.TargetName;
             var worldID = (uint)args.TargetHomeWorldID;
+
             if (string.IsNullOrEmpty(name) ||
                 !Sheets.Worlds.ContainsKey(worldID))
             {
@@ -308,15 +311,16 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName != "FriendList") 
+            if (args.AddonName != "FriendList")
                 return null;
 
             var contentID = AgentFriendlist.Instance()->SelectedContentId;
-            if (contentID == 0) 
+            if (contentID == 0)
                 return null;
-            
+
             var name    = args.TargetName;
             var worldID = (uint)args.TargetHomeWorldID;
+
             if (string.IsNullOrEmpty(name) ||
                 !Sheets.Worlds.ContainsKey(worldID))
             {
@@ -363,7 +367,7 @@ public unsafe partial class OptimizedFriendList : ModuleBase
             if (targetCharacter == null)
                 return null;
 
-            if (!TryGetAetheryteID(targetCharacter->Location, out var aetheryteID)) 
+            if (!TryGetAetheryteID(targetCharacter->Location, out var aetheryteID))
                 return null;
 
             return new()

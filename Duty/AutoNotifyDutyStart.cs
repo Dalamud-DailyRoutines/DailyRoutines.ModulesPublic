@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyDutyStart : ModuleBase
+internal class AutoNotifyDutyStart : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class AutoNotifyDutyStart : ModuleBase
         Description = Lang.Get("AutoNotifyDutyStartDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoNotifyDutyStart);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

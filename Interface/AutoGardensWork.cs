@@ -20,7 +20,7 @@ using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoGardensWork : ModuleBase
+internal unsafe class AutoGardensWork : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,7 +29,9 @@ public unsafe class AutoGardensWork : ModuleBase
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
-    
+
+    public override string ModuleName => nameof(AutoGardensWork);
+
     private Config config = null!;
 
     private string searchSeed      = string.Empty;
@@ -441,12 +443,12 @@ public unsafe class AutoGardensWork : ModuleBase
 
         // 园圃家具周围绕一圈的那个实际可交互的坑位
         objectIDs = IObjectTable.Instance()
-                            .Where
-                            (x => x is { ObjectKind: Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj, DataID: 2003757 } &&
-                                  gardenCenters.Any(g => Vector3.DistanceSquared(x.Position, g.Position) <= 25)
-                            )
-                            .Select(x => x.GameObjectID)
-                            .ToList();
+                                .Where
+                                (x => x is { ObjectKind: Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj, DataID: 2003757 } &&
+                                      gardenCenters.Any(g => Vector3.DistanceSquared(x.Position, g.Position) <= 25)
+                                )
+                                .Select(x => x.GameObjectID)
+                                .ToList();
         return objectIDs.Count > 0;
     }
 

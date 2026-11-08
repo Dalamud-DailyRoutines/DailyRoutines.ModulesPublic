@@ -12,7 +12,7 @@ using AgentShowDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Age
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoRefuseTrade : ModuleBase
+internal unsafe partial class AutoRefuseTrade : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe partial class AutoRefuseTrade : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoRefuseTrade);
 
     private Hook<AgentShowDelegate>? AgentTradeShowHook;
 

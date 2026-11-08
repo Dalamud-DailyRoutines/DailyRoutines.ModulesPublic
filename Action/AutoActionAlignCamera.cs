@@ -15,7 +15,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoActionAlignCamera : ModuleBase
+internal unsafe class AutoActionAlignCamera : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe class AutoActionAlignCamera : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoActionAlignCamera);
 
     private Config config = null!;
 

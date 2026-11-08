@@ -26,7 +26,7 @@ using GatheringHouseAgent = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.A
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedMJIGatheringHouse : ModuleBase
+internal unsafe class OptimizedMJIGatheringHouse : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -39,6 +39,8 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedMJIGatheringHouse/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedMJIGatheringHouse);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -427,11 +429,11 @@ public unsafe class OptimizedMJIGatheringHouse : ModuleBase
             dispatch.String  = Lang.Get("OptimizedMJIGatheringHouse-Dispatch");
             dispatch.OnClick = module.DispatchExpeditions;
             layout.AddNode(dispatch);
-            
+
             layout.AddDummy();
 
             layout.AddNode(Style.CreateSeparator());
-            
+
             layout.AddDummy();
 
             var heading = Style.CreateText();

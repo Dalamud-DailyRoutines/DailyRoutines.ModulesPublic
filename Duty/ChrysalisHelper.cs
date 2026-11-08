@@ -3,13 +3,11 @@ using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ChrysalisHelper : ModuleBase
+internal unsafe class ChrysalisHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +15,8 @@ public unsafe class ChrysalisHelper : ModuleBase
         Description = Lang.Get("ChrysalisHelperDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(ChrysalisHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

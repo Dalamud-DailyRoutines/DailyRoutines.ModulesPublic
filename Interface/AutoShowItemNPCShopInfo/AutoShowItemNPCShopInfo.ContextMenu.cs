@@ -4,7 +4,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoShowItemNPCShopInfo
+internal partial class AutoShowItemNPCShopInfo
 {
     private SourceContextMenu      sourceContextMenu      = null!;
     private DestinationContextMenu destinationContextMenu = null!;
@@ -21,7 +21,7 @@ public partial class AutoShowItemNPCShopInfo
 
             return new()
             {
-                Name = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Source"),
+                Name      = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Source"),
                 OnClicked = clicked => OpenShopInfoByItemID(clicked.Source.TargetItemRow.RowId)
             };
         }
@@ -39,7 +39,7 @@ public partial class AutoShowItemNPCShopInfo
 
             return new()
             {
-                Name = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Destination"),
+                Name      = Lang.Get("AutoShowItemNPCShopInfo-ContextMenu-Destination"),
                 OnClicked = clicked => OpenExchangeInfoByItemID(clicked.Source.TargetItemRow.RowId)
             };
         }

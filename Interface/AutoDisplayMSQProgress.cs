@@ -12,7 +12,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayMSQProgress : ModuleBase
+internal unsafe class AutoDisplayMSQProgress : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe class AutoDisplayMSQProgress : ModuleBase
         Description = Lang.Get("AutoDisplayMSQProgressDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoDisplayMSQProgress);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

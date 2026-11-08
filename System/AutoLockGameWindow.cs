@@ -8,7 +8,7 @@ using Dalamud.Game.ClientState.Conditions;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoLockGameWindow : ModuleBase
+internal class AutoLockGameWindow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoLockGameWindow : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["status102"]
     };
+
+    public override string ModuleName => nameof(AutoLockGameWindow);
 
     private          bool isLocked;
     private readonly Lock objectLock = new();

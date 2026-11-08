@@ -17,7 +17,7 @@ using AgentWeeklyBingo = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Agen
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedWeeklyBingo : ModuleBase
+internal unsafe class OptimizedWeeklyBingo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe class OptimizedWeeklyBingo : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedWeeklyBingo/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedWeeklyBingo);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

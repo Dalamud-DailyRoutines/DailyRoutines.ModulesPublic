@@ -7,13 +7,11 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.OmenService.ZoneIndicator;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class NeverreapHelper : ModuleBase
+internal unsafe class NeverreapHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +20,8 @@ public unsafe class NeverreapHelper : ModuleBase
         Category            = ModuleCategory.Duty,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
+
+    public override string ModuleName => nameof(NeverreapHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -15,7 +15,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class CustomActionQueueTime : ModuleBase
+internal class CustomActionQueueTime : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class CustomActionQueueTime : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(CustomActionQueueTime);
 
     private Config config = null!;
 

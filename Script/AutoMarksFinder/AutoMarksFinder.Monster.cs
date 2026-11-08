@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private sealed class NotoriousMonsterFound : IEquatable<NotoriousMonsterFound>
     {

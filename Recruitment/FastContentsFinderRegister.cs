@@ -15,7 +15,7 @@ using OmenTools.Threading;
 namespace DailyRoutines.ModulesPublic;
 
 // TODO：使用 KTK 新的 ListRenderer 能力重构
-public unsafe class FastContentsFinderRegister : ModuleBase
+internal unsafe class FastContentsFinderRegister : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class FastContentsFinderRegister : ModuleBase
         Category            = ModuleCategory.Recruitment,
         ModulesPrerequisite = ["ContentFinderCommand"]
     };
+
+    public override string ModuleName => nameof(FastContentsFinderRegister);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

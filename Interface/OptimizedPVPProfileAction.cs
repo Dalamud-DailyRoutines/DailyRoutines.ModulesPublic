@@ -5,7 +5,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class OptimizedPVPProfileAction : ModuleBase
+internal class OptimizedPVPProfileAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,7 +19,9 @@ public class OptimizedPVPProfileAction : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
+    public override string ModuleName => nameof(OptimizedPVPProfileAction);
+
     private MemoryPatch dragDropPatch = null!;
 
     protected override void Init()

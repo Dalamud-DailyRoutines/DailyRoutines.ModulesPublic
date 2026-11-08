@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
+internal unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
         Category    = ModuleCategory.Action
     };
 
+    public override string ModuleName => nameof(AutoReplaceLowBlowWithInterject);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -25,33 +27,27 @@ public unsafe class AutoReplaceLowBlowWithInterject : ModuleBase
 
     private static readonly CompSig IsActionReplaceableSig = new
         ("40 53 48 83 EC ?? 8B D9 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 10 48 8B C8 FF 92 ?? ?? ?? ?? 8B D3");
-
     private delegate bool IsActionReplaceableDelegate
     (
         uint actionID
     );
-
     private Hook<IsActionReplaceableDelegate> IsActionReplaceableHook;
 
     private static readonly CompSig GetAdjustedActionIDSig = new("E8 ?? ?? ?? ?? 89 03 8B 03");
-
     private delegate uint GetAdjustedActionIDDelegate
     (
         ActionManager* manager,
         uint           actionID
     );
-
     private Hook<GetAdjustedActionIDDelegate> GetAdjustedActionIDHook;
 
     private static readonly CompSig GetIconIDForSlotSig = new("E8 ?? ?? ?? ?? 85 C0 89 83 ?? ?? ?? ?? 0F 94 C0");
-
     private delegate uint GetIconIDForSlotDelegate
     (
         RaptureHotbarModule.HotbarSlot*    slot,
         RaptureHotbarModule.HotbarSlotType type,
         uint                               actionID
     );
-
     private Hook<GetIconIDForSlotDelegate> GetIconIDForSlotHook;
 
     protected override void Init()

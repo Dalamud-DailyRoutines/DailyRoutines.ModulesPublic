@@ -5,7 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
+internal unsafe class IgnoreWindowMinSizeLimit : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public unsafe class IgnoreWindowMinSizeLimit : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Siren"]
     };
+
+    public override string ModuleName => nameof(IgnoreWindowMinSizeLimit);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

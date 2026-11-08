@@ -5,7 +5,7 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterFPSLimitation
+internal partial class BetterFPSLimitation
 {
     private sealed class FramePacer : IDisposable
     {

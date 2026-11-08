@@ -15,7 +15,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoAethericMimicry : ModuleBase
+internal class AutoAethericMimicry : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class AutoAethericMimicry : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
+
+    public override string ModuleName => nameof(AutoAethericMimicry);
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
@@ -81,7 +83,7 @@ public class AutoAethericMimicry : ModuleBase
                 Size             = new(230f, 120f),
                 CreateWindowNode = () => new WindowNode(),
             };
-            
+
             Addon.SetWindowPosition(ImGui.GetMousePos() - Addon.Size with { X = Addon.Size.X / 1.5f });
 
             Addon.Open();
@@ -230,7 +232,7 @@ public class AutoAethericMimicry : ModuleBase
     #region 常量
 
     private static readonly uint[] Status = [2124, 2125, 2126];
-    
+
     private const uint AethericMimicryActionID = 18322;
 
     #endregion

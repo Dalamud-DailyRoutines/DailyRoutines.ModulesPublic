@@ -26,7 +26,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class FastWorldTravel : ModuleBase
+internal partial class FastWorldTravel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -42,6 +42,8 @@ public partial class FastWorldTravel : ModuleBase
         Category            = ModuleCategory.System,
         ModulesPrerequisite = ["InstantLogout"]
     };
+
+    public override string ModuleName => nameof(FastWorldTravel);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

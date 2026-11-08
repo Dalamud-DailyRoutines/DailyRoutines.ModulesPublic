@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AdventurerPlateThroughInspect : ModuleBase
+internal unsafe class AdventurerPlateThroughInspect : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class AdventurerPlateThroughInspect : ModuleBase
         Description = Lang.Get("AdventurerPlateThroughInspectDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AdventurerPlateThroughInspect);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

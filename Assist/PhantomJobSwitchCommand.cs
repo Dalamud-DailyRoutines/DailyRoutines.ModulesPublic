@@ -10,7 +10,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public class PhantomJobSwitchCommand : ModuleBase
+internal class PhantomJobSwitchCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class PhantomJobSwitchCommand : ModuleBase
         Description = Lang.Get("PhantomJobSwitchCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(PhantomJobSwitchCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

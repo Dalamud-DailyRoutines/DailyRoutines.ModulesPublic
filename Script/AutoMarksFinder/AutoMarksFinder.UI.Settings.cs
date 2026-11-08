@@ -3,7 +3,7 @@ using DailyRoutines.Extensions;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private void DrawTabItemSettings()
     {

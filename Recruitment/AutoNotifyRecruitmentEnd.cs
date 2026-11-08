@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyRecruitmentEnd : ModuleBase
+internal class AutoNotifyRecruitmentEnd : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoNotifyRecruitmentEnd : ModuleBase
         Description = Lang.Get("AutoNotifyRecruitmentEndDescription"),
         Category    = ModuleCategory.Recruitment
     };
+
+    public override string ModuleName => nameof(AutoNotifyRecruitmentEnd);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

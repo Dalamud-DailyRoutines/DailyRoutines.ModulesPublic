@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyCountdown : ModuleBase
+internal class AutoNotifyCountdown : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,7 +20,9 @@ public class AutoNotifyCountdown : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
+    public override string ModuleName => nameof(AutoNotifyCountdown);
+
     protected override void Init() =>
         LogMessageManager.Instance().RegPost(OnLogMessage);
 
@@ -43,7 +45,7 @@ public class AutoNotifyCountdown : ModuleBase
                 ["seconds"] = item.Parameters[0].IntValue
             }
         );
-        
+
         NotifyHelper.Instance().TrayInfo(message);
     }
 }

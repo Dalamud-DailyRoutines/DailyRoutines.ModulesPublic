@@ -19,7 +19,7 @@ using InstanceContent = FFXIVClientStructs.FFXIV.Client.Game.UI.InstanceContent;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyRouletteBonus : ModuleBase
+internal unsafe class AutoNotifyRouletteBonus : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,21 +29,27 @@ public unsafe class AutoNotifyRouletteBonus : ModuleBase
         Author      = ["BoxingBunny"]
     };
 
+    public override string ModuleName => nameof(AutoNotifyRouletteBonus);
+
     private static readonly CompSig SetContentRouletteRoleBonusSig =
         new("48 89 4C 24 ?? 55 41 56 48 83 EC ?? ?? ?? ?? 4C 8B F1");
+
     private delegate void SetContentRouletteRoleBonusDelegate
     (
         AgentContentsFinder* instance,
         byte*                roleIDs,
         uint                 roleCount
     );
+
     private Hook<SetContentRouletteRoleBonusDelegate>? SetContentRouletteRoleBonusHook;
 
     private static readonly CompSig UpdateRouletteCompletionSig = new("0F B6 11 4C 8D 05 ?? ?? ?? ?? 8B 41");
+
     private delegate uint UpdateRouletteCompletionDelegate
     (
         void* packet
     );
+
     private Hook<UpdateRouletteCompletionDelegate>? UpdateRouletteCompletionHook;
 
     private Config config = null!;

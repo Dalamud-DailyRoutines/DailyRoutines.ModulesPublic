@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoConfirmPortraitUpdate : ModuleBase
+internal class AutoConfirmPortraitUpdate : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class AutoConfirmPortraitUpdate : ModuleBase
         Description = Lang.Get("AutoConfirmPortraitUpdateDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoConfirmPortraitUpdate);
 
     private Config config = null!;
 

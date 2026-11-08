@@ -11,7 +11,7 @@ using OmenTools.KamiToolKit.Nodes.CircleButton;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class CustomizeMapMarker
+internal unsafe partial class CustomizeMapMarker
 {
     private sealed class MarkerListAddon
     (

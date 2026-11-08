@@ -12,7 +12,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedSalvage : ModuleBase
+internal unsafe partial class OptimizedSalvage : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe partial class OptimizedSalvage : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedSalvage/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedSalvage);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

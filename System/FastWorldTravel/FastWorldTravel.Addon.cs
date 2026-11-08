@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class FastWorldTravel
+internal partial class FastWorldTravel
 {
     private AddonDRFastWorldTravel? travelAddon;
 

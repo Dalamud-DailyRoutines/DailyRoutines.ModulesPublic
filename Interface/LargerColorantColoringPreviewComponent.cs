@@ -6,7 +6,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class LargerColorantColoringPreviewComponent : ModuleBase
+internal unsafe class LargerColorantColoringPreviewComponent : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public unsafe class LargerColorantColoringPreviewComponent : ModuleBase
         Description = Lang.Get("LargerColorantColoringPreviewComponentDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(LargerColorantColoringPreviewComponent);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

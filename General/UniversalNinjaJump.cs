@@ -11,7 +11,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class UniversalNinjaJump : ModuleBase
+internal unsafe class UniversalNinjaJump : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class UniversalNinjaJump : ModuleBase
         Description = Lang.Get("UniversalNinjaJumpDescription"),
         Category    = ModuleCategory.General
     };
+
+    public override string ModuleName => nameof(UniversalNinjaJump);
 
     private static readonly CompSig GetAnimationBindingSig = new("40 53 48 83 EC 20 48 8B D9 E8 F2 00 00 00 0F B7 C8");
     private delegate nint GetAnimationBindingDelegate

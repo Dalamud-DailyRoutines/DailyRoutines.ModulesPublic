@@ -4,11 +4,10 @@ using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using OmenTools.Info.Game.Packets.Upstream;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BrayfloxsLongstopHelper : ModuleBase
+internal unsafe class BrayfloxsLongstopHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +16,8 @@ public unsafe class BrayfloxsLongstopHelper : ModuleBase
         Category            = ModuleCategory.Duty,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
+
+    public override string ModuleName => nameof(BrayfloxsLongstopHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -24,7 +24,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCountPlayers : ModuleBase
+internal unsafe partial class AutoCountPlayers : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -32,7 +32,9 @@ public unsafe partial class AutoCountPlayers : ModuleBase
         Description = Lang.Get("AutoCountPlayersDescription"),
         Category    = ModuleCategory.General
     };
-    
+
+    public override string ModuleName => nameof(AutoCountPlayers);
+
     private static bool IsPlayerSearchLocation =>
         IsContentSearchZone || IsPlayerSearchZone;
 
@@ -142,7 +144,7 @@ public unsafe partial class AutoCountPlayers : ModuleBase
         WarpType warpType
     ) =>
         Throttler.Shared.Remove("AutoCountPlayers.Zone");
-    
+
     private static void OnLogMessage
     (
         ref bool                isPrevented,
@@ -434,7 +436,7 @@ public unsafe partial class AutoCountPlayers : ModuleBase
                                                 .ToList())
                              )
     ];
-    
+
     private static void NotifyPlayerPosition
     (
         IPlayerCharacter player
@@ -459,7 +461,7 @@ public unsafe partial class AutoCountPlayers : ModuleBase
             false
         );
     }
-    
+
     private static bool MatchesSearch
     (
         string name,

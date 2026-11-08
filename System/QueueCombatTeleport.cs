@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class QueueCombatTeleport : ModuleBase
+internal unsafe class QueueCombatTeleport : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class QueueCombatTeleport : ModuleBase
         Description = Lang.Get("QueueCombatTeleportDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(QueueCombatTeleport);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

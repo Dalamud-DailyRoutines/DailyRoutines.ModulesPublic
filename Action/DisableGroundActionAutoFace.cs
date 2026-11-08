@@ -5,7 +5,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class DisableGroundActionAutoFace : ModuleBase
+internal class DisableGroundActionAutoFace : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class DisableGroundActionAutoFace : ModuleBase
     {
         AllDefaultEnabled = true
     };
+
+    public override string ModuleName => nameof(DisableGroundActionAutoFace);
 
     private MemoryPatch groundActionAutoFacePatch = null!;
 

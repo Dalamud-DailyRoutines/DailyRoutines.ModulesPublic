@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoMoveGearsNotInSet : ModuleBase
+internal class AutoMoveGearsNotInSet : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public class AutoMoveGearsNotInSet : ModuleBase
         Description = Lang.Get("AutoMoveGearsNotInSetDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoMoveGearsNotInSet);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

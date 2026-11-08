@@ -19,7 +19,7 @@ using AgentShowDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Age
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class InstantLogout : ModuleBase
+internal unsafe class InstantLogout : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,6 +27,8 @@ public unsafe class InstantLogout : ModuleBase
         Description = Lang.Get("InstantLogoutDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(InstantLogout);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

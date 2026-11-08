@@ -20,7 +20,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDiscard : ModuleBase
+internal unsafe class AutoDiscard : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe class AutoDiscard : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoDiscard);
 
     private Config                moduleConfig = null!;
     private LuminaSearcher<Item>? itemSearcher;

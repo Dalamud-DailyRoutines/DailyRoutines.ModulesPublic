@@ -11,7 +11,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoConstantlyInspect : ModuleBase
+internal class AutoConstantlyInspect : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public class AutoConstantlyInspect : ModuleBase
         Description = Lang.Get("AutoConstantlyInspectDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoConstantlyInspect);
 
     protected override void Init() =>
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "ItemInspectionResult", OnAddon);

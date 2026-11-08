@@ -32,12 +32,11 @@ using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Nodes;
 using OmenTools.Threading;
 using TimeAgo;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSubmarineCollect : ModuleBase
+internal unsafe class AutoSubmarineCollect : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -54,24 +53,28 @@ public unsafe class AutoSubmarineCollect : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
+    public override string ModuleName => nameof(AutoSubmarineCollect);
+
     private static readonly CompSig CurrentSubmarineIndexSig = new("48 8D 0D ?? ?? ?? ?? 80 A3");
 
     private static readonly CompSig SubmarineReturnTimeSig = new
     (
         "40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3 48 8D 48 ?? 48 83 C4 ?? 5B E9 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC 40 53 48 83 EC ?? 48 8B D9 E8 ?? ?? ?? ?? 84 C0 74 ?? E8 ?? ?? ?? ?? 48 8B D3"
     );
+
     private delegate nint SubmarineReturnTimeDelegate
     (
         SubmarineReturnTimePacket* packet
     );
+
     private Hook<SubmarineReturnTimeDelegate>? SubmarineReturnTimeHook;
 
     private Config config = null!;
 
     private DalamudLinkPayload? collectSubmarinePayload;
 
-    private          VerticalListNode?     itemListLayout;
-    private          TextButtonNode?       autoCollectNode;
+    private VerticalListNode? itemListLayout;
+    private TextButtonNode?   autoCollectNode;
 
     private bool isNextNotifyIgnoreTime;
 
@@ -416,7 +419,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
                         }
                     };
                     itemListLayout.AddNode(autoCollectNode);
-                    
+
                     foreach (var itemID in SubmarineItems)
                     {
                         var row = new ItemDisplayNode(itemID, width);
@@ -795,7 +798,7 @@ public unsafe class AutoSubmarineCollect : ModuleBase
         )
         {
             Size = new(width, 32f);
-            
+
             ItemID = itemID;
 
             IconNode = new()

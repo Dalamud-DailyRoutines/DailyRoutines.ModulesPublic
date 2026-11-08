@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class CustomizeCommandAlias : ModuleBase
+internal class CustomizeCommandAlias : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class CustomizeCommandAlias : ModuleBase
         Description = Lang.Get("CustomizeCommandAliasDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(CustomizeCommandAlias);
 
     private Config config = null!;
 

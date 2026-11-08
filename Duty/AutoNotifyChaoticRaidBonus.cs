@@ -10,7 +10,7 @@ using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyChaoticRaidBonus : ModuleBase
+internal class AutoNotifyChaoticRaidBonus : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoNotifyChaoticRaidBonus : ModuleBase
         Description = Lang.Get("AutoNotifyChaoticRaidBonusDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoNotifyChaoticRaidBonus);
 
     private Config config = null!;
 

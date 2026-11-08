@@ -5,7 +5,7 @@ using OmenTools.ImGuiOm.Widgets;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private readonly DatePicker departureDatePicker = new();
 
@@ -16,7 +16,7 @@ public partial class AutoMarksFinder
 
         ImGui.SameLine();
         if (ImGuiOm.ButtonIcon("设置", FontAwesomeIcon.Cog, Lang.Get("Settings")))
-            ChatManager.Instance().SendMessage($"/pdr search {GetType().Name}");
+            ChatManager.Instance().SendMessage($"/pdr search {ModuleName}");
 
         if (movement.IsBusy &&
             scanner?.IsRunning != true)

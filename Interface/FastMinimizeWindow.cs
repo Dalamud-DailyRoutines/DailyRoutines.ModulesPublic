@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastMinimizeWindow : ModuleBase
+internal unsafe class FastMinimizeWindow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class FastMinimizeWindow : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Rorinnn"]
     };
+
+    public override string ModuleName => nameof(FastMinimizeWindow);
 
     private Config      config = null!;
     private NotifyIcon? trayIcon;

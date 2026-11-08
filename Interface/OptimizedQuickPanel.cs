@@ -22,7 +22,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedQuickPanel : ModuleBase
+internal unsafe class OptimizedQuickPanel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -31,12 +31,15 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(OptimizedQuickPanel);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
     private static readonly CompSig AddonControlReceiveEventSig = new("40 53 56 41 56 48 81 EC ?? ?? ?? ?? 48 8B F1");
+
     private delegate void AddonControlReceiveEventDelegate
     (
         AtkAddonControl* control,
@@ -45,27 +48,33 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         AtkEvent*        atkEvent,
         AtkEventData*    atkEventData
     );
+
     private Hook<AddonControlReceiveEventDelegate>? AddonControlReceiveEventHook;
-    
+
     private static readonly CompSig IsMoveHandleNodeSig = new("48 3B 91 ?? ?? ?? ?? 74 ?? 45 33 C0");
+
     [return: MarshalAs(UnmanagedType.U1)]
     private delegate bool IsMoveHandleNodeDelegate
     (
         AtkUnitBase* addon,
         AtkResNode*  node
     );
+
     private Hook<IsMoveHandleNodeDelegate>? IsMoveHandleNodeHook;
 
     private static readonly CompSig StartDraggingAddonSig = new("40 53 48 83 EC 20 80 A2 A1 01 00 00 EF");
+
     private delegate void StartDraggingAddonDelegate
     (
         AtkUnitManager* manager,
         AtkUnitBase*    addon
     );
+
     private Hook<StartDraggingAddonDelegate>? StartDraggingAddonHook;
 
-    private static readonly CompSig QuickPanelReceiveEventSig = 
+    private static readonly CompSig QuickPanelReceiveEventSig =
         new("40 55 53 56 57 41 56 48 8D 6C 24 ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 48 8B 7D");
+
     private delegate void QuickPanelReceiveEventDelegate
     (
         AtkUnitBase*  addon,
@@ -74,8 +83,9 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         AtkEvent*     atkEvent,
         AtkEventData* atkEventData
     );
+
     private Hook<QuickPanelReceiveEventDelegate>? QuickPanelReceiveEventHook;
-    
+
     private Config config = null!;
 
     private CheckboxNode? lockCheckBoxNode;
@@ -142,7 +152,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
             case AddonEvent.PreFinalize:
                 lockCheckBoxNode = null;
                 break;
-            
+
             case AddonEvent.PreUpdate:
                 UpdateAddonFlags();
                 UpdateSlotLockState();
@@ -150,7 +160,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
             case AddonEvent.PostDraw:
                 if (QuickPanel == null) return;
-                
+
                 if (lockCheckBoxNode == null)
                 {
                     lockCheckBoxNode = new()
@@ -329,7 +339,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
 
         AddonControlReceiveEventHook.Original(control, eventType, eventParam, atkEvent, atkEventData);
     }
-    
+
     private bool IsMoveHandleNodeDetour
     (
         AtkUnitBase* addon,
@@ -372,6 +382,7 @@ public unsafe class OptimizedQuickPanel : ModuleBase
         if (QuickPanel == null) return;
 
         var slot = (byte*)QuickPanel + QUICK_PANEL_SLOT_ARRAY_OFFSET;
+
         for (var i = 0; i < QUICK_PANEL_SLOT_ARRAY_COUNT; i++, slot += QUICK_PANEL_SLOT_SIZE)
         {
             var dragDrop = *(AtkComponentDragDrop**)slot;

@@ -12,7 +12,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoPetFollow : ModuleBase
+internal class AutoPetFollow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class AutoPetFollow : ModuleBase
         Description = Lang.Get("AutoPetFollowDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(AutoPetFollow);
 
     private Config config = null!;
 
@@ -45,9 +47,9 @@ public class AutoPetFollow : ModuleBase
         bool          value
     )
     {
-        if (flag != ConditionFlag.InCombat                       ||
-            value                                                ||
-            GameState.IsInPVPArea                                ||
+        if (flag != ConditionFlag.InCombat               ||
+            value                                        ||
+            GameState.IsInPVPArea                        ||
             ICondition.Instance()[ConditionFlag.Mounted] ||
             !ValidClassJobs.Contains(LocalPlayerState.ClassJob))
             return;

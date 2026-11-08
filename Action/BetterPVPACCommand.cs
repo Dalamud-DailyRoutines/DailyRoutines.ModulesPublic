@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BetterPVPACCommand : ModuleBase
+internal unsafe class BetterPVPACCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class BetterPVPACCommand : ModuleBase
         Category    = ModuleCategory.Action,
         ModulesPair = ["OptimizedPVPProfileAction"]
     };
+
+    public override string ModuleName => nameof(BetterPVPACCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -31,12 +33,13 @@ public unsafe class BetterPVPACCommand : ModuleBase
         void*                                 source
     );
     private Hook<ExecuteCommandDelegate>? executeCommandHook;
-    
+
     private readonly Dictionary<string, uint> actionIDsByName = [];
-    
+
     protected override void Init()
     {
         actionIDsByName.Clear();
+
         foreach (var action in Sheets.PVPActions.Values)
         {
             var name = action.Name.ToString();
@@ -45,7 +48,7 @@ public unsafe class BetterPVPACCommand : ModuleBase
 
             actionIDsByName.TryAdd(name, action.RowId);
         }
-        
+
         executeCommandHook = ShellCommandActionExecuteCommandSig.GetHook<ExecuteCommandDelegate>(ExecuteCommandDetour);
         executeCommandHook.Enable();
     }
@@ -68,11 +71,12 @@ public unsafe class BetterPVPACCommand : ModuleBase
         var argPtr  = (int*)((byte*)context + COMMAND_ARG0_OFFSET);
         var encoded = *argPtr;
 
-        var name = context->StringArgs.First != null && context->StringArgs.First != context->StringArgs.Last
-                       ? context->StringArgs.First->ToString()
-                       : null;
+        var name = context->StringArgs.First != null && context->StringArgs.First != context->StringArgs.Last ?
+                       context->StringArgs.First->ToString() :
+                       null;
 
         uint actionID;
+
         if (encoded is -1 or -2)
         {
             if (name is null || !actionIDsByName.TryGetValue(name, out actionID))

@@ -11,7 +11,7 @@ using NativeScheduleAgent = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMJICra
 
 namespace DailyRoutines.ModulesPublic.OptimizedMJICraftSchedule;
 
-public partial class OptimizedMJICraftSchedule
+internal partial class OptimizedMJICraftSchedule
 {
     private UIStyle uiStyle = null!;
 

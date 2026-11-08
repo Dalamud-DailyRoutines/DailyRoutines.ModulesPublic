@@ -1,6 +1,6 @@
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot
+internal partial class AutoReplyChatBot
 {
     protected override void ConfigUI()
     {

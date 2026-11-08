@@ -5,7 +5,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class SameAethernetTeleport : ModuleBase
+internal class SameAethernetTeleport : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public class SameAethernetTeleport : ModuleBase
         NeedAuth          = true,
         AllDefaultEnabled = true
     };
+
+    public override string ModuleName => nameof(SameAethernetTeleport);
 
     private MemoryPatch patch0 = null!;
     private MemoryPatch patch1 = null!;

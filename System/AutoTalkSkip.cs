@@ -7,11 +7,10 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Models;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoTalkSkip : ModuleBase
+internal unsafe class AutoTalkSkip : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +18,8 @@ public unsafe class AutoTalkSkip : ModuleBase
         Description = Lang.Get("AutoTalkSkipDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoTalkSkip);
 
     private delegate AtkValue* ReceiveDialogueEventDelegate
     (

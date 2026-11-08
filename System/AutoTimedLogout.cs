@@ -10,7 +10,7 @@ using Task = System.Threading.Tasks.Task;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoTimedLogout : ModuleBase
+internal class AutoTimedLogout : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class AutoTimedLogout : ModuleBase
         ModulesPrerequisite = ["InstantLogout"],
         Author              = ["Wotou"]
     };
+
+    public override string ModuleName => nameof(AutoTimedLogout);
 
     private int                      customMinutes = 30;
     private long?                    scheduledTime;

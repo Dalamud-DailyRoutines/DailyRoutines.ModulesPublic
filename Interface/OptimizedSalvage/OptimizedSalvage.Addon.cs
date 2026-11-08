@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.Info;
+using DailyRoutines.Common.Info;
 using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Enums;
@@ -7,7 +7,7 @@ using OmenTools.KamiToolKit.Addons;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OptimizedSalvage
+internal partial class OptimizedSalvage
 {
     private OperationAddon? addon;
 

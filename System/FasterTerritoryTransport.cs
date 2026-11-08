@@ -9,7 +9,7 @@ using WarpType = FFXIVClientStructs.FFXIV.Client.Game.UI.WarpType;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FasterTerritoryTransport : ModuleBase
+internal unsafe class FasterTerritoryTransport : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class FasterTerritoryTransport : ModuleBase
         Category    = ModuleCategory.System,
         ModulesPair = ["NoUIFade"]
     };
+
+    public override string ModuleName => nameof(FasterTerritoryTransport);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -2,11 +2,10 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.Network;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder : ModuleBase
+internal partial class AutoMarksFinder : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +21,8 @@ public partial class AutoMarksFinder : ModuleBase
         ModulesPrerequisite = ["FastInstanceZoneChange"],
         Author              = ["AtmoOmen", "KirisameVanilla"]
     };
+
+    public override string ModuleName => nameof(AutoMarksFinder);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -117,7 +118,7 @@ public partial class AutoMarksFinder : ModuleBase
 
         scanner?.Dispose();
         scanner = null;
-        
+
         scanCoverageTexture?.Dispose();
         scanCoverageTexture = null;
         scanCoverageSource  = null;

@@ -11,7 +11,7 @@ using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyDutyConfirm : ModuleBase
+internal unsafe class AutoNotifyDutyConfirm : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class AutoNotifyDutyConfirm : ModuleBase
         Description = Lang.Get("AutoNotifyDutyConfirmDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoNotifyDutyConfirm);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -90,7 +92,7 @@ public unsafe class AutoNotifyDutyConfirm : ModuleBase
             ContentsType.Roulette => LuminaWrapper.GetContentRouletteName(entry.Id),
             _                     => string.Empty
         };
-        if (string.IsNullOrEmpty(dutyName)) 
+        if (string.IsNullOrEmpty(dutyName))
             return;
 
         NotifyHelper.Instance().TrayInfo

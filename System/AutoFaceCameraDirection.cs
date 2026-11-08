@@ -22,38 +22,46 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoFaceCameraDirection : ModuleBase
+internal unsafe class AutoFaceCameraDirection : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title            = Lang.Get("AutoFaceCameraDirectionTitle"),
-        Description      = Lang.Get("AutoFaceCameraDirectionDescription"),
-        Category         = ModuleCategory.System,
+        Title       = Lang.Get("AutoFaceCameraDirectionTitle"),
+        Description = Lang.Get("AutoFaceCameraDirectionDescription"),
+        Category    = ModuleCategory.System,
         ModulesPair = ["DisableGroundActionAutoFace", "IgnoreActionTargetBlocked"]
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
+    public override string ModuleName => nameof(AutoFaceCameraDirection);
+
     private static readonly CompSig cameraUpdateRotationSig = new("40 53 48 81 EC ?? ?? ?? ?? 8B 81 ?? ?? ?? ?? 48 8B D9 44 0F 29 54 24");
+
     private delegate void CameraUpdateRotationDelegate
     (
         Camera* camera
     );
+
     private Hook<CameraUpdateRotationDelegate> CameraUpdateRotationHook;
 
     private static readonly CompSig updateVisualRotationSig = new("40 53 48 83 EC ?? 83 B9 ?? ?? ?? ?? ?? 48 8B D9 0F 85 ?? ?? ?? ?? F6 81");
+
     private delegate void* UpdateVisualRotationDelegate
     (
         GameObject* gameObject
     );
+
     private UpdateVisualRotationDelegate UpdateVisualRotation = null!;
 
     private static readonly CompSig setRotationSig = new("40 53 48 83 EC ?? F3 0F 10 81 ?? ?? ?? ?? 48 8B D9 0F 2E C1");
+
     private delegate void SetRotationDelegate
     (
         GameObject* gameObject,
         float       rotation
     );
+
     private Hook<SetRotationDelegate>? SetRotationHook;
 
     private Config config = null!;
@@ -74,9 +82,9 @@ public unsafe class AutoFaceCameraDirection : ModuleBase
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-        
+
         UpdateVisualRotation = updateVisualRotationSig.GetDelegate<UpdateVisualRotationDelegate>();
-        
+
         CameraUpdateRotationHook ??= cameraUpdateRotationSig.GetHook<CameraUpdateRotationDelegate>(CameraUpdateRotationDetour);
         CameraUpdateRotationHook.Enable();
 

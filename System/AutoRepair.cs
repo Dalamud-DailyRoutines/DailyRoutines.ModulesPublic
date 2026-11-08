@@ -11,15 +11,12 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Attributes;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRepair : ModuleBase
+internal unsafe class AutoRepair : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +26,8 @@ public unsafe class AutoRepair : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoRepair);
 
     private Config config = null!;
 
@@ -251,7 +250,7 @@ public unsafe class AutoRepair : ModuleBase
                 ["repairThreshold"] = config.RepairThreshold
             }
         );
-        
+
         NotifyHelper.Instance().Chat(message);
         NotifyHelper.Toast(message);
     }

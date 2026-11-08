@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMovePetCenter : ModuleBase
+internal unsafe class AutoMovePetCenter : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe class AutoMovePetCenter : ModuleBase
         Author          = ["逆光"],
         ModulesConflict = ["AutoMovePetPosition"]
     };
+
+    public override string ModuleName => nameof(AutoMovePetCenter);
 
     private static readonly CompSig ProcessPacketSpawnNPCSig =
         new

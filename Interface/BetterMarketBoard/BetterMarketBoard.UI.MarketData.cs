@@ -9,7 +9,7 @@ using TimeAgo;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class BetterMarketBoard
+internal unsafe partial class BetterMarketBoard
 {
     private void DrawRightContent
     (

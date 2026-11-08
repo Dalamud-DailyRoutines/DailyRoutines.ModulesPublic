@@ -20,7 +20,7 @@ using CircleButtonNode = OmenTools.KamiToolKit.Nodes.CircleButton.CircleButtonNo
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class PortraitAnimationTimeEditor : ModuleBase
+internal unsafe class PortraitAnimationTimeEditor : ModuleBase
 {
     public override ModuleInfo Info => new()
     {
@@ -29,6 +29,8 @@ public unsafe class PortraitAnimationTimeEditor : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Yarukon"]
     };
+
+    public override string ModuleName => nameof(PortraitAnimationTimeEditor);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
