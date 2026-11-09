@@ -664,6 +664,18 @@ internal partial class AutoMarksFinder
             if (zones.Count == 0)
             {
                 Dispose();
+
+                var message = Lang.Get
+                (
+                    "AutoMarksFinder-ScanCompleted",
+                    new Dictionary<string, object>
+                    {
+                        ["count"] = FoundOnes.Values.Sum(monsters => monsters.Count)
+                    }
+                );
+                NotifyHelper.Instance().Chat(message);
+                NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinderTitle"));
+                NotifyHelper.Toast(message);
                 return;
             }
 
@@ -722,7 +734,11 @@ internal partial class AutoMarksFinder
 
         private void StopWithWarning(string key)
         {
-            NotifyHelper.Instance().NotificationWarning(Lang.Get(key), Lang.Get("AutoMarksFinderTitle"));
+            var message = Lang.Get(key);
+            NotifyHelper.ToastError(message);
+            NotifyHelper.Instance().TrayError(message, Lang.Get("AutoMarksFinderTitle"));
+            NotifyHelper.Instance().ChatError(message);
+
             Dispose();
         }
 

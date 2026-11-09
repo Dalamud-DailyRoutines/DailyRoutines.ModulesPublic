@@ -1,3 +1,4 @@
+using DailyRoutines.Manager;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 
@@ -11,6 +12,7 @@ internal partial class AutoMarksFinder
         private          NotoriousMonsterList? train;
         private          BroadcastStage        stage;
         private          long                  nextAt;
+        private          bool                  departureNotified;
 
         public HuntAutoBroadcast(AutoMarksFinder module)
         {
@@ -64,9 +66,11 @@ internal partial class AutoMarksFinder
                 module.relay.IsBusy)
                 return;
 
-            train = selected;
-            Index = selected.MonstersFound.FindIndex(monster => monster.IsAlive);
-            stage = BroadcastStage.WaitingForDeparture;
+            train             = selected;
+            Index             = selected.MonstersFound.FindIndex(monster => monster.IsAlive);
+            stage             = BroadcastStage.WaitingForDeparture;
+            nextAt            = 0;
+            departureNotified = false;
 
             if (Index < 0)
             {
@@ -129,7 +133,30 @@ internal partial class AutoMarksFinder
                         return;
                     }
 
-                    if (now < DepartAt)
+                    if (!departureNotified)
+                    {
+                        if (now < DepartAt - DEPARTURE_NOTICE_SECONDS)
+                            return;
+
+                        var message = Lang.Get
+                        (
+                            "AutoMarksFinder-AutoBroadcastStarting",
+                            new Dictionary<string, object>
+                            {
+                                ["count"] = PlayersManager.Instance().PlayersAroundCount
+                            }
+                        );
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinderTitle"));
+                        NotifyHelper.Toast(message);
+                        departureNotified = true;
+
+                        if (now >= DepartAt)
+                            nextAt = now + LATE_START_DELAY_SECONDS;
+                    }
+
+                    if (now < DepartAt ||
+                        now < nextAt)
                         return;
 
                     if (train.MonstersFound.Any(monster => !monster.IsAlive))
@@ -242,6 +269,10 @@ internal partial class AutoMarksFinder
                     break;
                 case BroadcastStage.Finishing:
                     Stop();
+                    var completedMessage = Lang.Get("AutoMarksFinder-AutoBroadcastCompleted");
+                    NotifyHelper.Instance().Chat(completedMessage);
+                    NotifyHelper.Instance().TrayInfo(completedMessage, Lang.Get("AutoMarksFinderTitle"));
+                    NotifyHelper.Toast(completedMessage);
                     break;
             }
         }
@@ -252,6 +283,8 @@ internal partial class AutoMarksFinder
         private const int  FIRST_POINT_DELAY_SECONDS = 3;
         private const int  NEXT_POINT_DELAY_SECONDS  = 1;
         private const int  END_DELAY_SECONDS         = 2;
+        private const int  DEPARTURE_NOTICE_SECONDS  = 30;
+        private const int  LATE_START_DELAY_SECONDS  = 5;
 
         #endregion
     }

@@ -575,9 +575,13 @@ internal partial class AutoMarksFinder
                     config.SelectedZones.IntersectWith(parsed.Where(pair => pair.Value.Count > 0).Select(pair => pair.Key));
                     scanZoneCombo = null;
                     config.Save(this);
+                    
                     NotifyHelper.Instance().NotificationInfo
                     (
-                        Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", new Dictionary<string, object> { ["count"] = parsed.Sum(pair => pair.Value.Count) }),
+                        Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", new Dictionary<string, object>
+                        {
+                            ["count"] = parsed.Sum(pair => pair.Value.Count)
+                        }),
                         Lang.Get("AutoMarksFinderTitle")
                     );
                 }
@@ -588,7 +592,11 @@ internal partial class AutoMarksFinder
             if (!cancellationToken.IsCancellationRequested)
             {
                 DLog.Error(exception);
-                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-UpdateSpawnPointsFailed"), Lang.Get("AutoMarksFinderTitle"));
+                NotifyHelper.Instance().NotificationWarning
+                (
+                    Lang.Get("AutoMarksFinder-UpdateSpawnPointsFailed"),
+                    Lang.Get("AutoMarksFinderTitle")
+                );
             }
         }
     }
@@ -695,7 +703,12 @@ internal partial class AutoMarksFinder
                     var train = scanResultSelection.Train;
                     train.Merge(scanner.FoundOnes.SelectMany(pair => pair.Value), overwrite);
                     config.Save(this);
-                    NotifyHelper.Instance().NotificationInfo(Lang.Get("SavedSuccessfully"));
+
+                    NotifyHelper.Instance().NotificationInfo
+                    (
+                        Lang.Get("SavedSuccessfully"),
+                        Lang.Get("AutoMarksFinderTitle")
+                    );
                 }
             }
         }

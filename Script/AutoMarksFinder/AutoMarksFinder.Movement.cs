@@ -377,7 +377,11 @@ internal partial class AutoMarksFinder
         private void StopWithWarning()
         {
             Stop();
-            NotifyHelper.Instance().ChatError(Lang.Get("AutoMarksFinder-NavigationInterrupted"));
+
+            var message = Lang.Get("AutoMarksFinder-NavigationInterrupted");
+            NotifyHelper.ToastError(message);
+            NotifyHelper.Instance().TrayError(message, Lang.Get("AutoMarksFinderTitle"));
+            NotifyHelper.Instance().ChatError(message);
         }
 
         private void UpdateTarget(IFramework framework)
