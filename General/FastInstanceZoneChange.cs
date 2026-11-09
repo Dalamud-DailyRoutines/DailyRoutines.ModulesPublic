@@ -27,7 +27,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
     {
         Title       = Lang.Get("FastInstanceZoneChangeTitle"),
         Description = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
-        Category    = ModuleCategory.System,
+        Category    = ModuleCategory.General,
         Author      = ["AtmoOmen", "KirisameVanilla"],
         ModulesPair = ["InstantTeleport"]
     };
@@ -148,7 +148,14 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
 
         entry.Text = !InstancesManager.IsInstancedArea ?
                          string.Empty :
-                         Lang.Get("AutoMarksFinder-RelayInstanceDisplay", InstancesManager.CurrentInstance.ToSESquareCount());
+                         Lang.Get
+                         (
+                             "FastInstanceZoneChange-DTRFormat",
+                             new Dictionary<string, object>
+                             {
+                                 ["instanceText"] = InstancesManager.CurrentInstance.ToSEHexCount()
+                             }
+                         );
         entry.Shown = InstancesManager.IsInstancedArea;
         entry.Tooltip = ValidUses.Contains(GameState.TerritoryIntendedUse) ?
                             Lang.Get("FastInstanceZoneChange-DtrEntryTooltip") :
