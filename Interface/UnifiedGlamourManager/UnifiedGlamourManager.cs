@@ -5,6 +5,8 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Lumina.Excel.Sheets;
+using OmenTools.Dalamud.Abstractions;
+using OmenTools.Dalamud.Attributes;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -31,6 +33,8 @@ internal partial class UnifiedGlamourManager : ModuleBase
     {
         config = Config.Load(this) ?? new();
         NormalizeConfig();
+
+        presetEditor = new(this);
 
         selectedPreset = config.Presets
                                .OrderByDescending(x => x.CreatedAt)
@@ -81,7 +85,10 @@ internal partial class UnifiedGlamourManager : ModuleBase
     {
         GameState.Instance().Login  -= OnLogin;
         GameState.Instance().Logout -= ResetStoredItemsSession;
+
         ResetStoredItemsSession();
+        presetEditor.Dispose();
+        blockedSlotsCache.Clear();
 
         if (openOverlayPlateTabPayload != null)
             LinkPayloadManager.Instance().Unreg(openOverlayPlateTabPayload.CommandId);
@@ -121,4 +128,14 @@ internal partial class UnifiedGlamourManager : ModuleBase
         uint              slotIndex
     ) =>
         slotIndex < PlateSlotDefinitions.Length && PlateSlotDefinitions[slotIndex].CanUse(category);
+
+    #region IPC
+
+    [IPCSubscriber("DailyRoutines.Modules.ExpandItemMenuSearch.GetItemSearchOptions")]
+    private IPCSubscriber<uint, Dictionary<string, string>> GetItemSearchOptionsIPC;
+
+    [IPCSubscriber("DailyRoutines.Modules.ExpandItemMenuSearch.SearchItem")]
+    private IPCSubscriber<uint, string, bool> SearchItemIPC;
+
+    #endregion
 }
