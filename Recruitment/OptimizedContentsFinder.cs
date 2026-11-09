@@ -34,7 +34,8 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         Category    = ModuleCategory.Recruitment,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-1.webp"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-1.webp",
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-2.webp"
         ]
     };
 
@@ -44,23 +45,19 @@ public unsafe class OptimizedContentsFinder : ModuleBase
     };
 
     public override string ModuleName => nameof(OptimizedContentsFinder);
-    
+
     private static readonly CompSig ApplySettingsSig =
         new("4C 8B DC 55 57 41 56 49 8D 6B ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 80 79");
     private delegate void                  ApplySettingsDelegate(byte* data, UIModule* module);
     private          ApplySettingsDelegate ApplySettings = null!;
-    
+
     private MemoryPatch PrerequisiteNamesPatch = null!;
-    
+
     private NativeListController<AddonContentsFinder> listController = null!;
 
     private readonly Dictionary<string, FinderNodes> finderNodes = [];
 
     private readonly Dictionary<uint, EntryNodes> entryNodes = [];
-    
-    private uint registrationIcon;
-
-    private string registrationTooltip = string.Empty;
 
     private byte enteredRoulette;
 
@@ -68,8 +65,6 @@ public unsafe class OptimizedContentsFinder : ModuleBase
 
     protected override void Init()
     {
-        registrationIcon    = 60081;
-
         ApplySettings = ApplySettingsSig.GetDelegate<ApplySettingsDelegate>();
 
         PrerequisiteNamesPatch = new("74 ?? 48 8B 13 48 8B CB FF 52 ?? BA ?? ?? ?? ?? 49 8B CF", [0x90, 0x90]);
@@ -102,7 +97,7 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         if (ContentsFinder != null)
         {
             SetupFinder(ContentsFinder);
-            
+
             var agent = AgentContentsFinder.Instance();
             agent->ListChanged = true;
             agent->UpdateAddon();
@@ -128,7 +123,7 @@ public unsafe class OptimizedContentsFinder : ModuleBase
                     renderer->GetTextNodeById(6)->SetWidth(nodes.NameWidth);
             }
         }
-        
+
         listController.Dispose();
 
         foreach (var nodes in entryNodes.Values)
@@ -163,19 +158,19 @@ public unsafe class OptimizedContentsFinder : ModuleBase
 
                     entryNodes.Clear();
                 }
-                
+
                 break;
-            
+
             case AddonEvent.PostSetup:
                 SetupFinder(args.Addon.ToStruct());
                 break;
-            
+
             case AddonEvent.PostShow:
             case AddonEvent.PostRefresh:
                 RefreshSettings(args.Addon.ToStruct());
                 break;
         }
-        
+
     }
 
     private void OnTerritoryChanged(uint territory)
@@ -199,6 +194,7 @@ public unsafe class OptimizedContentsFinder : ModuleBase
             return;
 
         var agent = AgentContentsFinder.Instance();
+
         for (var index = (int)agent->SelectedContent.LongCount - 1; index >= 0; index--)
         {
             var selected = agent->SelectedContent[index];
@@ -324,33 +320,37 @@ public unsafe class OptimizedContentsFinder : ModuleBase
 
         finderNodes.Add(addon->NameString, nodes);
         RefreshSettings(addon);
-        
+
         return;
-        
+
         static void OpenClassSelection()
         {
             AgentStatus.Instance()->TabIndex = 2;
             UIModule.Instance()->ExecuteMainCommand(2);
         }
     }
-    
+
     private void RefreshSettings(AtkUnitBase* addon)
     {
         if (!finderNodes.TryGetValue(addon->NameString, out var nodes))
             return;
 
         addon->GetNodeById(6)->ToggleVisibility(false);
+
         Span<byte> settings = stackalloc byte[12];
         settings.Clear();
+
         LoadSettingsToContentsFinder(settings);
 
         for (var index = 0; index < SETTINGS.Length; index++)
         {
             var setting = SETTINGS[index];
-            var button  = nodes.SettingButtons[index];
-            var icon    = nodes.SettingIcons[index];
-            icon.IconId = SETTING_ICONS[index];
             var tooltip = SETTING_TOOLTIPS[index];
+
+            var button = nodes.SettingButtons[index];
+            var icon   = nodes.SettingIcons[index];
+
+            icon.IconId = SETTING_ICONS[index];
 
             if (setting == 4)
             {
@@ -366,71 +366,28 @@ public unsafe class OptimizedContentsFinder : ModuleBase
                              1;
         }
 
-        registrationIcon = 60081;
-        if (settings[10] != 0)
-            registrationIcon = 60648;
-        else if (settings[7] != 0)
-            registrationIcon = 60649;
-        else if (settings[6] != 0)
-            registrationIcon = 60641;
-
-        var conditions = new List<string>();
-
-        for (var index = 0; index < SETTINGS.Length; index++)
-        {
-            var setting = SETTINGS[index];
-            if (settings[setting] == 0)
-                continue;
-
-            var tooltip = SETTING_TOOLTIPS[index];
-            if (setting == 4)
-                tooltip += settings[4];
-
-            conditions.Add($"  \ue06f {LuminaWrapper.GetAddonText(tooltip)}");
-        }
-
-        registrationTooltip = conditions.Count == 0 ?
-                                  Lang.Get("OptimizedContentsFinder-Register") :
-                                  Lang.Get
-                                  (
-                                      "OptimizedContentsFinder-RegisterWithConditions",
-                                      new Dictionary<string, object>
-                                      {
-                                          ["conditions"] = string.Join('\n', conditions)
-                                      }
-                                  );
-
-        var queued = ICondition.Instance()[ConditionFlag.InDutyQueue];
-
         foreach (var entry in entryNodes.Values)
-        {
-            entry.Icon.IconId = queued ?
-                                    61502u :
-                                    registrationIcon;
-            entry.Button.TextTooltip = queued ?
-                                           LuminaWrapper.GetAddonText(2506) :
-                                           registrationTooltip;
-        }
+            UpdateRegistration(entry, settings);
     }
-    
+
     private void UpdateEntry(AddonContentsFinder* addon, ListItemData item)
     {
         var agent        = AgentContentsFinder.Instance();
         var entry        = addon->DutyList->GetItem(item.ItemIndex);
         var contentIndex = entry->UIntValues[1];
 
-        if (contentIndex == 0 || contentIndex > agent->ContentList.LongCount)
+        if (contentIndex == 0 ||
+            contentIndex > agent->ContentList.LongCount)
         {
             ResetEntry(item);
             return;
         }
 
         var content = agent->ContentList[(int)contentIndex - 1].Value;
-        var rewardReceived = content->ID.ContentType == ContentsType.Roulette
-                             && UIInstanceContent.Instance()->IsRouletteComplete((byte)content->ID.ID);
+        var rewardReceived = content->ID.ContentType == ContentsType.Roulette &&
+                             UIInstanceContent.Instance()->IsRouletteComplete((byte)content->ID.ID);
 
-        if (content->UnavailableReasons != 0
-            && !rewardReceived)
+        if (content->UnavailableReasons != 0 && !rewardReceived)
         {
             ResetEntry(item);
             return;
@@ -446,14 +403,12 @@ public unsafe class OptimizedContentsFinder : ModuleBase
                 Layout = new()
                 {
                     Size        = new(48, 24),
-                    IsVisible   = true,
                     ItemSpacing = 0
                 },
                 Button = new()
                 {
                     Size         = new(24),
                     InnerPadding = new(8),
-                    IsVisible    = true
                 },
                 Reward = new()
                 {
@@ -495,16 +450,13 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         nodes.Button.IsVisible = content->UnavailableReasons == 0;
         nodes.Reward.IsVisible = rewardReceived;
 
-        var queued = ICondition.Instance()[ConditionFlag.InDutyQueue];
-        nodes.Icon.IconId = queued ?
-                                61502u :
-                                registrationIcon;
-        nodes.Button.TextTooltip = queued ?
-                                       LuminaWrapper.GetAddonText(2506) :
-                                       registrationTooltip;
-        
+        Span<byte> settings = stackalloc byte[12];
+        settings.Clear();
+        LoadSettingsToContentsFinder(settings);
+        UpdateRegistration(nodes, settings);
+
         return;
-        
+
         static void RegisterContent(EntryNodes nodes)
         {
             if (ICondition.Instance()[ConditionFlag.InDutyQueue])
@@ -521,7 +473,53 @@ public unsafe class OptimizedContentsFinder : ModuleBase
                 ContentsFinderHelper.RequestDutyNormal(nodes.Content.ID, options);
         }
     }
-    
+
+    private static void UpdateRegistration(EntryNodes nodes, ReadOnlySpan<byte> settings)
+    {
+        if (ICondition.Instance()[ConditionFlag.InDutyQueue])
+        {
+            nodes.Icon.IconId        = 61502;
+            nodes.Button.TextTooltip = LuminaWrapper.GetAddonText(2506);
+            return;
+        }
+
+        nodes.Icon.IconId = 60081;
+        if (settings[10] != 0)
+            nodes.Icon.IconId = 60648;
+        else if (settings[7] != 0)
+            nodes.Icon.IconId = 60649;
+        else if (settings[6] != 0)
+            nodes.Icon.IconId = 60641;
+
+        var conditions = new List<string>();
+
+        for (var index = 0; index < SETTINGS.Length; index++)
+        {
+            var setting = SETTINGS[index];
+            if (settings[setting] == 0)
+                continue;
+
+            var tooltip = SETTING_TOOLTIPS[index];
+            if (setting == 4)
+                tooltip += settings[4];
+
+            conditions.Add($"  \ue06f {LuminaWrapper.GetAddonText(tooltip)}");
+        }
+
+        var parameters = new Dictionary<string, object>
+        {
+            ["contentName"] = nodes.Content.GetName()
+        };
+
+        if (conditions.Count == 0)
+            nodes.Button.TextTooltip = Lang.Get("OptimizedContentsFinder-Register", parameters);
+        else
+        {
+            parameters["conditions"] = string.Join('\n', conditions);
+            nodes.Button.TextTooltip = Lang.Get("OptimizedContentsFinder-RegisterWithConditions", parameters);
+        }
+    }
+
     private void ResetEntry(ListItemData item)
     {
         if (!entryNodes.TryGetValue(item.NodeId, out var nodes))
@@ -532,22 +530,21 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         if (name != null)
             name->SetWidth(nodes.NameWidth);
     }
-    
+
     private static IconImageNode CreateButtonIcon(IconButtonNode parent, float size)
     {
         parent.BackgroundNode.IsVisible = false;
         parent.ImageNode.IsVisible      = false;
-        
+
         var position = (parent.Size - new Vector2(size)) / 2;
-        
+
         var icon = new IconImageNode
         {
             Size       = new(size),
             Position   = position,
             FitTexture = true,
-            IsVisible  = true
         };
-        
+
         icon.AddTimeline
         (
             new TimelineBuilder()
@@ -565,7 +562,7 @@ public unsafe class OptimizedContentsFinder : ModuleBase
                 .EndFrameSet()
                 .Build()
         );
-        
+
         icon.AttachNode(parent);
         return icon;
     }
@@ -593,10 +590,13 @@ public unsafe class OptimizedContentsFinder : ModuleBase
     {
         Span<byte> settings = stackalloc byte[27];
         settings.Clear();
+        
         LoadSettingsToContentsFinder(settings);
         settings[..12].CopyTo(settings[12..]);
 
-        if (setting < 4 && settings[setting] != 0 && settings[0] + settings[1] + settings[2] + settings[3] == 1)
+        if (setting                                               < 4  &&
+            settings[setting]                                     != 0 &&
+            settings[0] + settings[1] + settings[2] + settings[3] == 1)
             return;
 
         settings[setting] = setting == 4 ?
@@ -613,7 +613,7 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         if (RaidFinder != null)
             RefreshSettings(RaidFinder);
     }
-    
+
     private sealed class FinderNodes : IDisposable
     {
         public HorizontalListNode Jobs { get; init; } = null!;
@@ -641,11 +641,11 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         public HorizontalListNode Layout { get; init; } = null!;
 
         public IconButtonNode Button { get; init; } = null!;
-        
+
         public SimpleImageNode Reward { get; init; } = null!;
 
         public IconImageNode Icon { get; set; } = null!;
-        
+
         public ushort NameWidth { get; init; }
 
         public AgentContentsFinder.ContentsID Content { get; set; }
