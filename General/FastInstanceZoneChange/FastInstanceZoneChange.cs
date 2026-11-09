@@ -38,7 +38,7 @@ internal unsafe partial class FastInstanceZoneChange : ModuleBase
         Author   = ["AtmoOmen", "KirisameVanilla"],
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/FrontlineMapRadar/preview-1.webp"
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/FastInstanceZoneChange/preview-1.webp"
         ]
     };
 
