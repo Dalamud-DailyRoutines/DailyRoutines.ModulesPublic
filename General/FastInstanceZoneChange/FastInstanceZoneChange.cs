@@ -5,7 +5,6 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Gui.Dtr;
 using Dalamud.Utility.Numerics;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -22,15 +21,25 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-internal unsafe class FastInstanceZoneChange : ModuleBase
+internal unsafe partial class FastInstanceZoneChange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
-        Title       = Lang.Get("FastInstanceZoneChangeTitle"),
-        Description = Lang.Get("FastInstanceZoneChangeDescription", COMMAND),
-        Category    = ModuleCategory.General,
-        Author      = ["AtmoOmen", "KirisameVanilla"],
-        ModulesPair = ["InstantTeleport"]
+        Title = Lang.Get("FastInstanceZoneChangeTitle"),
+        Description = Lang.Get
+        (
+            "FastInstanceZoneChangeDescription",
+            new Dictionary<string, object>
+            {
+                ["command"] = COMMAND
+            }
+        ),
+        Category = ModuleCategory.General,
+        Author   = ["AtmoOmen", "KirisameVanilla"],
+        PreviewImageURL =
+        [
+            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/FrontlineMapRadar/preview-1.webp"
+        ]
     };
 
     public override string ModuleName => nameof(FastInstanceZoneChange);
@@ -69,6 +78,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
     {
         GameState.Instance().WarpComplete -= OnWarpComplete;
 
+        CloseAddon();
         HandleDtrEntry(false);
         CommandManager.Instance().RemoveSubCommand(COMMAND);
     }
@@ -93,81 +103,22 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
         }
     }
 
-    protected override void OverlayUI()
-    {
-        if (!InstancesManager.IsInstancedArea ||
-            !ValidUses.Contains(GameState.TerritoryIntendedUse))
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-        
-        var count = InstancesManager.Instance().GetInstancesCount();
-        if (count <= 1)
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        if (IKeyState.Instance()[VirtualKey.ESCAPE])
-        {
-            Overlay.IsOpen = false;
-            if (SystemMenu != null)
-                SystemMenu->Close(true);
-            return;
-        }
-
-        if (!ValidUses.Contains(GameState.TerritoryIntendedUse))
-        {
-            Overlay.IsOpen = false;
-            return;
-        }
-
-        ImGui.SetWindowPos((ImGui.GetMainViewport().Size - ImGui.GetWindowSize()) / 2f);
-
-        for (uint i = 1; i <= count; i++)
-        {
-            if (i == InstancesManager.CurrentInstance)
-                continue;
-
-            var buttonLabel = Lang.Get
-            (
-                "FastInstanceZoneChange-ButtonFormat",
-                new Dictionary<string, object>
-                {
-                    ["instanceText"] = i.ToSEHexCount(),
-                    ["keyboardHint"] = i.ToSESmallCount()
-                }
-            );
-
-            var disabledCondition =
-                TaskHelper.IsBusy ||
-                ICondition.Instance().IsBetweenAreas;
-            
-            using (ImRaii.Disabled(disabledCondition))
-            {
-                if (ImGui.Button($"{buttonLabel}")             |
-                    IKeyState.Instance()[(VirtualKey)(48 + i)] |
-                    IKeyState.Instance()[(VirtualKey)(96 + i)])
-                {
-                    if (disabledCondition)
-                        continue;
-
-                    ChatManager.Instance().SendMessage($"/pdr insc {i}");
-                    Overlay.IsOpen = false;
-                }
-            }
-        }
-    }
-    
     private void OnWarpComplete(WarpType warpType)
     {
+        if (instanceZoneChangeAddon is { IsOpen: true })
+        {
+            if (IsAddonDisplayable())
+                instanceZoneChangeAddon.Rebuild();
+            else
+                CloseAddon();
+        }
+
         if (!config.AddDtrEntry ||
             entry == null)
             return;
 
         entry.Shown = InstancesManager.IsInstancedArea;
-        
+
         entry.Text = InstancesManager.IsInstancedArea ?
                          Lang.Get
                          (
@@ -178,7 +129,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
                              }
                          ) :
                          string.Empty;
-        
+
         entry.Tooltip = ValidUses.Contains(GameState.TerritoryIntendedUse) ?
                             Lang.Get("FastInstanceZoneChange-DTREntryTooltip") :
                             string.Empty;
@@ -193,7 +144,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
         args = args.Trim().ToLowerInvariant();
 
         var publicInstance = UIState.Instance()->PublicInstance;
-        
+
         if (!InstancesManager.IsInstancedArea)
         {
             NotifyError(Lang.Get("FastInstanceZoneChange-Notification-NoInstanceZones"));
@@ -202,7 +153,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
 
         if (args.Length == 0)
         {
-            Overlay.IsOpen ^= true;
+            ToggleAddon();
             return;
         }
 
@@ -257,8 +208,9 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
                 }
             )
         );
-        
+
         var isAnyAetheryteNearby = IsAnyAetheryteNearby(out _);
+
         if (config.TeleportIfNotNearAetheryte && !isAnyAetheryteNearby)
         {
             TaskHelper.Enqueue
@@ -339,7 +291,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
             },
             "切换完毕后上坐骑"
         );
-        
+
         return;
 
         static void NotifyError(ReadOnlySeString message)
@@ -357,22 +309,10 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
         switch (isAdd)
         {
             case true when entry == null:
-                entry = IDtrBar.Instance().Get("DailyRoutines-FastInstanceZoneChange");
-                entry.OnClick = _ =>
-                {
-                    if (Overlay == null)
-                    {
-                        Overlay = new(this, Lang.Get("FastInstanceZoneChangeTitle"));
+                entry         = IDtrBar.Instance().Get("DailyRoutines-FastInstanceZoneChange");
+                entry.OnClick = _ => ToggleAddon();
+                entry.Shown   = false;
 
-                        var flags = Overlay.Flags;
-                        flags.Add(ImGuiWindowFlags.NoMove);
-                        Overlay.Flags = flags;
-                    }
-
-                    Overlay.IsOpen ^= true;
-                };
-                entry.Shown = false;
-                
                 OnWarpComplete(WarpType.Normal);
                 return;
             case false:
@@ -405,7 +345,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
                 if (!Throttler.Shared.Throttle("FastInstanceZoneChange-DetectInstances")) return false;
 
                 var publicInstance = UIState.Instance()->PublicInstance;
-                if (!publicInstance.IsInstancedArea() || 
+                if (!publicInstance.IsInstancedArea() ||
                     publicInstance.InstanceId == targetInstance)
                     TaskHelper.RemoveQueueTasks(2);
 
@@ -417,7 +357,7 @@ internal unsafe class FastInstanceZoneChange : ModuleBase
 
         // 实际切换指令
         TaskHelper.Enqueue(() => ChangeInstanceZone(targetInstance), "开始切换", weight: 2);
-        
+
         // 延迟下一次检测
         TaskHelper.DelayNext(1_500, "等待 1.5 秒后继续", 2);
         TaskHelper.Enqueue
