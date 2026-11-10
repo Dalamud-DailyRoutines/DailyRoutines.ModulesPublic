@@ -21,6 +21,18 @@ internal partial class AutoMarksFinder
                 config.Save(this);
 
             ImGuiOm.TextDisabledWrapped(Lang.Get("AutoMarksFinder-PreferAetheryteBroadcastHelp"));
+
+            if (config.PreferAetheryteBroadcast)
+            {
+                ImGui.SetNextItemWidth(200f * GlobalUIScale);
+                if (ImGui.InputInt(Lang.Get("AutoMarksFinder-AreaBroadcastDelay"), ref config.AreaBroadcastDelayMS))
+                {
+                    config.AreaBroadcastDelayMS = Math.Max(0, config.AreaBroadcastDelayMS);
+                    config.Save(this);
+                }
+
+                ImGuiOm.TextDisabledWrapped(Lang.Get("AutoMarksFinder-AreaBroadcastDelayHelp"));
+            }
         }
 
         ImGui.NewLine();
@@ -146,23 +158,16 @@ internal partial class AutoMarksFinder
         using var heading = ImRaii.Heading1(Lang.Get(title));
         using var id      = ImRaii.PushId(type.ToString());
 
-        var isMultiline = type is RelayType.BeforeStart or RelayType.AfterEnd;
-        if (isMultiline)
-            ImGui.InputTextMultiline("###Content", ref content, 16_384, ScaledVector2(500f, 120f));
-        else
-            ImGui.InputText("###Content", ref content, 1024);
+        ImGui.InputTextMultiline("###Content", ref content, 16_384, ScaledVector2(500f, 120f));
 
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
 
         var lineCount    = content.AsSpan().Count('\n') + 1;
-        var tooManyLines = isMultiline && lineCount > HuntRelay.MAX_RELAY_LINES;
+        var tooManyLines = lineCount > HuntRelay.MAX_RELAY_LINES;
 
-        if (isMultiline)
-        {
-            ImGui.SameLine();
-            ImGui.TextDisabled($"{lineCount}/{HuntRelay.MAX_RELAY_LINES}");
-        }
+        ImGui.SameLine();
+        ImGui.TextDisabled($"{lineCount}/{HuntRelay.MAX_RELAY_LINES}");
 
         using (ImRaii.Disabled
                (

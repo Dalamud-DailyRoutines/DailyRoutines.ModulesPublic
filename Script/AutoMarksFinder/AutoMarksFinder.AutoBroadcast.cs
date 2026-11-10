@@ -13,6 +13,9 @@ internal partial class AutoMarksFinder
         private          BroadcastStage        stage;
         private          long                  nextAt;
         private          bool                  departureNotified;
+        private          uint                  arrivalZone;
+        private          long                  arrivalAt;
+        private          bool                  navigateAfterArrival;
 
         public HuntAutoBroadcast(AutoMarksFinder module)
         {
@@ -74,7 +77,7 @@ internal partial class AutoMarksFinder
 
             if (Index < 0)
             {
-                module.relay.Send(RelayType.AfterEnd, train);
+                module.relay.Send(RelayType.AfterEnd, train, automatic: true);
                 stage = BroadcastStage.Finishing;
             }
 
@@ -108,10 +111,15 @@ internal partial class AutoMarksFinder
                 return;
             }
 
-            if (LocalPlayerState.Object == null      ||
-                !UIModule.IsScreenReady()            ||
-                ICondition.Instance().IsBetweenAreas ||
-                module.relay.IsBusy)
+            if (LocalPlayerState.Object == null ||
+                !UIModule.IsScreenReady()       ||
+                ICondition.Instance().IsBetweenAreas)
+            {
+                arrivalAt = 0;
+                return;
+            }
+
+            if (module.relay.IsBusy)
                 return;
 
             var now = Framework.GetServerTime();
@@ -123,7 +131,7 @@ internal partial class AutoMarksFinder
 
                     if (Index < 0)
                     {
-                        if (!module.relay.Send(RelayType.AfterEnd, train))
+                        if (!module.relay.Send(RelayType.AfterEnd, train, automatic: true))
                         {
                             Stop();
                             return;
@@ -166,7 +174,7 @@ internal partial class AutoMarksFinder
                         return;
                     }
 
-                    if (!module.relay.Send(RelayType.BeforeStart, train))
+                    if (!module.relay.Send(RelayType.BeforeStart, train, automatic: true))
                     {
                         Stop();
                         return;
@@ -194,9 +202,10 @@ internal partial class AutoMarksFinder
                     }
 
                     var monster = train.MonstersFound[Index];
+                    var changingArea = GameState.TerritoryType != monster.ZoneID ||
+                                       (monster.Instance != 0 && InstancesManager.CurrentInstance != monster.Instance);
                     var gather = module.config.PreferAetheryteBroadcast &&
-                                 (GameState.TerritoryType != monster.ZoneID ||
-                                  (monster.Instance != 0 && InstancesManager.CurrentInstance != monster.Instance));
+                                 changingArea;
 
                     if (!module.relay.Send
                         (
@@ -204,7 +213,9 @@ internal partial class AutoMarksFinder
                                 RelayType.WaitAetheryte :
                                 RelayType.Position,
                             train,
-                            monster
+                            monster,
+                            automatic: true,
+                            arriveBeforeNavigation: changingArea
                         ))
                     {
                         Stop();
@@ -212,7 +223,10 @@ internal partial class AutoMarksFinder
                     }
 
                     module.selection.MonsterIndex = Index;
-                    stage = gather ?
+                    arrivalZone                   = 0;
+                    arrivalAt                     = 0;
+                    navigateAfterArrival          = changingArea;
+                    stage = changingArea ?
                                 BroadcastStage.WaitingForArrival :
                                 BroadcastStage.WaitingForDeath;
                     break;
@@ -225,18 +239,45 @@ internal partial class AutoMarksFinder
                         return;
                     }
 
+                    if (navigateAfterArrival &&
+                        module.movement.IsBusy)
+                    {
+                        arrivalAt = 0;
+                        return;
+                    }
+
                     var destination = train.MonstersFound[Index];
-                    if (GameState.TerritoryType != destination.ZoneID ||
-                        (destination.Instance != 0 && InstancesManager.CurrentInstance != destination.Instance))
+                    var currentZone = GameState.TerritoryType;
+                    var inMonsterArea = currentZone == destination.ZoneID &&
+                                        (destination.Instance == 0 || InstancesManager.CurrentInstance == destination.Instance);
+                    var inAetheryteArea = currentZone != destination.ZoneID &&
+                                          currentZone == destination.NearestAetheryteRecord?.ZoneID;
+
+                    if ((!inMonsterArea && !inAetheryteArea) ||
+                        currentZone == arrivalZone)
+                    {
+                        arrivalAt = 0;
+                        return;
+                    }
+
+                    if (arrivalAt == 0)
+                        arrivalAt = Environment.TickCount64;
+
+                    if (module.config.PreferAetheryteBroadcast &&
+                        Environment.TickCount64 - arrivalAt < module.config.AreaBroadcastDelayMS)
                         return;
 
-                    if (!module.relay.Send(RelayType.Position, train, destination))
+                    if (!module.relay.Send(RelayType.Position, train, destination, automatic: navigateAfterArrival))
                     {
                         Stop();
                         return;
                     }
 
-                    stage = BroadcastStage.WaitingForDeath;
+                    arrivalZone          = currentZone;
+                    arrivalAt            = 0;
+                    navigateAfterArrival = false;
+                    if (inMonsterArea)
+                        stage = BroadcastStage.WaitingForDeath;
                     break;
                 case BroadcastStage.WaitingForDeath:
                     if (train.MonstersFound[Index].IsAlive)
@@ -259,7 +300,7 @@ internal partial class AutoMarksFinder
                         return;
                     }
 
-                    if (!module.relay.Send(RelayType.AfterEnd, train))
+                    if (!module.relay.Send(RelayType.AfterEnd, train, automatic: true))
                     {
                         Stop();
                         return;

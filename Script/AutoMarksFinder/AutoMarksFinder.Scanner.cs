@@ -9,6 +9,7 @@ using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Info.Game.AetheryteRecord;
+using OmenTools.Info.Game.AetheryteRecord.Data;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
@@ -41,7 +42,6 @@ internal partial class AutoMarksFinder
         private Vector3   observationPosition;
         private Vector3   previousPosition;
         private Vector3   navigationTarget;
-        private float     flightHeight;
         private uint?     originalAroundRangeMode;
         private float     coverageScale;
         private bool      coverageDirty;
@@ -267,8 +267,7 @@ internal partial class AutoMarksFinder
 
             PendingPoints.Clear();
             PendingPoints.AddRange(points);
-            ScanPoints   = points;
-            flightHeight = points.Max(point => point.Y) + FLIGHT_HEIGHT;
+            ScanPoints = points;
             Array.Clear(coverageMask);
             Array.Clear(coveragePixels);
             coverageDirty = false;
@@ -304,24 +303,26 @@ internal partial class AutoMarksFinder
                 return;
             }
 
-            BuildCandidates();
-
+            var              nearestPoint = PendingPoints.MinBy(point => DistanceSquared(position, point));
+            var              aetherytes   = GetScanAetherytes().ToArray();
             var              bestCoverage = 0;
             var              bestScore    = float.MaxValue;
             AetheryteRecord? teleport     = null;
+
+            BuildCandidates(nearestPoint);
 
             foreach (var candidate in candidates)
             {
                 if (failedCandidates.Any(failed => DistanceSquared(failed, candidate) < 1))
                     continue;
 
-                if (!PendingPoints.Any(point => DistanceSquared(point, candidate) <= PLANNING_RADIUS * PLANNING_RADIUS))
+                if (DistanceSquared(nearestPoint, candidate) > PLANNING_RADIUS * PLANNING_RADIUS)
                     continue;
 
                 var coverage    = PendingPoints.Count(point => DistanceSquared(point, position, candidate) <= DETECTION_RADIUS * DETECTION_RADIUS);
                 var cost        = (MathF.Sqrt(DistanceSquared(position, candidate)) / MOUNT_SPEED) + OBSERVATION_DURATION;
                 var score       = cost / coverage;
-                var aetheryte   = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, candidate, true);
+                var aetheryte   = aetherytes.MinBy(record => DistanceSquared(record.Position, candidate));
                 var useTeleport = false;
 
                 if (aetheryte != null)
@@ -349,7 +350,11 @@ internal partial class AutoMarksFinder
                      coverage   <= bestCoverage))
                     continue;
 
-                var destination = candidate with { Y = MathF.Max(flightHeight, position.Y) };
+                var destination = candidate;
+                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, RETRY_DISTANCE, 10000) is not { } ground)
+                    continue;
+
+                destination.Y = ground.Y + FLIGHT_HEIGHT;
                 if (RaycastHelper.IsInsideCollision(destination))
                     continue;
 
@@ -367,7 +372,7 @@ internal partial class AutoMarksFinder
                 return;
             }
 
-            anchor = PendingPoints.MinBy(point => DistanceSquared(point, target));
+            anchor = nearestPoint;
             targetPoints.Clear();
             targetPoints.UnionWith(PendingPoints.Where(point => DistanceSquared(point, target) <= PLANNING_RADIUS * PLANNING_RADIUS));
 
@@ -427,7 +432,10 @@ internal partial class AutoMarksFinder
 
             while (retryTargets.TryDequeue(out var candidate))
             {
-                candidate.Y = MathF.Max(flightHeight, LocalPlayerState.Object.Position.Y);
+                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, RETRY_DISTANCE, 10000) is not { } ground)
+                    continue;
+
+                candidate.Y = ground.Y + FLIGHT_HEIGHT;
                 if (RaycastHelper.IsInsideCollision(candidate))
                     continue;
 
@@ -642,7 +650,7 @@ internal partial class AutoMarksFinder
                     continue;
 
                 Instance = instance;
-                var aetheryte = AetheryteRecordManager.Instance().GetNearestAetheryte(ZoneID, Vector3.Zero, true);
+                var aetheryte = GetScanAetherytes().MinBy(record => ScanPoints.Min(point => DistanceSquared(point, record.Position)));
 
                 if (aetheryte == null)
                 {
@@ -687,27 +695,29 @@ internal partial class AutoMarksFinder
                 return;
             }
 
-            ZoneID     = costs.MinBy(pair => pair.Value).Key;
+            ZoneID = costs.MinBy(pair => pair.Value).Key;
+            var aetheryte = GetScanAetherytes().MinBy(record => zones[ZoneID].Min(point => DistanceSquared(point, record.Position)));
             ScanPoints = [];
             PendingPoints.Clear();
             Array.Clear(coverageMask);
             Array.Clear(coveragePixels);
             coverageDirty = false;
             CoverageVersion++;
-            module.movement.Travel(ZoneID);
+            module.movement.Travel(ZoneID, aetheryte: aetheryte);
             ChangeState(ScanState.SwitchingZone);
         }
 
-        private void BuildCandidates()
+        private void BuildCandidates(Vector3 nearestPoint)
         {
             candidates.Clear();
-            candidates.AddRange(PendingPoints);
+            var nearbyPoints = PendingPoints.Where(point => DistanceSquared(point, nearestPoint) <= 4 * PLANNING_RADIUS * PLANNING_RADIUS).ToArray();
+            candidates.AddRange(nearbyPoints);
 
-            for (var first = 0; first < PendingPoints.Count; first++)
-            for (var second = first + 1; second < PendingPoints.Count; second++)
+            for (var first = 0; first < nearbyPoints.Length; first++)
+            for (var second = first + 1; second < nearbyPoints.Length; second++)
             {
-                var start    = PendingPoints[first];
-                var end      = PendingPoints[second];
+                var start    = nearbyPoints[first];
+                var end      = nearbyPoints[second];
                 var distance = DistanceSquared(start, end);
                 if (distance is <= 0 or > 4 * PLANNING_RADIUS * PLANNING_RADIUS)
                     continue;
@@ -719,6 +729,16 @@ internal partial class AutoMarksFinder
                 candidates.Add(middle - offset);
             }
         }
+
+        private IEnumerable<AetheryteRecord> GetScanAetherytes() =>
+            AetheryteRecordManager.Instance().AllRecords
+                                  .Where
+                                  (record => record.ZoneID == ZoneID                                 &&
+                                             record.IsAetheryte                                      &&
+                                             AetheryteRecords.AethernetGroups.Contains(record.Group) &&
+                                             !AETHERYTE_BLACKLIST.Contains(record.RowID)             &&
+                                             record.IsUnlocked()
+                                  );
 
         private void ChangeState(ScanState next)
         {
@@ -778,7 +798,7 @@ internal partial class AutoMarksFinder
         private const float MOUNT_SPEED                 = 12;
         private const float TELEPORT_DURATION           = 10;
         private const float OBSERVATION_DURATION        = OBSERVATION_DELAY_MS / 1000f;
-        private const float FLIGHT_HEIGHT               = 100;
+        private const float FLIGHT_HEIGHT               = 15;
         private const float RETRY_DISTANCE              = 80;
         private const float PROGRESS_DISTANCE           = 2;
         private const int   RETRY_RINGS                 = 2;
@@ -793,8 +813,9 @@ internal partial class AutoMarksFinder
         public const  int   COVERAGE_SIZE               = 1024;
         private const int   COVERAGE_UPDATE_INTERVAL_MS = 1000;
 
-        private static readonly uint COVERAGE_OUTLINE_COLOR = (uint)Color.FromKnownColor(KnownColor.GreenYellow).ToArgb();
-        private static readonly uint COVERAGE_FILL_COLOR    = (COVERAGE_OUTLINE_COLOR & 0x00FFFFFF) | 0x1F000000;
+        private static readonly uint          COVERAGE_OUTLINE_COLOR = (uint)Color.FromKnownColor(KnownColor.GreenYellow).ToArgb();
+        private static readonly uint          COVERAGE_FILL_COLOR    = (COVERAGE_OUTLINE_COLOR & 0x00FFFFFF) | 0x1F000000;
+        private static readonly HashSet<uint> AETHERYTE_BLACKLIST    = [105, 148, 173, 175, 181, 201];
 
         #endregion
     }

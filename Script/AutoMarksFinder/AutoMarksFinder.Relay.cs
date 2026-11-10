@@ -24,8 +24,10 @@ internal partial class AutoMarksFinder
         (
             RelayType              type,
             NotoriousMonsterList?  train,
-            NotoriousMonsterFound? info    = null,
-            bool                   preview = false
+            NotoriousMonsterFound? info                   = null,
+            bool                   preview                = false,
+            bool                   automatic              = false,
+            bool                   arriveBeforeNavigation = false
         )
         {
             if (IsBusy)
@@ -56,33 +58,7 @@ internal partial class AutoMarksFinder
                     (!preview && config.RelayCommands.Count == 0))
                     return true;
 
-                var lines = FormatRelayMessage(text, train).ReplaceLineEndings("\n")
-                                                           .Split('\n')
-                                                           .Take(MAX_RELAY_LINES);
-
-                string[] commands = preview ?
-                                        ["/e"] :
-                                        [.. config.RelayCommands];
-                var firstLine = true;
-
-                foreach (var line in lines)
-                {
-                    if (string.IsNullOrWhiteSpace(line))
-                        continue;
-
-                    if (!firstLine)
-                        tasks.DelayNext(RELAY_LINE_INTERVAL_MS);
-
-                    tasks.Enqueue
-                    (() =>
-                        {
-                            foreach (var command in commands)
-                                ChatManager.Instance().SendMessage($"{command} {line}");
-                        }
-                    );
-                    firstLine = false;
-                }
-
+                EnqueueMessage(FormatRelayMessage(text, train), preview);
                 return true;
             }
 
@@ -114,10 +90,30 @@ internal partial class AutoMarksFinder
             {
                 info.OpenMap();
                 var sent = RelayPosition(pattern, info.ZoneID, info.Position, info.GetBNPCName(), info.Instance, train, markMap: false);
-                if (sent                                                             &&
+
+                if (automatic                                                        &&
+                    sent                                                             &&
                     config is { MoveAfterBroadcast: true, RelayCommands.Count: > 0 } &&
                     !string.IsNullOrWhiteSpace(pattern))
-                    movement.NavigateToMonster(info, afterBroadcast: true);
+                {
+                    if (arriveBeforeNavigation)
+                    {
+                        var entry = info.NearestAetheryteRecord;
+                        tasks.Enqueue
+                        (() => movement.Travel
+                         (
+                             entry?.ZoneID ?? info.ZoneID,
+                             entry == null || entry.ZoneID == info.ZoneID ?
+                                 info.Instance :
+                                 0,
+                             entry,
+                             afterBroadcast: true
+                         )
+                        );
+                    }
+                    else
+                        tasks.Enqueue(() => movement.NavigateToMonster(info, afterBroadcast: true));
+                }
 
                 return sent;
             }
@@ -127,10 +123,21 @@ internal partial class AutoMarksFinder
                 return false;
 
             var relayed = RelayPosition(pattern, aetheryte.Territory.RowId, position, aetheryte.PlaceName.Value.Name.ToString(), info.Instance, train);
-            if (relayed                                                          &&
+            if (automatic                                                        &&
+                relayed                                                          &&
                 config is { MoveAfterBroadcast: true, RelayCommands.Count: > 0 } &&
                 !string.IsNullOrWhiteSpace(pattern))
-                movement.Travel(info.ZoneID, info.Instance, info.NearestAetheryteRecord, afterBroadcast: true);
+                tasks.Enqueue
+                (() => movement.Travel
+                 (
+                     aetheryte.Territory.RowId,
+                     aetheryte.Territory.RowId == info.ZoneID ?
+                         info.Instance :
+                         0,
+                     info.NearestAetheryteRecord,
+                     afterBroadcast: true
+                 )
+                );
 
             return relayed;
         }
@@ -160,16 +167,34 @@ internal partial class AutoMarksFinder
 
             var message = FormatRelayMessage(pattern, train, name, instance);
 
-            if (preview)
-            {
-                ChatManager.Instance().SendMessage($"/e {message}");
-                return true;
-            }
-
-            foreach (var command in config.RelayCommands)
-                ChatManager.Instance().SendMessage($"{command} {message}");
-
+            EnqueueMessage(message, preview);
             return true;
+        }
+
+        private void EnqueueMessage(string message, bool preview)
+        {
+            string[] commands = preview ?
+                                    ["/e"] :
+                                    [.. config.RelayCommands];
+            var firstLine = true;
+
+            foreach (var line in message.ReplaceLineEndings("\n").Split('\n').Take(MAX_RELAY_LINES))
+            {
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                if (!firstLine)
+                    tasks.DelayNext(RELAY_LINE_INTERVAL_MS);
+
+                tasks.Enqueue
+                (() =>
+                    {
+                        foreach (var command in commands)
+                            ChatManager.Instance().SendMessage($"{command} {line}");
+                    }
+                );
+                firstLine = false;
+            }
         }
 
         private static string FormatRelayMessage(string pattern, NotoriousMonsterList? train, string name = "", uint instance = 0)
@@ -190,7 +215,7 @@ internal partial class AutoMarksFinder
         #region 常量
 
         public const  int MAX_RELAY_LINES        = 15;
-        private const int RELAY_LINE_INTERVAL_MS = 1000;
+        private const int RELAY_LINE_INTERVAL_MS = 500;
 
         #endregion
     }

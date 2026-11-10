@@ -152,7 +152,13 @@ internal partial class AutoMarksFinder
         {
             StopNavigation();
             pathCancellation = new();
-            pathTask         = vnavmeshIPC.PathfindCancelable(LocalPlayerState.Object.Position, target, fly, pathCancellation.Token);
+            pathTask = vnavmeshIPC.PathfindCancelable
+            (
+                LocalPlayerState.Object.Position + new Vector3(0, 2, 0),
+                target,
+                fly,
+                pathCancellation.Token
+            );
         }
 
         public List<Vector3>? TakePath()

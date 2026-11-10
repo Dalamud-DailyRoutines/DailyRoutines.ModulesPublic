@@ -78,9 +78,11 @@ internal partial class AutoMarksFinder
         private uint GetInitialNearestAetheryteID() =>
             ZoneID switch
             {
-                RUBY_SEA_ZONE_ID => ONOKORO_AETHERYTE_ID,
-                TEMPEST_ZONE_ID  => ONDO_CUPS_AETHERYTE_ID,
-                _                => AetheryteRecordManager.Instance().GetNearestAetheryte(AetheryteZoneID, Position, true)?.RowID ?? 0
+                RUBY_SEA_ZONE_ID        => ONOKORO_AETHERYTE_ID,
+                TEMPEST_ZONE_ID         => ONDO_CUPS_AETHERYTE_ID,
+                MARE_LAMENTORUM_ZONE_ID => SINUS_LACRIMARUM_AETHERYTE_ID,
+                URQOPACHA_ZONE_ID       => WACHUNPELO_AETHERYTE_ID,
+                _                       => AetheryteRecordManager.Instance().GetNearestAetheryte(AetheryteZoneID, Position, true)?.RowID ?? 0
             };
 
         public bool Equals
@@ -181,8 +183,12 @@ internal partial class AutoMarksFinder
         private const uint IDYLLSHIRE_ZONE_ID            = 478;
         private const uint RUBY_SEA_ZONE_ID              = 613;
         private const uint TEMPEST_ZONE_ID               = 818;
+        private const uint MARE_LAMENTORUM_ZONE_ID       = 959;
+        private const uint URQOPACHA_ZONE_ID             = 1187;
         private const uint ONOKORO_AETHERYTE_ID          = 106;
         private const uint ONDO_CUPS_AETHERYTE_ID        = 147;
+        private const uint SINUS_LACRIMARUM_AETHERYTE_ID = 174;
+        private const uint WACHUNPELO_AETHERYTE_ID       = 200;
 
         #endregion
     }

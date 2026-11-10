@@ -18,6 +18,7 @@ internal partial class AutoMarksFinder
 
         public bool MoveAfterBroadcast       = true;
         public bool PreferAetheryteBroadcast = true;
+        public int  AreaBroadcastDelayMS     = 5000;
 
         public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints    = [];
         public HashSet<uint>                                     SelectedZones = [];
