@@ -140,6 +140,8 @@ internal unsafe partial class UnifiedGlamourManager
             items.Clear();
             items.AddRange(refreshedItems);
 
+            nextOwnedEquipmentRefresh = 0;
+            presetEditor.ItemsDirty   = true;
             MarkFilteredItemsDirty(true, true);
             retry = cabinet->State                == GameCabinet.CabinetState.Requested ||
                     cabinet->AdditionalItemsState == GameCabinet.CabinetState.Requested;
@@ -411,14 +413,21 @@ internal unsafe partial class UnifiedGlamourManager
 
     private void ResetStoredItemsSession()
     {
+        presetEditor.End();
+
         storedItemsSession++;
         TaskHelper?.Abort();
+
         isRefreshingItems           = false;
         isStoredItemsRefreshPending = false;
         Array.Clear(prismBoxStains);
         items.Clear();
         filteredItems.Clear();
         selectedItem = null;
+        ownedEquipment.Clear();
+        ownedEquipmentComplete    = false;
+        nextOwnedEquipmentRefresh = 0;
+        presetEditor.ItemsDirty   = true;
         missingApplyItems.Clear();
         openMissingApplyItemsPopup = false;
         missingApplyItemsPopupOpen = false;

@@ -7,6 +7,7 @@ using OmenTools.Dalamud;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlateData;
+using AgentTryon = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentTryon;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
@@ -202,6 +203,7 @@ internal unsafe partial class UnifiedGlamourManager
         };
 
         preset.Items.AddRange(items);
+        NormalizePresetWithNotice(preset);
 
         config.Presets.Add(preset);
         selectedPreset = preset;
@@ -225,10 +227,12 @@ internal unsafe partial class UnifiedGlamourManager
             selectedPreset == null)
             return false;
 
-        var entries = selectedPreset.Items
-                                    .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
-                                    .OrderBy(x => x.SlotIndex)
-                                    .ToList();
+        var applyPreset = CopyPreset(selectedPreset);
+        NormalizePresetEquipment(applyPreset);
+        var entries = applyPreset.Items
+                                 .Where(x => x.SlotIndex < PlateSlotAddonTextIDs.Length)
+                                 .OrderBy(x => x.SlotIndex)
+                                 .ToList();
 
         missingApplyItems.Clear();
 
@@ -347,39 +351,48 @@ internal unsafe partial class UnifiedGlamourManager
         PlatePreset preset
     )
     {
-        if (ICondition.Instance().IsOccupiedInEvent ||
-            AgentTryon.Instance() == null)
+        if (ICondition.Instance().IsOccupiedInEvent)
             return false;
+
+        preset = CopyPreset(preset);
+        NormalizePresetEquipment(preset);
 
         var entries = preset.Items
                             .Where
                             (x =>
-                                 x.ItemID    > 0                            &&
-                                 x.SlotIndex < PlateSlotAddonTextIDs.Length &&
+                                 x.ItemID    > 0                 &&
+                                 x.SlotIndex < PlateSlots.Length &&
                                  LuminaGetter.TryGetRow<Item>(ItemUtil.GetBaseId(x.ItemID).ItemId, out _)
                             )
                             .OrderBy(x => x.SlotIndex)
                             .ToList();
 
-        if (entries is not { Count: > 0 })
-        {
-            TaskHelper.Abort();
+        var agent = AgentTryon.Instance();
+        var shown = agent->IsAddonShown();
+        if (entries.Count == 0 && !shown)
             return true;
-        }
 
-        AgentTryon.Instance()->SaveDeleteOutfit = true;
+        if (!shown)
+            agent->Show();
 
-        foreach (var entry in entries)
+        agent->ClearTryOnItems();
+
+        var tryOnItems = agent->TryOnItems;
+
+        for (var i = 0; i < entries.Count && i < tryOnItems.Length; i++)
         {
-            TaskHelper.Enqueue
-            (() =>
-                {
-                    AgentTryon.TryOn(0, entry.ItemID, entry.Stain0ID, entry.Stain1ID);
-                    return true;
-                }
-            );
-            TaskHelper.DelayNext(50);
+            ref var tryOnItem = ref tryOnItems[i];
+            var     entry     = entries[i];
+
+            tryOnItem.EquipSlotCategory = (byte)PlateSlots[entry.SlotIndex];
+            tryOnItem.Id                = ItemUtil.GetBaseId(entry.ItemID).ItemId;
+            tryOnItem.Stain0Id          = entry.Stain0ID;
+            tryOnItem.Stain1Id          = entry.Stain1ID;
         }
+
+        agent->TryOnItemsChanged  = true;
+        agent->RefreshAddon();
+        agent->CharaView.DoUpdate = true;
 
         return true;
     }
