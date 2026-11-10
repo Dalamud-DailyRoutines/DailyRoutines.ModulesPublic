@@ -6,7 +6,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager
+internal partial class UnifiedGlamourManager
 {
     private readonly Dictionary<uint, uint> blockedSlotsCache = [];
 

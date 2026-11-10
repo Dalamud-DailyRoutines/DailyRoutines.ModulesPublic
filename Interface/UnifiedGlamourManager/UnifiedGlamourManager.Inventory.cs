@@ -7,7 +7,7 @@ using GameCabinet = FFXIVClientStructs.FFXIV.Client.Game.UI.Cabinet;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager
+internal unsafe partial class UnifiedGlamourManager
 {
     private HashSet<uint> ownedEquipment = [];
     private bool          ownedEquipmentComplete;

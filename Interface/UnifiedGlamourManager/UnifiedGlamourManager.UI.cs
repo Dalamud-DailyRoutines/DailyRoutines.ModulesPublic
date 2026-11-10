@@ -1117,16 +1117,24 @@ internal unsafe partial class UnifiedGlamourManager
 
                 for (var slot = 0; slot < PlateSlotDefinitions.Length; slot++)
                 {
-                    using var id       = ImRaii.PushId(slot);
-                    var       entry    = draft.Items.FirstOrDefault(x => x.SlotIndex == (uint)slot);
-                    var       covering = draft.Items.FirstOrDefault(x => (GetBlockedEquipmentSlots(x.ItemID) & (1u << slot)) != 0);
-                    var       row      = LuminaGetter.GetRow<Item>(ItemUtil.GetBaseId(entry.ItemID).ItemId).GetValueOrDefault();
+                    using var id = ImRaii.PushId(slot);
+                    
+                    var entry    = draft.Items.FirstOrDefault(x => x.SlotIndex                                         == (uint)slot);
+                    var covering = draft.Items.FirstOrDefault(x => (GetBlockedEquipmentSlots(x.ItemID) & (1u << slot)) != 0);
+                    var row      = LuminaGetter.GetRowOrDefault<Item>(ItemUtil.GetBaseId(entry.ItemID).ItemId);
 
                     var itemLabel = Lang.Get("None");
                     if (entry.ItemID != 0)
                         itemLabel = row.Name.ExtractText();
                     else if (covering.ItemID != 0)
-                        itemLabel = $"{Lang.Get("UnifiedGlamourManager-Editor-CoveredSlot")}: {LuminaWrapper.GetItemName(covering.ItemID)}";
+                        itemLabel = Lang.Get
+                        (
+                            "UnifiedGlamourManager-Editor-CoveredSlot",
+                            new Dictionary<string, object>
+                            {
+                                ["itemName"] = LuminaWrapper.GetItemName(covering.ItemID)
+                            }
+                        );
 
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
