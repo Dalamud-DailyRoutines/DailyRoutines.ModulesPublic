@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoReadOutTalk : ModuleBase
+internal unsafe class AutoReadOutTalk : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoReadOutTalk : ModuleBase
         Category        = ModuleCategory.Interface,
         ModulesConflict = ["AutoTalkSkip"]
     };
+
+    public override string ModuleName => nameof(AutoReadOutTalk);
 
     private Config config = null!;
 
@@ -179,7 +181,7 @@ public unsafe class AutoReadOutTalk : ModuleBase
     {
         CancelBefore();
         speechCancellationSource = new();
-        _ = NotifyHelper.SpeakAsync(text, speechCancellationSource.Token);
+        _                        = NotifyHelper.SpeakAsync(text, speechCancellationSource.Token);
     }
 
     private void CancelBefore()

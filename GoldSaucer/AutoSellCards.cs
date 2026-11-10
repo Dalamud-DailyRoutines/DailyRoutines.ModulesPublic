@@ -9,13 +9,11 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 using OmenTools.Info.Game.Packets.Upstream;
-using OmenTools.OmenService;
 using OmenTools.Threading;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSellCards : ModuleBase
+internal unsafe class AutoSellCards : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +22,8 @@ public unsafe class AutoSellCards : ModuleBase
         Category            = ModuleCategory.GoldSaucer,
         ModulesPrerequisite = ["InstantLeaveDuty", "ContentFinderCommand"]
     };
+
+    public override string ModuleName => nameof(AutoSellCards);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

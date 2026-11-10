@@ -11,7 +11,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoReplaceActionLowLevel : ModuleBase
+internal unsafe class AutoReplaceActionLowLevel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class AutoReplaceActionLowLevel : ModuleBase
         Description = Lang.Get("AutoReplaceActionLowLevelDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoReplaceActionLowLevel);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class PraetoriumHelper : ModuleBase
+internal unsafe class PraetoriumHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class PraetoriumHelper : ModuleBase
         Category    = ModuleCategory.Duty,
         Author      = ["逆光"]
     };
+
+    public override string ModuleName => nameof(PraetoriumHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -66,11 +68,11 @@ public unsafe class PraetoriumHelper : ModuleBase
     private static IGameObject? GetMostCanTargetObjects()
     {
         var allTargets = IObjectTable.Instance().SearchObjects
-                                 (
-                                     o => o.IsTargetable && ActionManager.CanUseActionOnTarget(7, o.ToStruct()),
-                                     IObjectTable.CharactersRange
-                                 )
-                                 .ToList();
+                                     (
+                                         o => o.IsTargetable && ActionManager.CanUseActionOnTarget(7, o.ToStruct()),
+                                         IObjectTable.CharactersRange
+                                     )
+                                     .ToList();
         if (allTargets.Count <= 0) return null;
 
         IGameObject? preObjects         = null;
@@ -81,6 +83,7 @@ public unsafe class PraetoriumHelper : ModuleBase
             if (Vector3.DistanceSquared(IObjectTable.Instance().LocalPlayer.Position, b.Position) - b.HitboxRadius > 900) continue;
 
             var aoeCount = GetTargetAoECount(b, allTargets);
+
             if (aoeCount > preObjectsAoECount)
             {
                 preObjectsAoECount = aoeCount;

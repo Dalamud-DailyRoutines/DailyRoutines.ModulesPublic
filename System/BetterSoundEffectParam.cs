@@ -5,7 +5,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BetterSoundEffectParam : ModuleBase
+internal class BetterSoundEffectParam : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -13,6 +13,8 @@ public class BetterSoundEffectParam : ModuleBase
         Description = Lang.Get("BetterSoundEffectParamDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(BetterSoundEffectParam);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -36,7 +38,7 @@ public class BetterSoundEffectParam : ModuleBase
             "0F 86 ?? ?? ?? ?? 83 C1",
             [0x90, 0x90, 0x90, 0x90, 0x90, 0x90]
         );
-        
+
         channelCheckPatch.Enable();
         counterCheckPatch.Enable();
     }

@@ -10,11 +10,10 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Classes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService.ZoneIndicator;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class CuffOfTheFatherHelper : ModuleBase
+internal unsafe class CuffOfTheFatherHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +27,8 @@ public unsafe class CuffOfTheFatherHelper : ModuleBase
         ),
         Category = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(CuffOfTheFatherHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

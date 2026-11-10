@@ -20,7 +20,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedCastBar : ModuleBase
+internal unsafe class OptimizedCastBar : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -29,6 +29,8 @@ public unsafe class OptimizedCastBar : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Middo"]
     };
+
+    public override string ModuleName => nameof(OptimizedCastBar);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -39,7 +41,7 @@ public unsafe class OptimizedCastBar : ModuleBase
 
     private SimpleNineGridNode? slideMarkerZoneNode;
     private SimpleNineGridNode? slideMarkerLineNode;
-    
+
     private uint aetheryteID;
 
     protected override void Init()
@@ -47,7 +49,7 @@ public unsafe class OptimizedCastBar : ModuleBase
         config = Config.Load(this) ?? new();
 
         ExecuteCommandManager.Instance().RegPost(OnExecuteCommand);
-        
+
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRequestedUpdate, "_CastBar", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,           "_CastBar", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,        "_CastBar", OnAddon);
@@ -60,7 +62,7 @@ public unsafe class OptimizedCastBar : ModuleBase
         ICondition.Instance().ConditionChange -= OnConditionChanged;
 
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
-        
+
         ExecuteCommandManager.Instance().Unreg(OnExecuteCommand);
 
         slideMarkerZoneNode?.Dispose();
@@ -265,9 +267,9 @@ public unsafe class OptimizedCastBar : ModuleBase
                     config.Save(this);
             }
         }
-        
+
         ImGui.NewLine();
-        
+
         if (ImGui.Checkbox(Lang.Get("OptimizedCastBar-DisplayDetailedCastInfo"), ref config.DisplayDetailedCastInfo))
             config.Save(this);
         ImGuiOm.HelpMarker(Lang.Get("OptimizedCastBar-DisplayDetailedCastInfo-Help"));
@@ -289,7 +291,7 @@ public unsafe class OptimizedCastBar : ModuleBase
 
         UpdateOriginalAddonNodes();
     }
-    
+
     private void OnExecuteCommand
     (
         ExecuteCommandFlag command,
@@ -312,7 +314,7 @@ public unsafe class OptimizedCastBar : ModuleBase
     )
     {
         var addon = (AddonCastBar*)CastBar;
-        
+
         switch (type)
         {
             case AddonEvent.PreFinalize:
@@ -376,19 +378,19 @@ public unsafe class OptimizedCastBar : ModuleBase
 
                 break;
             }
-            
+
             case AddonEvent.PostDraw:
-                if (addon == null) 
+                if (addon == null)
                     return;
-                
+
                 var progressBarNode = (AtkNineGridNode*)CastBar->GetNodeById(11);
-                if (progressBarNode == null) 
+                if (progressBarNode == null)
                     return;
 
                 if (Throttler.Shared.Throttle("OptimizedCastBar-PostDraw-UpdateOriginal"))
                     UpdateOriginalAddonNodes();
 
-                if (!Throttler.Shared.Throttle("OptimizedCastBar-PostDraw-UpdateSlideCast", 10)) 
+                if (!Throttler.Shared.Throttle("OptimizedCastBar-PostDraw-UpdateSlideCast", 10))
                     return;
 
                 var slidePerercentage = ((float)(addon->CastTime * 10) - config.SlideCastZoneAdjust) / (addon->CastTime * 10);

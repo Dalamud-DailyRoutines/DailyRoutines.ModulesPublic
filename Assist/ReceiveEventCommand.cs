@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ReceiveEventCommand : ModuleBase
+internal unsafe class ReceiveEventCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class ReceiveEventCommand : ModuleBase
         Description = Lang.Get("ReceiveEventCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(ReceiveEventCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

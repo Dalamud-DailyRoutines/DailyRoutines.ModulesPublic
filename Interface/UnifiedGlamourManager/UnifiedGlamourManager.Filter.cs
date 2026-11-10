@@ -1,6 +1,6 @@
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager
+internal unsafe partial class UnifiedGlamourManager
 {
     private readonly List<UnifiedItem>       filteredItems        = [];
     private readonly HashSet<uint>           favoriteItemIDs      = [];

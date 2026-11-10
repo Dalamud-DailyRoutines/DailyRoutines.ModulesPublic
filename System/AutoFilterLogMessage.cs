@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoFilterLogMessage : ModuleBase
+internal class AutoFilterLogMessage : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class AutoFilterLogMessage : ModuleBase
         Description = Lang.Get("AutoFilterLogMessageDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoFilterLogMessage);
 
     private Config          config = null!;
     private LogMessageCombo combo  = null!;

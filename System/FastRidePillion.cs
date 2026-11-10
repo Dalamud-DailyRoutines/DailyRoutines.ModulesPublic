@@ -17,7 +17,7 @@ using GameControl = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastRidePillion : ModuleBase
+internal unsafe class FastRidePillion : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe class FastRidePillion : ModuleBase
         Description = Lang.Get("FastRidePillionDescription", COMMAND),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(FastRidePillion);
 
     private Hook<AgentContext.Delegates.OpenContextMenu>? OpenContextMenuHook;
 
@@ -40,14 +42,14 @@ public unsafe class FastRidePillion : ModuleBase
 
         CommandManager.Instance().AddSubCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("FastRidePillion-Command-Help") });
     }
-    
+
     protected override void Uninit() =>
         CommandManager.Instance().RemoveSubCommand(COMMAND);
 
     protected override void ConfigUI()
     {
         using var heading = ImRaii.Heading1(Lang.Get("Command"));
-        
+
         ImGui.TextUnformatted($"/pdr {COMMAND} {Lang.Get("FastRidePillion-Command-Help")}");
     }
 
@@ -56,7 +58,7 @@ public unsafe class FastRidePillion : ModuleBase
         var localPlayer = GameControl.Instance()->LocalPlayer;
         if (localPlayer == null || localPlayer->Mount.MountId != 0)
             return;
-        
+
         var group = GroupManager.Instance()->GetGroup();
         if (group == null)
             return;
@@ -64,21 +66,21 @@ public unsafe class FastRidePillion : ModuleBase
         for (var i = 0; i < group->MemberCount; i++)
         {
             var member = group->PartyMembers[i];
-            
-            var owner  = CharacterManager.Instance()->LookupBattleCharaByEntityId(member.EntityId);
+
+            var owner = CharacterManager.Instance()->LookupBattleCharaByEntityId(member.EntityId);
             if (owner == null)
                 continue;
-            
+
             var mountObject = owner->Mount.MountObject;
             if (owner->Mount.MountId == 0 || mountObject == null)
                 continue;
-            
+
             if (LocalPlayerState.DistanceTo3DSquared(mountObject->Position) > MAX_RIDE_DISTANCE_SQ)
                 continue;
-            
+
             if (!TryGetEmptySeat(owner, mountObject, out var seatIndex))
                 continue;
-            
+
             TargetCommand.Set(owner->EntityId);
             MountCommand.RidePillion(owner->EntityId, seatIndex);
 
@@ -88,7 +90,7 @@ public unsafe class FastRidePillion : ModuleBase
                 new Dictionary<string, object>
                 {
                     ["player"] = ReadOnlySeString.CreatePlayerLink(owner->NameString, owner->HomeWorld),
-                    ["seat"] = seatIndex + 1
+                    ["seat"]   = seatIndex + 1
                 }
             );
             NotifyHelper.Toast(message);
@@ -172,6 +174,7 @@ public unsafe class FastRidePillion : ModuleBase
             return false;
 
         var charas = CharacterManager.Instance()->BattleCharas;
+
         for (uint seat = 0; seat < mountRow.ExtraSeats; seat++)
         {
             if (IsSeatOccupied(charas, mountObject, seat))

@@ -13,7 +13,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDismount : ModuleBase
+internal unsafe class AutoDismount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoDismount : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(AutoDismount);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -29,12 +31,14 @@ public unsafe class AutoDismount : ModuleBase
 
     private static readonly CompSig IsActionUsableSig =
         new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 32 DB 41 8B F8 48 83 3D ?? ?? ?? ?? ?? 8B F2 48 8B E9");
+
     private delegate byte IsActionUsableDelegate
     (
         ActionManager* actionManager,
         ActionType     actionType,
         uint           actionID
     );
+
     private IsActionUsableDelegate IsActionUsable = null!;
 
     protected override void Init()

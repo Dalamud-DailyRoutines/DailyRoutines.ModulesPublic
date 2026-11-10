@@ -14,7 +14,7 @@ using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
+internal unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,6 +27,8 @@ public unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-2.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoShowItemNPCShopInfo);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

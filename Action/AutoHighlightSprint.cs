@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHighlightSprint : ModuleBase
+internal unsafe class AutoHighlightSprint : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class AutoHighlightSprint : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
+
+    public override string ModuleName => nameof(AutoHighlightSprint);
 
     private Hook<ActionManager.Delegates.IsActionHighlighted>? IsActionHighlightedHook;
 

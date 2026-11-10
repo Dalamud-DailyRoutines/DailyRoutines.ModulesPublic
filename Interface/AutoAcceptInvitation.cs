@@ -16,7 +16,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoAcceptInvitation : ModuleBase
+internal unsafe class AutoAcceptInvitation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe class AutoAcceptInvitation : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Fragile"]
     };
+
+    public override string ModuleName => nameof(AutoAcceptInvitation);
 
     private Config config = null!;
 

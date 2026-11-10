@@ -3,7 +3,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCastMovementLock
+internal unsafe partial class AutoCastMovementLock
 {
     private void OnPreUseAction
     (
@@ -49,7 +49,7 @@ public unsafe partial class AutoCastMovementLock
 
         var manager = ActionManager.Instance();
         if (manager == null) return;
-        if (IObjectTable.Instance().LocalPlayer is not { } localPlayer) 
+        if (IObjectTable.Instance().LocalPlayer is not { } localPlayer)
             return;
 
         var protectedCast = inputInterceptor.IsContentReady(localPlayer)            &&

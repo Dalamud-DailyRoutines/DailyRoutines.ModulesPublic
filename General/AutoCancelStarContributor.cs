@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCancelStarContributor : ModuleBase
+internal unsafe class AutoCancelStarContributor : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class AutoCancelStarContributor : ModuleBase
         Category    = ModuleCategory.General,
         Author      = ["Shiyuvi"]
     };
+
+    public override string ModuleName => nameof(AutoCancelStarContributor);
 
     protected override void Init()
     {

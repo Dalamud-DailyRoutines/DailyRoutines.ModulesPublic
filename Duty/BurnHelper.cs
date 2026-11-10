@@ -3,12 +3,10 @@ using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using OmenTools.OmenService;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BurnHelper : ModuleBase
+internal unsafe class BurnHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +14,8 @@ public unsafe class BurnHelper : ModuleBase
         Description = Lang.Get("BurnHelperDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(BurnHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -48,7 +48,7 @@ public unsafe class BurnHelper : ModuleBase
 
         LogMessageManager.Instance().RegPreInstanceContentText(OnPreContentText);
     }
-    
+
     private static void OnPreContentText
     (
         ref bool isPrevented,
@@ -61,11 +61,11 @@ public unsafe class BurnHelper : ModuleBase
                 FrameworkManager.Instance().Reg(OnUpdate);
                 UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
                 break;
-            
+
             case COALESCING_TEXT_ID:
                 FrameworkManager.Instance().Unreg(OnUpdate);
                 UseActionManager.Instance().Unreg(OnPreUseAction);
-                
+
                 var chara = CharacterManager.Instance()->FindFirst(&TryFindMistDragon);
                 if (chara != null)
                     chara->TargetableStatus |= ObjectTargetableFlags.IsTargetable;
@@ -98,7 +98,7 @@ public unsafe class BurnHelper : ModuleBase
         if (chara != null)
             chara->TargetableStatus &= ~ObjectTargetableFlags.IsTargetable;
     }
-    
+
     private static bool TryFindMistDragon
     (
         BattleChara* chara
@@ -112,7 +112,7 @@ public unsafe class BurnHelper : ModuleBase
 
     private const uint VAPORIZE_TEXT_ID   = 19708;
     private const uint COALESCING_TEXT_ID = 19712;
-    
+
     private const uint MIST_DRAGON_ID = 9265;
 
     #endregion

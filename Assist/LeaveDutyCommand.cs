@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.ExecuteCommand.Implementations;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class LeaveDutyCommand : ModuleBase
+internal class LeaveDutyCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class LeaveDutyCommand : ModuleBase
         ),
         Category = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(LeaveDutyCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -65,10 +67,10 @@ public class LeaveDutyCommand : ModuleBase
 
             if (!agent->Finished)
                 agent->Finish(false);
-            
+
             return;
         }
-        
+
         var isInCombat = ICondition.Instance()[ConditionFlag.InCombat];
 
         if (GameState.IsDutyCompleted || IsInSoloDuty())
@@ -91,13 +93,13 @@ public class LeaveDutyCommand : ModuleBase
     {
         if (IPartyList.Instance().Length > 1)
             return false;
-        
+
         if (PlayersManager.Instance().PlayersTargetingMe.Count > 0)
             return false;
-        
+
         return true;
     }
-    
+
     private static void OnPreReceiveLogMessage
     (
         ref bool                isPrevented,
@@ -112,7 +114,7 @@ public class LeaveDutyCommand : ModuleBase
     #region 常量
 
     private const string COMMAND = "leaveduty";
-    
+
     private const uint KEYBOUND_BRAWLER_CONTENT_ID = 1095;
 
     #endregion

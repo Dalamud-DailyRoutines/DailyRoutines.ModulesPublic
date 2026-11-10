@@ -13,7 +13,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoLeaveDuty : ModuleBase
+internal class AutoLeaveDuty : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public class AutoLeaveDuty : ModuleBase
         Description = Lang.Get("AutoLeaveDutyDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoLeaveDuty);
 
     private Config config = null!;
 
@@ -91,16 +93,16 @@ public class AutoLeaveDuty : ModuleBase
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
         ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-Delay-Help"));
-        
+
         ImGui.Spacing();
 
         // 不退高难
         if (ImGui.Checkbox($"{Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties")}###NoLeaveHighEndDuties", ref config.NoLeaveHighEndDuties))
             config.Save(this);
         ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-NoLeaveHighEndDuties-Help"));
-        
+
         ImGui.Spacing();
-        
+
         // 黑名单副本
         {
             if (contentSelectCombo.DrawCheckbox())
@@ -114,7 +116,7 @@ public class AutoLeaveDuty : ModuleBase
 
             ImGuiOm.TextDisabledWrapped(Lang.Get("AutoLeaveDuty-BlacklistContents-Help"));
         }
-        
+
         ImGui.Spacing();
 
         // 立刻退出

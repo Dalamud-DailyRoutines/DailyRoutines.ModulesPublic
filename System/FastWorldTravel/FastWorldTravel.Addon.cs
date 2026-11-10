@@ -7,22 +7,20 @@ using KamiToolKit.BaseTypes;
 using KamiToolKit.Nodes;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Info.Lumina;
 using OmenTools.Info.Lumina.ExtraSheets;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class FastWorldTravel
+internal partial class FastWorldTravel
 {
     private AddonDRFastWorldTravel? travelAddon;
 
     private static bool IsAbleToCrossDC() =>
         GameState.IsCN ?
             IDalamudPluginInterface.Instance().IsPluginEnabled("DCTravelerX") && IsDCTravelerValid :
-            GameState.CurrentWorldData.PhysicalDataCenter.RowId == 1;
+            GameState.IsGL;
 
     private void OpenTravelAddon
     (

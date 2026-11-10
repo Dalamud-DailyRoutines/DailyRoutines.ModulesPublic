@@ -13,7 +13,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoBroadcastActionHitInfo : ModuleBase
+internal unsafe class AutoBroadcastActionHitInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoBroadcastActionHitInfo : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["Xww"]
     };
+
+    public override string ModuleName => nameof(AutoBroadcastActionHitInfo);
 
     private static readonly CompSig ProcessPacketActionEffectSig = new("E8 ?? ?? ?? ?? 48 8B 8D F0 03 00 00");
     private delegate void ProcessPacketActionEffectDelegate

@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoRecordSubTimeLeft
+internal partial class AutoRecordSubTimeLeft
 {
     private static string FormatTimeSpan
     (
@@ -45,7 +45,7 @@ public partial class AutoRecordSubTimeLeft
         var ptr = Unsafe.AsPointer(ref Unsafe.AsRef(in info));
         return (Marshal.ReadInt64((nint)ptr, 16), Marshal.ReadInt64((nint)ptr, 24));
     }
-    
+
     private void EnsureQueryState()
     {
         startDatePicker ??= new(CultureInfo.GetCultureInfo("zh-CN")) { DateFormat = "yyyy 年 MM 月" };
@@ -58,7 +58,7 @@ public partial class AutoRecordSubTimeLeft
         queryEndDate   = today;
     }
 
-    
+
     private void ApplyPresetRange
     (
         int days
@@ -68,7 +68,7 @@ public partial class AutoRecordSubTimeLeft
         queryEndDate   = today;
         queryStartDate = today.AddDays(1 - days);
     }
-    
+
     private void NormalizeQueryRange()
     {
         queryStartDate = queryStartDate.Date;
@@ -78,7 +78,7 @@ public partial class AutoRecordSubTimeLeft
 
         (queryStartDate, queryEndDate) = (queryEndDate, queryStartDate);
     }
-    
+
     private static unsafe void UpdateCharacterSelectRemain
     (
         TimeSpan leftMonth,

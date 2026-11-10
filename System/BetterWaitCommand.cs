@@ -5,7 +5,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BetterWaitCommand : ModuleBase
+internal class BetterWaitCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class BetterWaitCommand : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Cindy-Master"]
     };
+
+    public override string ModuleName => nameof(BetterWaitCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -52,7 +54,7 @@ public class BetterWaitCommand : ModuleBase
                 0xEB // 0x1F
             ]
         );
-        
+
         waitSyntaxDecimalPatch.Enable();
         waitCommandDecimalPatch.Enable();
     }

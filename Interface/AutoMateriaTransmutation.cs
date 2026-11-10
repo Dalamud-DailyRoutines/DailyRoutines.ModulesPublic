@@ -15,7 +15,7 @@ using AgentTradeMultiple = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.Ag
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMateriaTransmutation : ModuleBase
+internal unsafe class AutoMateriaTransmutation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class AutoMateriaTransmutation : ModuleBase
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoCutsceneSkip", "AutoTalkSkip"]
     };
+
+    public override string ModuleName => nameof(AutoMateriaTransmutation);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

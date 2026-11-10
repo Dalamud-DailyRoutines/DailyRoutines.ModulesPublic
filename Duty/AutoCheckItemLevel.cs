@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCheckItemLevel : ModuleBase
+internal unsafe class AutoCheckItemLevel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoCheckItemLevel : ModuleBase
         Description = Lang.Get("AutoCheckItemLevelDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoCheckItemLevel);
 
     protected override void Init()
     {
@@ -187,8 +189,9 @@ public unsafe class AutoCheckItemLevel : ModuleBase
                 ["memberCount"] = results.Count,
             }
         );
-        
+
         var minIL = 0U;
+
         if (content.ItemLevelRequired > 0)
             minIL = content.ItemLevelRequired;
         else if (content.ClassJobLevelRequired > 0)
@@ -203,7 +206,7 @@ public unsafe class AutoCheckItemLevel : ModuleBase
                           .FirstOrDefault()
                           .LevelItem.RowId;
         }
-        
+
         var hasOutput = false;
 
         using var rented        = new RentedSeStringBuilder();
@@ -238,7 +241,7 @@ public unsafe class AutoCheckItemLevel : ModuleBase
                                              .PopColorType()
                                              .ToReadOnlySeString();
             payloadRented.Clear();
-            
+
             var minILText = !isMinILAbnormal ?
                                 result.LowestItemLevel.ToString() :
                                 payloadRented.PushColorType(COLOR_TYPE_LEVEL_LOW)
@@ -252,10 +255,10 @@ public unsafe class AutoCheckItemLevel : ModuleBase
                 "AutoCheckItemLevel-Notification-Message",
                 new Dictionary<string, object>
                 {
-                    ["levelText"]  = levelText,
-                    ["player"] = playerLink,
-                    ["minILText"]  = minILText,
-                    ["avgIL"]  = result.AverageItemLevel
+                    ["levelText"] = levelText,
+                    ["player"]    = playerLink,
+                    ["minILText"] = minILText,
+                    ["avgIL"]     = result.AverageItemLevel
                 }
             );
 

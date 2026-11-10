@@ -7,7 +7,7 @@ using PlayerMoveControllerWalk = FFXIVClientStructs.Expansion.FFXIV.Client.Game.
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCastMovementLock
+internal unsafe partial class AutoCastMovementLock
 {
     private static readonly CompSig ReadWalkInputSig = new("E8 ?? ?? ?? ?? 80 7B 3E 00 48 8D 3D");
     private delegate void ReadWalkInputDelegate

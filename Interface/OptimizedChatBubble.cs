@@ -12,7 +12,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedChatBubble : ModuleBase
+internal unsafe class OptimizedChatBubble : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public unsafe class OptimizedChatBubble : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Middo", "Xww"]
     };
+
+    public override string ModuleName => nameof(OptimizedChatBubble);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

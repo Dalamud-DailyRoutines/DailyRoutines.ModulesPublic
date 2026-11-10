@@ -18,7 +18,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class CustomizeMapMarker : ModuleBase
+internal unsafe partial class CustomizeMapMarker : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe partial class CustomizeMapMarker : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CustomizeMapMarker/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(CustomizeMapMarker);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

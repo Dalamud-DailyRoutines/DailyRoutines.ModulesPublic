@@ -23,7 +23,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedEnemyList : ModuleBase
+internal unsafe class OptimizedEnemyList : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -36,6 +36,8 @@ public unsafe class OptimizedEnemyList : ModuleBase
         ],
         ModulesPair = ["AutoDisplayHiddenCast"]
     };
+
+    public override string ModuleName => nameof(OptimizedEnemyList);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -889,7 +891,7 @@ public unsafe class OptimizedEnemyList : ModuleBase
 
             using var utf8String = new Utf8String();
             _ = AgentHUD.Instance()->GetStatusTooltipText(&utf8String, status.StatusId, status.Param);
-            
+
             TextTooltip = utf8String.AsReadOnlySeString();
         }
     }

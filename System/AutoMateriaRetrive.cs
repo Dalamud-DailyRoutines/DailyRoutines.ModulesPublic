@@ -8,12 +8,10 @@ using Lumina.Excel.Sheets;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMateriaRetrive : ModuleBase
+internal unsafe class AutoMateriaRetrive : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +19,8 @@ public unsafe class AutoMateriaRetrive : ModuleBase
         Description = Lang.Get("AutoMateriaRetriveDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoMateriaRetrive);
 
     private Hook<EventFramework.Delegates.MaterializeItem>? RetriveMateriaHook;
 

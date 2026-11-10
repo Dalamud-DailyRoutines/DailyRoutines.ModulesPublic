@@ -13,7 +13,7 @@ using Timer = System.Timers.Timer;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNoviceNetwork : ModuleBase
+internal unsafe class AutoNoviceNetwork : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoNoviceNetwork : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoNoviceNetwork);
 
     private Config config = null!;
 
@@ -157,7 +159,7 @@ public unsafe class AutoNoviceNetwork : ModuleBase
         isJoined = IsInNoviceNetwork();
         if (isJoined) return;
 
-        if (!config.IsTryJoinWhenInactive               || TaskHelper.IsBusy) return;
+        if (!config.IsTryJoinWhenInactive       || TaskHelper.IsBusy) return;
         if (ICondition.Instance().IsBoundByDuty || ICondition.Instance().IsOccupiedInEvent) return;
 
         if (LastInputInfo.GetIdleTimeTick() > 10_000 || !GameState.IsForeground)

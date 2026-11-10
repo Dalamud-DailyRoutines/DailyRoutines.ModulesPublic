@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class InstantDismount : ModuleBase
+internal unsafe class InstantDismount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,17 +18,21 @@ public unsafe class InstantDismount : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(InstantDismount);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth = true
     };
 
     private static readonly CompSig DismountSig = new("E8 ?? ?? ?? ?? 84 C0 75 ?? 4D 85 F6 0F 84 ?? ?? ?? ?? 49 8B 06");
+
     private delegate bool DismountDelegate
     (
         nint     a1,
         Vector3* location
     );
+
     private Hook<DismountDelegate>? DismountHook;
 
     protected override void Init()

@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoRecordSubTimeLeft
+internal partial class AutoRecordSubTimeLeft
 {
     private sealed class PlaytimeTracker : IDisposable
     {

@@ -15,7 +15,7 @@ using CabinetSheet = Lumina.Excel.Sheets.Cabinet;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoStoreToCabinet : ModuleBase
+internal unsafe class AutoStoreToCabinet : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,11 +23,13 @@ public unsafe class AutoStoreToCabinet : ModuleBase
         Description = Lang.Get("AutoStoreToCabinetDescription"),
         Category    = ModuleCategory.Interface
     };
-    
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
+
+    public override string ModuleName => nameof(AutoStoreToCabinet);
 
     private AutoStoreToCabinetAddon? addon;
 

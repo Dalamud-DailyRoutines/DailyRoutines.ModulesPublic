@@ -21,7 +21,7 @@ using PlayerController = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Control.
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OccultCrescentHelper
+internal partial class OccultCrescentHelper
 {
     private class TreasureManager
     (

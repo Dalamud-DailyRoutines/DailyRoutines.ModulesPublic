@@ -12,7 +12,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class RealPositionInNaviMap : ModuleBase
+internal unsafe class RealPositionInNaviMap : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe class RealPositionInNaviMap : ModuleBase
         Description = Lang.Get("RealPositionInNaviMapDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(RealPositionInNaviMap);
 
     private Config config = null!;
 

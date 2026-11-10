@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class CancelCountdownCommand : ModuleBase
+internal class CancelCountdownCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class CancelCountdownCommand : ModuleBase
         Category    = ModuleCategory.Assist,
         Author      = ["decorwdyun"]
     };
+
+    public override string ModuleName => nameof(CancelCountdownCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

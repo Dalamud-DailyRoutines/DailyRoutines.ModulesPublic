@@ -10,7 +10,7 @@ using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
+internal unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoDisplayDutyReadyLeftTime : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayDutyReadyLeftTime/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoDisplayDutyReadyLeftTime);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

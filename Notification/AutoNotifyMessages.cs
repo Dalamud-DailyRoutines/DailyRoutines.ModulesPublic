@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyMessages : ModuleBase
+internal class AutoNotifyMessages : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoNotifyMessages : ModuleBase
         Description = Lang.Get("AutoNotifyMessagesDescription"),
         Category    = ModuleCategory.Notification
     };
+
+    public override string ModuleName => nameof(AutoNotifyMessages);
 
     private Config config = null!;
 

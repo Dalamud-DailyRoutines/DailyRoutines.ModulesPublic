@@ -7,7 +7,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class NoHideHotbars : ModuleBase
+internal unsafe class NoHideHotbars : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public unsafe class NoHideHotbars : ModuleBase
         Description = Lang.Get("NoHideHotbarsDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(NoHideHotbars);
 
     private static readonly CompSig ToggleUISig = new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC 20 48 8B 01 41 0F B6 D9");
 

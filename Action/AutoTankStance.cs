@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoTankStance : ModuleBase
+internal class AutoTankStance : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoTankStance : ModuleBase
         Description = Lang.Get("AutoTankStanceDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoTankStance);
 
     private Config config = null!;
 

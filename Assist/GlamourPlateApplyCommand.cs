@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class GlamourPlateApplyCommand : ModuleBase
+internal unsafe class GlamourPlateApplyCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class GlamourPlateApplyCommand : ModuleBase
         Description = Lang.Get("GlamourPlateApplyCommandDescription"),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(GlamourPlateApplyCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

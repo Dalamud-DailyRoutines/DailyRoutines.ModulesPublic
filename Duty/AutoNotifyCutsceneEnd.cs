@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNotifyCutsceneEnd : ModuleBase
+internal unsafe class AutoNotifyCutsceneEnd : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,7 +23,9 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
+    public override string ModuleName => nameof(AutoNotifyCutsceneEnd);
+
     private long cutsceneBeginTick;
     private long cutsceneLastWatchingTick;
 
@@ -88,7 +90,7 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
 
         if (!value)
         {
-            if (GameState.IsDutyCompleted) 
+            if (GameState.IsDutyCompleted)
                 return;
 
             IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "_PartyList", OnAddon);
@@ -155,9 +157,9 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
         cutsceneLastWatchingTick = 0;
 
         // 小于四秒 → 不播报
-        if (elapsedTime < TimeSpan.FromSeconds(4)) 
+        if (elapsedTime < TimeSpan.FromSeconds(4))
             return;
-        
+
         NotifyHelper.Instance().TrayInfo(Lang.Get("AutoNotifyCutsceneEnd-Notification"));
         NotifyHelper.Instance().Chat
         (
@@ -189,7 +191,7 @@ public unsafe class AutoNotifyCutsceneEnd : ModuleBase
             if ((group.PartyMembers[i].Flags & 0x10) != 0)
                 return true;
         }
-        
+
         foreach (var member in agent->PartyMembers)
         {
             if (member.EntityId  == 0 ||

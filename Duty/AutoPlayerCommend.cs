@@ -17,7 +17,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoPlayerCommend : ModuleBase
+internal unsafe class AutoPlayerCommend : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe class AutoPlayerCommend : ModuleBase
         Description = Lang.Get("AutoPlayerCommendDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoPlayerCommend);
 
     private static uint MIPDisplayType
     {
@@ -279,7 +281,7 @@ public unsafe class AutoPlayerCommend : ModuleBase
                     )
                 }
             );
-            
+
             NotifyHelper.Instance().Chat(message);
             NotifyHelper.Toast(message);
             return true;
@@ -373,18 +375,18 @@ public unsafe class AutoPlayerCommend : ModuleBase
                 return null;
 
             var contentID    = targetCharacter->ContentId;
-            var isTargetSelf = contentID == LocalPlayerState.ContentID;
+            var isTargetSelf = contentID                == LocalPlayerState.ContentID;
             var isTargetSame = module.assignedContentID == contentID;
 
             if (isTargetSame)
             {
                 return new()
                 {
-                    Name      = Lang.Get("AutoPlayerCommend-ContextMenu-Auto"),
+                    Name = Lang.Get("AutoPlayerCommend-ContextMenu-Auto"),
                     OnClicked = _ =>
                     {
                         module.assignedContentID = 0;
-                        
+
                         var message = Lang.Get("AutoPlayerCommend-Notification-Auto");
                         NotifyHelper.Instance().Chat(message);
                         NotifyHelper.Toast(message);
@@ -396,11 +398,11 @@ public unsafe class AutoPlayerCommend : ModuleBase
             {
                 return new()
                 {
-                    Name      = Lang.Get("AutoPlayerCommend-ContextMenu-AssignNobody"),
+                    Name = Lang.Get("AutoPlayerCommend-ContextMenu-AssignNobody"),
                     OnClicked = _ =>
                     {
                         module.assignedContentID = LocalPlayerState.ContentID;
-                        
+
                         var message = Lang.Get("AutoPlayerCommend-Notification-AssignedNobody");
                         NotifyHelper.Instance().Chat(message);
                         NotifyHelper.Toast(message);

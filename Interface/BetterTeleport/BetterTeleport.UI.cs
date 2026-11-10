@@ -22,25 +22,30 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class BetterTeleport
+internal unsafe partial class BetterTeleport
 {
     private static readonly CompSig AddonTeleportGetRegionIconIDSig = new("40 55 48 8B EC 48 83 EC ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 ?? 83 FA");
+
     private delegate int AddonTeleportGetRegionIconIDDelegate
     (
         AddonTeleport* addon,
         int            category
     );
+
     private AddonTeleportGetRegionIconIDDelegate AddonTeleportGetRegionIconID = null!;
 
     private static readonly CompSig AgentTeleportGetRegionSig = new("48 83 EC ?? 0F B7 4A ?? E8 ?? ?? ?? ?? 48 85 C0 0F 84");
+
     private delegate int AgentTeleportGetRegionDelegate
     (
         AgentTeleport* agent,
         TeleportInfo*  teleportInfo
     );
+
     private AgentTeleportGetRegionDelegate AgentTeleportGetRegion = null!;
 
     private static readonly CompSig AgentTeleportGetTimelineIDSig = new("41 81 F8 ?? 03 00 00 75 ?? B8 08 00 00 00 C3 41 81 F8 ?? 03 00 00 75 ?? B8 09 00 00 00 C3");
+
     private delegate int AgentTeleportGetTimelineIDDelegate
     (
         AgentTeleport* agent,

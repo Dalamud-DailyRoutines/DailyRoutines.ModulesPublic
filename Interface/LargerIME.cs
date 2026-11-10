@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class LargerIME : ModuleBase
+internal unsafe class LargerIME : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class LargerIME : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(LargerIME);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -24,6 +26,7 @@ public unsafe class LargerIME : ModuleBase
 
     private static readonly CompSig TextInputReceiveEventSig =
         new("4C 8B DC 55 53 57 41 54 41 57 49 8D AB ?? ?? ?? ?? 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 ?? ?? ?? ?? 48 8B 9D ?? ?? ?? ??");
+
     private delegate void TextInputReceiveEventDelegate
     (
         AtkComponentTextInput* component,
@@ -32,6 +35,7 @@ public unsafe class LargerIME : ModuleBase
         AtkEvent*              atkEvent,
         AtkEventData*          eventData
     );
+
     private Hook<TextInputReceiveEventDelegate>? TextInputReceiveEventHook;
 
     private Config config = null!;

@@ -17,7 +17,7 @@ using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedCharacterClass : ModuleBase
+internal unsafe class OptimizedCharacterClass : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,6 +26,8 @@ public unsafe class OptimizedCharacterClass : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Middo"]
     };
+
+    public override string ModuleName => nameof(OptimizedCharacterClass);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

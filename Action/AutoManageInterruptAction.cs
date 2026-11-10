@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoManageInterruptAction : ModuleBase
+internal class AutoManageInterruptAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoManageInterruptAction : ModuleBase
         Description = Lang.Get("AutoManageInterruptActionDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoManageInterruptAction);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

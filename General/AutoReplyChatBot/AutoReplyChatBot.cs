@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot : ModuleBase
+internal partial class AutoReplyChatBot : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public partial class AutoReplyChatBot : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoReplyChatBot);
 
 
     private RateLimiter?  rateLimiter;

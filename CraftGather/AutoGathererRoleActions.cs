@@ -7,7 +7,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoGathererRoleActions : ModuleBase
+internal class AutoGathererRoleActions : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoGathererRoleActions : ModuleBase
         Description = Lang.Get("AutoGathererRoleActionsDescription"),
         Category    = ModuleCategory.CraftGather
     };
+
+    public override string ModuleName => nameof(AutoGathererRoleActions);
 
     protected override void Init()
     {
@@ -53,7 +55,7 @@ public class AutoGathererRoleActions : ModuleBase
                         if (GameState.HomeWorld != GameState.CurrentWorld)
                             continue;
                     }
-                    
+
                     if (localPlayer->StatusManager.HasStatus(status)) continue;
 
                     TaskHelper.Enqueue

@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoManagePeloton : ModuleBase
+internal class AutoManagePeloton : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoManagePeloton : ModuleBase
         Description = Lang.Get("AutoManagePelotonDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoManagePeloton);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

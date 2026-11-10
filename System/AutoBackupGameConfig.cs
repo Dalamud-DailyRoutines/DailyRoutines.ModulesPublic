@@ -17,7 +17,7 @@ using SearchOption = System.IO.SearchOption;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoBackupGameConfig : ModuleBase
+internal class AutoBackupGameConfig : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public class AutoBackupGameConfig : ModuleBase
         Description = Lang.Get("AutoBackupGameConfigDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoBackupGameConfig);
 
     private Config     config     = null!;
     private HttpClient httpClient = null!;

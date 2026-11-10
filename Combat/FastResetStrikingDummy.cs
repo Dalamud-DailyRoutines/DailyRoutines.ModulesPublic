@@ -11,7 +11,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class FastResetStrikingDummy : ModuleBase
+internal class FastResetStrikingDummy : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public class FastResetStrikingDummy : ModuleBase
         Description = Lang.Get("FastResetStrikingDummyDescription", COMMAND),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(FastResetStrikingDummy);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -3,11 +3,10 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using OmenTools.Interop.Game.Models;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class IgnoreTurnAndLookAtWait : ModuleBase
+internal unsafe class IgnoreTurnAndLookAtWait : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +15,8 @@ public unsafe class IgnoreTurnAndLookAtWait : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(IgnoreTurnAndLookAtWait);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         NeedAuth = true
@@ -23,10 +24,12 @@ public unsafe class IgnoreTurnAndLookAtWait : ModuleBase
 
     private static readonly CompSig WaitForBaseSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B D9 48 8B 49 ?? E8 ?? ?? ?? ?? 48 8B 35");
+
     private delegate nint EventSceneScriptDelegate
     (
         EventSceneModuleImplBase* scene
     );
+
     private Hook<EventSceneScriptDelegate>? WaitForTurnHook;
     private Hook<EventSceneScriptDelegate>? WaitForLookAtHook;
 

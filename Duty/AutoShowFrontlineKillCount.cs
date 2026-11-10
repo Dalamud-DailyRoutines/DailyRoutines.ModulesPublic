@@ -11,7 +11,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoShowFrontlineKillCount : ModuleBase
+internal unsafe class AutoShowFrontlineKillCount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class AutoShowFrontlineKillCount : ModuleBase
         Description = Lang.Get("AutoShowFrontlineKillCountDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoShowFrontlineKillCount);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

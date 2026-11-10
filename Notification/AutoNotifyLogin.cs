@@ -5,7 +5,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyLogin : ModuleBase
+internal class AutoNotifyLogin : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,7 +18,9 @@ public class AutoNotifyLogin : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
+    public override string ModuleName => nameof(AutoNotifyLogin);
+
     protected override void Init() =>
         GameState.Instance().Login += OnLogin;
 
@@ -28,7 +30,7 @@ public class AutoNotifyLogin : ModuleBase
     private static void OnLogin()
     {
         var message = Lang.Get("AutoNotifyLogin-Notification");
-        
+
         NotifyHelper.Instance().Chat(message, false);
         NotifyHelper.Instance().TrayInfo(message);
     }

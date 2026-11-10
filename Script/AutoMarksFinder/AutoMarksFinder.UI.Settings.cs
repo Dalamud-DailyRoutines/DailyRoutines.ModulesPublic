@@ -1,17 +1,60 @@
-﻿using DailyRoutines.Common.Extensions;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private void DrawTabItemSettings()
     {
         using var itemWidth = ImRaii.ItemWidth(500f * GlobalUIScale);
-        
+
         using var tabSettings = ImRaii.TabItem(Lang.Get("Settings"));
         if (!tabSettings) return;
-        
+
+        using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcastBehaviour")))
+        {
+            if (ImGui.Checkbox(Lang.Get("AutoMarksFinder-MoveAfterBroadcast"), ref config.MoveAfterBroadcast))
+                config.Save(this);
+
+            if (ImGui.Checkbox(Lang.Get("AutoMarksFinder-PreferAetheryteBroadcast"), ref config.PreferAetheryteBroadcast))
+                config.Save(this);
+
+            ImGuiOm.TextDisabledWrapped(Lang.Get("AutoMarksFinder-PreferAetheryteBroadcastHelp"));
+        }
+
+        ImGui.NewLine();
+
+        using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-NavigationMode")))
+        {
+            if (ImGui.RadioButton(Lang.Get("AutoMarksFinder-NavigationExact"), config.NavigationMode == HuntNavigationMode.Exact))
+            {
+                config.NavigationMode = HuntNavigationMode.Exact;
+                config.Save(this);
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.RadioButton(Lang.Get("AutoMarksFinder-NavigationNearby"), config.NavigationMode == HuntNavigationMode.Nearby))
+            {
+                config.NavigationMode = HuntNavigationMode.Nearby;
+                config.Save(this);
+            }
+
+            if (config.NavigationMode == HuntNavigationMode.Nearby)
+            {
+                ImGui.SetNextItemWidth(150 * GlobalUIScale);
+
+                if (ImGui.InputFloat(Lang.Get("AutoMarksFinder-NavigationDistance"), ref config.NearbyDistance, 0, 0, "%.0f"))
+                {
+                    config.NearbyDistance = Math.Max(1, config.NearbyDistance);
+                    config.Save(this);
+                }
+            }
+        }
+
+        ImGui.NewLine();
+
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-RelayChatTypes")))
         using (var combo = ImRaii.Combo
                (
@@ -40,7 +83,7 @@ public partial class AutoMarksFinder
                 }
             }
         }
-        
+
         ImGui.NewLine();
 
         DrawRelaySettings(RelayType.Position, ref config.RelayPositionPattern);
@@ -56,27 +99,29 @@ public partial class AutoMarksFinder
         ImGui.NewLine();
 
         DrawRelaySettings(RelayType.AfterEnd, ref config.AutoRelayAfterEndPattern);
-        
+
         ImGui.NewLine();
-        
+
         using (ImRaii.Heading1(Lang.Get("Command")))
-            ImGui.TextUnformatted($"{COMMAND} {Lang.Get("AutoMarksFinder-HelpMessage")}");
-        
+            ImGui.TextUnformatted($"/pdr {COMMAND} {Lang.Get("AutoMarksFinder-HelpMessage")}");
+
         ImGui.NewLine();
 
         using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-Relay-Placeholders")))
         {
-            ImGuiOm.TextDisabledWrapped
+            ImGui.TextWrapped
             (
                 Lang.Get
                 (
                     "AutoMarksFinder-Relay-PlaceholderHelp",
                     new Dictionary<string, object>
                     {
-                        ["name"]         = "{name}",
-                        ["position"]     = "{position}",
-                        ["instance"]     = "{instance}",
-                        ["instanceText"] = "{instanceText}"
+                        ["name"]              = "{name}",
+                        ["position"]          = "{position}",
+                        ["instance"]          = "{instance}",
+                        ["instanceText"]      = "{instanceText}",
+                        ["routeName"]         = "{routeName}",
+                        ["routeMonsterCount"] = "{routeMonsterCount}"
                     }
                 )
             );
@@ -111,24 +156,23 @@ public partial class AutoMarksFinder
             config.Save(this);
 
         var lineCount    = content.AsSpan().Count('\n') + 1;
-        var tooManyLines = isMultiline && lineCount > MAX_RELAY_LINES;
+        var tooManyLines = isMultiline && lineCount > HuntRelay.MAX_RELAY_LINES;
 
         if (isMultiline)
         {
             ImGui.SameLine();
-            ImGui.TextDisabled($"{lineCount}/{MAX_RELAY_LINES}");
+            ImGui.TextDisabled($"{lineCount}/{HuntRelay.MAX_RELAY_LINES}");
         }
 
         using (ImRaii.Disabled
                (
                    string.IsNullOrWhiteSpace(content) ||
                    tooManyLines                       ||
-                   relayTaskHelper.IsBusy             ||
-                   autoBroadcast.On
+                   relay.IsBusy
                ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.ShareSquare, Lang.Get("Preview")))
-                Relay(type, preview: true);
+                relay.Send(type, SelectedTrain, preview: true);
         }
     }
 }

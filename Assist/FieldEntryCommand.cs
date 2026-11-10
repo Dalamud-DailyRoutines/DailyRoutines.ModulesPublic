@@ -1,17 +1,14 @@
 using System.Collections.Frozen;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
-using DailyRoutines.Manager;
 using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Action = System.Action;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FieldEntryCommand : ModuleBase
+internal unsafe class FieldEntryCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +17,8 @@ public unsafe class FieldEntryCommand : ModuleBase
         Category            = ModuleCategory.Assist,
         ModulesPrerequisite = ["AutoTalkSkip"]
     };
+
+    public override string ModuleName => nameof(FieldEntryCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -204,7 +203,7 @@ public unsafe class FieldEntryCommand : ModuleBase
     // 蜃景幻界新月岛 南征之章
     private static void EnqueueSouthHorn() =>
         MovementManager.Instance().TPSmart_BetweenZone(1252);
-    
+
     // 蜃景幻界新月岛 北征之章
     private static void EnqueueNorthHorn() =>
         MovementManager.Instance().TPSmart_BetweenZone(1346);

@@ -29,7 +29,7 @@ using DetailKind = FFXIVClientStructs.FFXIV.Client.Enums.DetailKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BetterMKDSupportJobList : ModuleBase
+internal unsafe class BetterMKDSupportJobList : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -41,6 +41,8 @@ public unsafe class BetterMKDSupportJobList : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterMKDSupportJobList/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(BetterMKDSupportJobList);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

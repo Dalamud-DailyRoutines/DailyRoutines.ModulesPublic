@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRequestItemSubmit : ModuleBase
+internal unsafe class AutoRequestItemSubmit : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoRequestItemSubmit : ModuleBase
         Description = Lang.Get("AutoRequestItemSubmitDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoRequestItemSubmit);
 
     private Config config = null!;
 

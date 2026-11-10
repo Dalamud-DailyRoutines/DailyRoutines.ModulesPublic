@@ -13,7 +13,7 @@ using TreeList = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkComponentTr
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoNumericInputMax : ModuleBase
+internal unsafe class AutoNumericInputMax : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoNumericInputMax : ModuleBase
         Category    = ModuleCategory.Interface,
         ModulesPair = ["AutoIncreaseBuyAmountLimit"]
     };
+
+    public override string ModuleName => nameof(AutoNumericInputMax);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -393,7 +395,7 @@ public unsafe class AutoNumericInputMax : ModuleBase
         "CountDownSettingDialog",
         "ConfigSystem",
         "ConfigCharacter",
-        
+
         "DRBetterPartyFinderFilter"
     ];
 

@@ -12,7 +12,7 @@ using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoShowItemNPCShopInfo
+internal unsafe partial class AutoShowItemNPCShopInfo
 {
     private abstract class AddonNPCShopsBase<TSectionSlot> : NativeAddon
         where TSectionSlot : AddonNPCShopsBase<TSectionSlot>.SectionSlot

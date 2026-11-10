@@ -10,7 +10,7 @@ using LuminaAction = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCastMovementLock
+internal unsafe partial class AutoCastMovementLock
 {
     private sealed class InputInterceptor
     (
@@ -90,8 +90,8 @@ public unsafe partial class AutoCastMovementLock
                 return mouseUnlocked;
 
             lastInputFrame = frame;
-            mouseUnlocked = GameState.IsForeground                            &&
-                            config.MouseButtonsToTempUnlock                   &&
+            mouseUnlocked = GameState.IsForeground                      &&
+                            config.MouseButtonsToTempUnlock             &&
                             InputQuery.IsKeyPressed(VirtualKey.LBUTTON) &&
                             InputQuery.IsKeyPressed(VirtualKey.RBUTTON);
 
@@ -146,7 +146,7 @@ public unsafe partial class AutoCastMovementLock
                    ActionManager.GetAdjustedCastTime(ActionType.Action, actionID) > 0;
         }
     }
-    
+
     private static partial class InputQuery
     {
         public static bool IsKeyPressed

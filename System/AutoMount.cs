@@ -15,7 +15,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMount : ModuleBase
+internal unsafe class AutoMount : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoMount : ModuleBase
         Description = Lang.Get("AutoMountDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoMount);
 
     private Config config = null!;
 
@@ -141,8 +143,8 @@ public unsafe class AutoMount : ModuleBase
         switch (flag)
         {
             case ConditionFlag.Gathering when !value && config.MountWhenGatherEnd:
-            case ConditionFlag.InCombat when !value                                 &&
-                                             config.MountWhenCombatEnd              &&
+            case ConditionFlag.InCombat when !value                         &&
+                                             config.MountWhenCombatEnd      &&
                                              !IClientState.Instance().IsPvP &&
                                              (FateManager.Instance()->CurrentFate           == null ||
                                               FateManager.Instance()->CurrentFate->Progress == 100):

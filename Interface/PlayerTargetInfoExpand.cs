@@ -14,7 +14,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class PlayerTargetInfoExpand : ModuleBase
+internal unsafe class PlayerTargetInfoExpand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class PlayerTargetInfoExpand : ModuleBase
         Category        = ModuleCategory.Interface,
         ModulesConflict = ["LiveAnonymousMode"]
     };
+
+    public override string ModuleName => nameof(PlayerTargetInfoExpand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

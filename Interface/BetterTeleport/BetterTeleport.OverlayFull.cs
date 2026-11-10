@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class BetterTeleport
+internal unsafe partial class BetterTeleport
 {
     private BetterTeleportFullWindow? fullWindow;
 

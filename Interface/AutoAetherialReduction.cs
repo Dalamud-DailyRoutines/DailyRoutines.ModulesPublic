@@ -14,7 +14,7 @@ using OmenTools.Info.Game.Data;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoAetherialReduction : ModuleBase
+internal unsafe class AutoAetherialReduction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoAetherialReduction : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["YLCHEN"]
     };
+
+    public override string ModuleName => nameof(AutoAetherialReduction);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -36,7 +38,7 @@ public unsafe class AutoAetherialReduction : ModuleBase
     protected override void Init()
     {
         TaskHelper ??= new();
-        Overlay    ??= new Overlay(this);
+        Overlay    ??= new(this);
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,    "PurifyItemSelector", OnAddonList);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "PurifyItemSelector", OnAddonList);

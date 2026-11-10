@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoUseEarthsReply : ModuleBase
+internal class AutoUseEarthsReply : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoUseEarthsReply : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["ToxicStar"]
     };
+
+    public override string ModuleName => nameof(AutoUseEarthsReply);
 
     private Config config = null!;
 

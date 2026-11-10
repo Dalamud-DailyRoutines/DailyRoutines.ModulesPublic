@@ -17,7 +17,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoGlamourDresser : ModuleBase
+internal unsafe class AutoGlamourDresser : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public unsafe class AutoGlamourDresser : ModuleBase
         Description = Lang.Get("AutoGlamourDresserDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoGlamourDresser);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

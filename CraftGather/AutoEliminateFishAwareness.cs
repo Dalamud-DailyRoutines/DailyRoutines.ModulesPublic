@@ -18,7 +18,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoEliminateFishAwareness : ModuleBase
+internal unsafe class AutoEliminateFishAwareness : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -34,6 +34,8 @@ public unsafe class AutoEliminateFishAwareness : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoEliminateFishAwareness);
 
     private Config config = null!;
 

@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterFPSLimitation
+internal partial class BetterFPSLimitation
 {
     private readonly float[] fpsHistory = new float[HISTORY_LENGTH];
 

@@ -12,7 +12,7 @@ using ContentsFinderQueueInfo = FFXIVClientStructs.Expansion.FFXIV.Client.Game.U
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCommenceDuty : ModuleBase
+internal unsafe class AutoCommenceDuty : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public unsafe class AutoCommenceDuty : ModuleBase
         Category    = ModuleCategory.Duty,
         Author      = ["Cindy-Master"]
     };
+
+    public override string ModuleName => nameof(AutoCommenceDuty);
 
     private Hook<ContentsFinderQueueInfo.Delegates.SetQueueState>? SetQueueStateHook;
 

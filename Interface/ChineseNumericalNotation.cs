@@ -16,7 +16,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ChineseNumericalNotation : ModuleBase
+internal unsafe class ChineseNumericalNotation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class ChineseNumericalNotation : ModuleBase
         Description = Lang.Get("ChineseNumericalNotationDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(ChineseNumericalNotation);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -75,7 +77,7 @@ public unsafe class ChineseNumericalNotation : ModuleBase
                 0x90, 0x90, 0x90, 0x90
             ]
         );
-        
+
         AtkTextNodeSetNumberCommaPatch.Enable();
 
         AtkCounterNodeSetNumberHook ??= AtkCounterNodeSetNumberSig.GetHook<AtkCounterNodeSetNumberDelegate>(AtkCounterNodeSetNumberDetour);

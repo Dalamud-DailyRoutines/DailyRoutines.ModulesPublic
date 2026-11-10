@@ -21,7 +21,7 @@ using NetworkModule = FFXIVClientStructs.Expansion.FFXIV.Application.Network.Net
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDisplayNetworkLatency : ModuleBase
+internal class AutoDisplayNetworkLatency : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -33,6 +33,8 @@ public class AutoDisplayNetworkLatency : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayNetworkLatency/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoDisplayNetworkLatency);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -499,6 +501,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
                                      100d * retransmittedBytes / sentBytes;
 
             var value = info.RoundTripTime / 1000f;
+
             unsafe
             {
                 if (value <= 10)
@@ -507,7 +510,7 @@ public class AutoDisplayNetworkLatency : ModuleBase
                     value = MathF.Max(10, module->RoundTripTime - (Framework.Instance()->FrameDeltaTime * 1000f));
                 }
             }
-            
+
             History[HistoryIndex] = value;
             HistoryIndex          = (HistoryIndex + 1) % History.Length;
             FilledCount           = Math.Min(FilledCount + 1, History.Length);

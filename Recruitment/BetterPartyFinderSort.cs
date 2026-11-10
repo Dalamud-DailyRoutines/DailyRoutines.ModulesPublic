@@ -7,7 +7,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class BetterPartyFinderSort : ModuleBase
+internal unsafe class BetterPartyFinderSort : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class BetterPartyFinderSort : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["decorwdyun"]
     };
+
+    public override string ModuleName => nameof(BetterPartyFinderSort);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

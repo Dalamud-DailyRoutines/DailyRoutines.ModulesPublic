@@ -6,7 +6,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoQuestComplete : ModuleBase
+internal class AutoQuestComplete : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class AutoQuestComplete : ModuleBase
         Description = Lang.Get("AutoQuestCompleteDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoQuestComplete);
 
     protected override void Init()
     {

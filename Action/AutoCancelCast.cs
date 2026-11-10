@@ -14,7 +14,7 @@ using LuminaAction = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCancelCast : ModuleBase
+internal unsafe class AutoCancelCast : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public unsafe class AutoCancelCast : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { AllDefaultEnabled = true };
+
+    public override string ModuleName => nameof(AutoCancelCast);
 
     protected override void Init() =>
         ICondition.Instance().ConditionChange += OnConditionChanged;

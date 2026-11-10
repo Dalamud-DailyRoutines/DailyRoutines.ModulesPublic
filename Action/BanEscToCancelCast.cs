@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BanEscToCancelCast : ModuleBase
+internal class BanEscToCancelCast : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class BanEscToCancelCast : ModuleBase
         Description = Lang.Get("BanEscToCancelCastDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(BanEscToCancelCast);
 
     protected override void Init() =>
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);

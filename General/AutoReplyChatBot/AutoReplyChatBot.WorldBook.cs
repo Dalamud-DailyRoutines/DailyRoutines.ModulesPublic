@@ -2,7 +2,7 @@ using System.Text;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot
+internal partial class AutoReplyChatBot
 {
     private static class WorldBookManager
     {

@@ -15,7 +15,7 @@ using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentMiragePrismMiragePlat
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class UnifiedGlamourManager
+internal unsafe partial class UnifiedGlamourManager
 {
     private readonly (uint RawItemID, uint Stain0ID, uint Stain1ID)[] prismBoxStains = new (uint, uint, uint)[PRISM_BOX_CAPACITY];
 

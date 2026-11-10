@@ -15,7 +15,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class CustomizeInterfaceText : ModuleBase
+internal unsafe class CustomizeInterfaceText : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,8 +26,11 @@ public unsafe class CustomizeInterfaceText : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
-    private static readonly CompSig SetPlayerNamePlateSig = 
+    public override string ModuleName => nameof(CustomizeInterfaceText);
+
+    private static readonly CompSig SetPlayerNamePlateSig =
         new("48 89 5C 24 ?? 55 56 57 41 54 41 55 41 56 41 57 48 83 EC ?? 44 0F B6 EA");
+
     private delegate nint SetPlayerNamePlateDelegate
     (
         nint namePlateObjectPtr,
@@ -39,15 +42,18 @@ public unsafe class CustomizeInterfaceText : ModuleBase
         nint prefix,
         int  iconID
     );
+
     private Hook<SetPlayerNamePlateDelegate>? SetPlayerNamePlateHook;
 
     private static readonly CompSig TextNodeSetStringSig =
         new("E8 ?? ?? ?? ?? 48 83 C4 ?? 5B C3 CC CC CC CC CC CC CC CC CC CC 40 55 56 57 48 81 EC");
+
     private delegate void TextNodeSetStringDelegate
     (
         AtkTextNode*   textNode,
         CStringPointer text
     );
+
     private Hook<TextNodeSetStringDelegate>? TextNodeSetStringHook;
 
     private Config config = null!;

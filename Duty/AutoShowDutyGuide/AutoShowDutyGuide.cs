@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoShowDutyGuide : ModuleBase
+internal partial class AutoShowDutyGuide : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,9 +19,11 @@ public partial class AutoShowDutyGuide : ModuleBase
         Category    = ModuleCategory.Duty
     };
 
+    public override string ModuleName => nameof(AutoShowDutyGuide);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
-        CNDefaultEnabled = true, 
+        CNDefaultEnabled = true,
         TCDefaultEnabled = true
     };
 
@@ -54,7 +56,7 @@ public partial class AutoShowDutyGuide : ModuleBase
             }
         );
 
-        Overlay                 ??= new Overlay(this);
+        Overlay                 ??= new(this);
         Overlay.Flags           &=  ~ImGuiWindowFlags.NoTitleBar;
         Overlay.Flags           &=  ~ImGuiWindowFlags.AlwaysAutoResize;
         Overlay.Flags           |=  ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoNavInputs;

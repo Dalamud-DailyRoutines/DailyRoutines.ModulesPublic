@@ -1,237 +1,291 @@
-using System.Globalization;
+using DailyRoutines.Manager;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
-    private NotoriousMonsterList? SelectedTrain =>
-        selectedTrainIndex >= 0 && selectedTrainIndex < config.Trains.Count ?
-            config.Trains[selectedTrainIndex] :
-            null;
-
-    private DateTime CalibratedNow =>
-        autoBroadcast.TimeCalibrated ?
-            DateTime.Now.AddSeconds(-autoBroadcast.TimeCalibOffsetSec) :
-            DateTime.Now;
-
-    private readonly AutoBroadcastSession autoBroadcast = new();
-
-    private void ToggleAutoBroadcast()
+    private sealed class HuntAutoBroadcast : IDisposable
     {
-        if (autoBroadcast.On)
+        private readonly AutoMarksFinder       module;
+        private          NotoriousMonsterList? train;
+        private          BroadcastStage        stage;
+        private          long                  nextAt;
+        private          bool                  departureNotified;
+
+        public HuntAutoBroadcast(AutoMarksFinder module)
         {
-            StopAutoBroadcast();
-            return;
+            this.module              =  module;
+            module.selection.Changed += Stop;
+            DepartAt                 =  Framework.GetServerTime();
         }
 
-        var train = SelectedTrain;
-        if (train                     == null ||
-            train.MonstersFound.Count == 0)
-            return;
+        public long DepartAt { get; private set; }
 
-        var      hasDepartTime = !string.IsNullOrWhiteSpace(autoBroadcast.DepartTimeInput);
-        DateTime parsed        = default;
-
-        if (hasDepartTime &&
-            !TryParseDepartTime(out parsed))
+        public DateTime LocalDeparture
         {
-            NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
-            return;
+            get => DateTimeOffset.FromUnixTimeSeconds(DepartAt).LocalDateTime;
+            set => DepartAt = new DateTimeOffset(DateTime.SpecifyKind(value, DateTimeKind.Local)).ToUnixTimeSeconds();
         }
 
-        relayTaskHelper.Abort();
-        autoBroadcast.On          = true;
-        autoBroadcast.Index       = 0;
-        autoBroadcast.Train       = train;
-        autoBroadcast.NextPending = false;
-        autoBroadcast.NextAt      = 0;
-        autoBroadcast.EndPending  = false;
-        autoBroadcast.EndAt       = 0;
+        public int Index { get; private set; }
 
-        if (hasDepartTime)
-        {
-            autoBroadcast.Departed          = false;
-            autoBroadcast.FirstPointPending = false;
-            autoBroadcast.FirstPointAt      = 0;
-            autoBroadcast.DepartAt          = parsed;
-        }
-        else
-        {
-            autoBroadcast.Departed          = true;
-            autoBroadcast.FirstPointPending = true;
-            autoBroadcast.FirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
+        public bool IsRunning => stage != BroadcastStage.Stopped;
 
-            if (!Relay(RelayType.BeforeStart))
-            {
-                StopAutoBroadcast();
+        public string Status => stage switch
+        {
+            BroadcastStage.WaitingForDeparture => Lang.Get
+            (
+                "AutoMarksFinder-AutoBroadcastRemain",
+                new Dictionary<string, object>
+                {
+                    ["remainingTimeText"] = TimeSpan.FromSeconds(Math.Max(0, DepartAt - Framework.GetServerTime())).ToString("g")
+                }
+            ),
+            BroadcastStage.Starting                                  => string.Empty,
+            BroadcastStage.WaitingForEnd or BroadcastStage.Finishing => string.Empty,
+            _ => Lang.Get
+            (
+                "AutoMarksFinder-AutoBroadcastProgress",
+                new Dictionary<string, object>
+                {
+                    ["pointIndex"] = Math.Min(Index + 1, train?.MonstersFound.Count ?? 0)
+                }
+            )
+        };
+
+        public void Start()
+        {
+            if (IsRunning                                                         ||
+                module.SelectedTrain is not { MonstersFound.Count: > 0 } selected ||
+                module.config.RelayCommands.Count == 0                            ||
+                (selected.MonstersFound.Any(monster => monster.IsAlive) &&
+                 string.IsNullOrWhiteSpace(module.config.RelayPositionPattern)) ||
+                module.scanner?.IsRunning == true                               ||
+                module.relay.IsBusy)
                 return;
+
+            train             = selected;
+            Index             = selected.MonstersFound.FindIndex(monster => monster.IsAlive);
+            stage             = BroadcastStage.WaitingForDeparture;
+            nextAt            = 0;
+            departureNotified = false;
+
+            if (Index < 0)
+            {
+                module.relay.Send(RelayType.AfterEnd, train);
+                stage = BroadcastStage.Finishing;
             }
-        }
-    }
 
-    private void StopAutoBroadcast()
-    {
-        relayTaskHelper?.Abort();
-        autoBroadcast.On                = false;
-        autoBroadcast.Departed          = false;
-        autoBroadcast.Index             = 0;
-        autoBroadcast.Train             = null;
-        autoBroadcast.FirstPointPending = false;
-        autoBroadcast.FirstPointAt      = 0;
-        autoBroadcast.NextPending       = false;
-        autoBroadcast.NextAt            = 0;
-        autoBroadcast.EndPending        = false;
-        autoBroadcast.EndAt             = 0;
-    }
-
-    private bool TryParseDepartTime
-    (
-        out DateTime parsed
-    )
-    {
-        parsed = default;
-
-        if (!TimeSpan.TryParseExact(autoBroadcast.DepartTimeInput.Trim(), @"hh\:mm\:ss", CultureInfo.InvariantCulture, out var timeOfDay) ||
-            timeOfDay < TimeSpan.Zero                                                                                                     ||
-            timeOfDay >= TimeSpan.FromDays(1))
-            return false;
-
-        var now = CalibratedNow;
-        parsed = now.Date + timeOfDay;
-
-        if (parsed <= now)
-            parsed = parsed.AddDays(1);
-
-        return true;
-    }
-
-    private void UpdateAutoBroadcast
-    (
-        IFramework _
-    )
-    {
-        if (!autoBroadcast.On)
-            return;
-
-        if (LocalPlayerState.Object == null ||
-            !UIModule.IsScreenReady()       ||
-            ICondition.Instance().IsBetweenAreas)
-            return;
-
-        if (autoBroadcast.Train is not { MonstersFound.Count: > 0 } train ||
-            !config.Trains.Any(x => ReferenceEquals(x, train))            ||
-            !ReferenceEquals(SelectedTrain, train))
-        {
-            StopAutoBroadcast();
-            return;
+            FrameworkManager.Instance().Reg(Update, UPDATE_INTERVAL_MS);
         }
 
-        if (relayTaskHelper.IsBusy)
-            return;
-
-        if (!autoBroadcast.Departed)
+        public void Stop()
         {
-            if (CalibratedNow < autoBroadcast.DepartAt)
+            if (!IsRunning)
                 return;
 
-            autoBroadcast.Departed          = true;
-            autoBroadcast.Index             = 0;
-            autoBroadcast.FirstPointPending = true;
-            autoBroadcast.FirstPointAt      = Environment.TickCount64 + AUTO_BROADCAST_FIRST_POINT_DELAY_MS;
-            if (!Relay(RelayType.BeforeStart))
-                StopAutoBroadcast();
-            return;
+            FrameworkManager.Instance().Unreg(Update);
+            module.relay.Cancel();
+            train = null;
+            stage = BroadcastStage.Stopped;
+            Index = 0;
         }
 
-        if (autoBroadcast.FirstPointPending)
+        public void Dispose()
         {
-            if (Environment.TickCount64 < autoBroadcast.FirstPointAt)
-                return;
+            Stop();
+            module.selection.Changed -= Stop;
+        }
 
-            while (autoBroadcast.Index < train.MonstersFound.Count &&
-                   !train.MonstersFound[autoBroadcast.Index].IsAlive)
-                autoBroadcast.Index++;
-
-            if (autoBroadcast.Index >= train.MonstersFound.Count)
+        private void Update(IFramework framework)
+        {
+            if (!GameState.IsLoggedIn ||
+                !ReferenceEquals(module.SelectedTrain, train))
             {
-                autoBroadcast.FirstPointPending = false;
-                autoBroadcast.EndPending        = true;
-                autoBroadcast.EndAt             = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
+                Stop();
                 return;
             }
 
-            if (Relay(RelayType.Position, train.MonstersFound[autoBroadcast.Index]))
-                autoBroadcast.FirstPointPending = false;
-            return;
-        }
-
-        if (autoBroadcast.NextPending)
-        {
-            if (Environment.TickCount64 < autoBroadcast.NextAt)
+            if (LocalPlayerState.Object == null      ||
+                !UIModule.IsScreenReady()            ||
+                ICondition.Instance().IsBetweenAreas ||
+                module.relay.IsBusy)
                 return;
 
-            while (autoBroadcast.Index < train.MonstersFound.Count &&
-                   !train.MonstersFound[autoBroadcast.Index].IsAlive)
-                autoBroadcast.Index++;
+            var now = Framework.GetServerTime();
 
-            if (autoBroadcast.Index >= train.MonstersFound.Count)
+            switch (stage)
             {
-                autoBroadcast.NextPending = false;
-                autoBroadcast.EndPending  = true;
-                autoBroadcast.EndAt       = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
-                return;
+                case BroadcastStage.WaitingForDeparture:
+                    Index = train.MonstersFound.FindIndex(candidate => candidate.IsAlive);
+
+                    if (Index < 0)
+                    {
+                        if (!module.relay.Send(RelayType.AfterEnd, train))
+                        {
+                            Stop();
+                            return;
+                        }
+
+                        stage = BroadcastStage.Finishing;
+                        return;
+                    }
+
+                    if (!departureNotified)
+                    {
+                        if (now < DepartAt - DEPARTURE_NOTICE_SECONDS)
+                            return;
+
+                        var message = Lang.Get
+                        (
+                            "AutoMarksFinder-AutoBroadcastStarting",
+                            new Dictionary<string, object>
+                            {
+                                ["count"] = PlayersManager.Instance().PlayersAroundCount
+                            }
+                        );
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinderTitle"));
+                        NotifyHelper.Toast(message);
+                        departureNotified = true;
+
+                        if (now >= DepartAt)
+                            nextAt = now + LATE_START_DELAY_SECONDS;
+                    }
+
+                    if (now < DepartAt ||
+                        now < nextAt)
+                        return;
+
+                    if (train.MonstersFound.Any(monster => !monster.IsAlive))
+                    {
+                        nextAt = now;
+                        stage  = BroadcastStage.WaitingForPoint;
+                        return;
+                    }
+
+                    if (!module.relay.Send(RelayType.BeforeStart, train))
+                    {
+                        Stop();
+                        return;
+                    }
+
+                    stage = BroadcastStage.Starting;
+                    break;
+                case BroadcastStage.Starting:
+                    nextAt = now + FIRST_POINT_DELAY_SECONDS;
+                    stage  = BroadcastStage.WaitingForPoint;
+                    break;
+                case BroadcastStage.WaitingForPoint:
+                    if (now < nextAt)
+                        return;
+
+                    while (Index < train.MonstersFound.Count &&
+                           !train.MonstersFound[Index].IsAlive)
+                        Index++;
+
+                    if (Index >= train.MonstersFound.Count)
+                    {
+                        nextAt = now + END_DELAY_SECONDS;
+                        stage  = BroadcastStage.WaitingForEnd;
+                        return;
+                    }
+
+                    var monster = train.MonstersFound[Index];
+                    var gather = module.config.PreferAetheryteBroadcast &&
+                                 (GameState.TerritoryType != monster.ZoneID ||
+                                  (monster.Instance != 0 && InstancesManager.CurrentInstance != monster.Instance));
+
+                    if (!module.relay.Send
+                        (
+                            gather ?
+                                RelayType.WaitAetheryte :
+                                RelayType.Position,
+                            train,
+                            monster
+                        ))
+                    {
+                        Stop();
+                        return;
+                    }
+
+                    module.selection.MonsterIndex = Index;
+                    stage = gather ?
+                                BroadcastStage.WaitingForArrival :
+                                BroadcastStage.WaitingForDeath;
+                    break;
+                case BroadcastStage.WaitingForArrival:
+                    if (!train.MonstersFound[Index].IsAlive)
+                    {
+                        Index++;
+                        nextAt = now + NEXT_POINT_DELAY_SECONDS;
+                        stage  = BroadcastStage.WaitingForPoint;
+                        return;
+                    }
+
+                    var destination = train.MonstersFound[Index];
+                    if (GameState.TerritoryType != destination.ZoneID ||
+                        (destination.Instance != 0 && InstancesManager.CurrentInstance != destination.Instance))
+                        return;
+
+                    if (!module.relay.Send(RelayType.Position, train, destination))
+                    {
+                        Stop();
+                        return;
+                    }
+
+                    stage = BroadcastStage.WaitingForDeath;
+                    break;
+                case BroadcastStage.WaitingForDeath:
+                    if (train.MonstersFound[Index].IsAlive)
+                        return;
+
+                    Index++;
+                    nextAt = now + NEXT_POINT_DELAY_SECONDS;
+                    stage  = BroadcastStage.WaitingForPoint;
+                    break;
+                case BroadcastStage.WaitingForEnd:
+                    if (now < nextAt)
+                        return;
+
+                    Index = train.MonstersFound.FindIndex(candidate => candidate.IsAlive);
+
+                    if (Index >= 0)
+                    {
+                        nextAt = now;
+                        stage  = BroadcastStage.WaitingForPoint;
+                        return;
+                    }
+
+                    if (!module.relay.Send(RelayType.AfterEnd, train))
+                    {
+                        Stop();
+                        return;
+                    }
+
+                    stage = BroadcastStage.Finishing;
+                    break;
+                case BroadcastStage.Finishing:
+                    Stop();
+                    var completedMessage = Lang.Get("AutoMarksFinder-AutoBroadcastCompleted");
+                    NotifyHelper.Instance().Chat(completedMessage);
+                    NotifyHelper.Instance().TrayInfo(completedMessage, Lang.Get("AutoMarksFinderTitle"));
+                    NotifyHelper.Toast(completedMessage);
+                    break;
             }
-
-            if (Relay(RelayType.Position, train.MonstersFound[autoBroadcast.Index]))
-                autoBroadcast.NextPending = false;
-            return;
         }
 
-        if (autoBroadcast.EndPending)
-        {
-            if (Environment.TickCount64 < autoBroadcast.EndAt)
-                return;
+        #region 常量
 
-            autoBroadcast.EndPending = false;
-            Relay(RelayType.AfterEnd);
-            relayTaskHelper.Enqueue(StopAutoBroadcast);
-            return;
-        }
+        private const uint UPDATE_INTERVAL_MS        = 500;
+        private const int  FIRST_POINT_DELAY_SECONDS = 3;
+        private const int  NEXT_POINT_DELAY_SECONDS  = 1;
+        private const int  END_DELAY_SECONDS         = 2;
+        private const int  DEPARTURE_NOTICE_SECONDS  = 30;
+        private const int  LATE_START_DELAY_SECONDS  = 5;
 
-        if (autoBroadcast.Index < 0 ||
-            autoBroadcast.Index >= train.MonstersFound.Count)
-        {
-            StopAutoBroadcast();
-            return;
-        }
-
-        if (train.MonstersFound[autoBroadcast.Index].IsAlive)
-            return;
-
-        autoBroadcast.Index++;
-        while (autoBroadcast.Index < train.MonstersFound.Count &&
-               !train.MonstersFound[autoBroadcast.Index].IsAlive)
-            autoBroadcast.Index++;
-
-        if (autoBroadcast.Index >= train.MonstersFound.Count)
-        {
-            autoBroadcast.EndPending = true;
-            autoBroadcast.EndAt      = Environment.TickCount64 + AUTO_BROADCAST_END_DELAY_MS;
-            return;
-        }
-
-        autoBroadcast.NextPending = true;
-        autoBroadcast.NextAt      = Environment.TickCount64 + AUTO_BROADCAST_NEXT_DELAY_MS;
+        #endregion
     }
-
-    #region 常量
-
-    private const uint AUTO_BROADCAST_TICK_MS = 500;
-
-    private const long AUTO_BROADCAST_FIRST_POINT_DELAY_MS = 3_000;
-    private const long AUTO_BROADCAST_NEXT_DELAY_MS        = 1_000;
-    private const long AUTO_BROADCAST_END_DELAY_MS         = 2_000;
-
-    #endregion
 }

@@ -10,7 +10,7 @@ using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class SelectableRecruitmentText : ModuleBase
+internal unsafe class SelectableRecruitmentText : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class SelectableRecruitmentText : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/SelectableRecruitmentText/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(SelectableRecruitmentText);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

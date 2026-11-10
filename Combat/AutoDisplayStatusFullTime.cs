@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Common.Module.Abstractions;
+using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
@@ -10,7 +10,7 @@ using OmenTools.Interop.Game;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayStatusFullTime : ModuleBase
+internal unsafe class AutoDisplayStatusFullTime : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class AutoDisplayStatusFullTime : ModuleBase
         Description = Lang.Get("AutoDisplayStatusFullTimeDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(AutoDisplayStatusFullTime);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

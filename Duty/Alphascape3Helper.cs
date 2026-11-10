@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class Alphascape3Helper : ModuleBase
+internal unsafe class Alphascape3Helper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class Alphascape3Helper : ModuleBase
         Description = Lang.Get("Alphascape3HelperDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(Alphascape3Helper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

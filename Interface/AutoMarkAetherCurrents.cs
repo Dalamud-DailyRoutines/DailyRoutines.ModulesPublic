@@ -25,7 +25,7 @@ using Map = Lumina.Excel.Sheets.Map;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMarkAetherCurrents : ModuleBase
+internal unsafe class AutoMarkAetherCurrents : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -33,6 +33,8 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
         Description = Lang.Get("AutoMarkAetherCurrentsDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoMarkAetherCurrents);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -684,7 +686,7 @@ public unsafe class AutoMarkAetherCurrents : ModuleBase
                     if (!ICondition.Instance().IsOnMount)
                     {
                         taskHelper.Enqueue(() => UseActionManager.Instance().UseAction(ActionType.GeneralAction, 9), weight: 1);
-                        taskHelper.Enqueue(() => ICondition.Instance().IsOnMount,                            weight: 1);
+                        taskHelper.Enqueue(() => ICondition.Instance().IsOnMount,                                    weight: 1);
                     }
                 }
             );

@@ -13,7 +13,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHideBanners : ModuleBase
+internal unsafe class AutoHideBanners : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,7 +22,9 @@ public unsafe class AutoHideBanners : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["XSZYYS"]
     };
-    
+
+    public override string ModuleName => nameof(AutoHideBanners);
+
     private Hook<AddonImage.Delegates.SetImage>? SetImageHook;
 
     private Config config = null!;
@@ -35,7 +37,7 @@ public unsafe class AutoHideBanners : ModuleBase
 
         foreach (var bannerID in BannersData)
         {
-            if (!config.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID))) 
+            if (!config.HiddenBanners.TryAdd(bannerID, DefaultEnabledBanners.Contains(bannerID)))
                 continue;
             isAnyAdded = true;
         }

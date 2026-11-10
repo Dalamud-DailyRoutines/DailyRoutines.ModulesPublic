@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterFPSLimitation : ModuleBase
+internal partial class BetterFPSLimitation : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,7 +23,9 @@ public partial class BetterFPSLimitation : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
+    public override string ModuleName => nameof(BetterFPSLimitation);
+
     private Config        config = null!;
     private IDtrBarEntry? entry;
     private FramePacer?   pacer;
@@ -147,19 +149,19 @@ public partial class BetterFPSLimitation : ModuleBase
             case "":
                 ToggleAddon();
                 return;
-            
+
             case "on":
                 config.IsEnabled = true;
                 break;
-            
+
             case "off":
                 config.IsEnabled = false;
                 break;
-            
+
             case "toggle":
                 config.IsEnabled ^= true;
                 break;
-                
+
             default:
                 if (!short.TryParse(args, out var targetFPS) || targetFPS < 1)
                 {
@@ -181,16 +183,17 @@ public partial class BetterFPSLimitation : ModuleBase
                 config.Limitation = targetFPS;
                 goto case "on";
         }
-        
-        var message = config.IsEnabled
-                          ? Lang.Get(
+
+        var message = config.IsEnabled ?
+                          Lang.Get
+                          (
                               "BetterFPSLimitationTitle-Notification-Set",
                               new Dictionary<string, object>
                               {
                                   ["fps"] = config.Limitation
                               }
-                          )
-                          : Lang.Get("BetterFPSLimitationTitle-Notification-Unset");
+                          ) :
+                          Lang.Get("BetterFPSLimitationTitle-Notification-Unset");
         NotifyHelper.Instance().Chat(message);
         NotifyHelper.Toast(message);
 
@@ -205,15 +208,17 @@ public partial class BetterFPSLimitation : ModuleBase
     {
         if (entry == null) return;
 
-        currentFPS = pacer.FPS >= 1 ? pacer.FPS : 1;
+        currentFPS = pacer.FPS >= 1 ?
+                         pacer.FPS :
+                         1;
         RecordFPS(currentFPS);
 
         var text = ISeStringEvaluator.Instance().EvaluateFromAddon(4002, [(int)MathF.Round(currentFPS)]);
-        
+
         if (config.IsEnabled)
         {
             using var rented = new RentedSeStringBuilder();
-            
+
             text = rented
                    .PushEdgeColorType(37)
                    .Append(text)

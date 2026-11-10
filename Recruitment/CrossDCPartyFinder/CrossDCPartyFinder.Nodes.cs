@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class CrossDCPartyFinder
+internal partial class CrossDCPartyFinder
 {
     private RadioButtonGroupNode? dataCenterGroup;
 
@@ -70,7 +70,7 @@ public partial class CrossDCPartyFinder
                     var labelSize = radioButton.LabelNode.GetTextDrawSize(considerScale: false);
                     radioButton.LabelNode.Size = new Vector2(MathF.Ceiling(labelSize.X), radioButton.Height);
                     radioButton.Width          = radioButton.LabelNode.X + radioButton.LabelNode.Width;
-                    
+
                     dataCenterGroup.AddButton(radioButton);
                 }
 

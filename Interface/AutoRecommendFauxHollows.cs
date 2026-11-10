@@ -11,7 +11,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRecommendFauxHollows : ModuleBase
+internal unsafe class AutoRecommendFauxHollows : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public unsafe class AutoRecommendFauxHollows : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Veever"]
     };
+
+    public override string ModuleName => nameof(AutoRecommendFauxHollows);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

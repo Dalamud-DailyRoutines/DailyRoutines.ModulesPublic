@@ -14,7 +14,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedSalvage
+internal unsafe partial class OptimizedSalvage
 {
     private readonly Dictionary<nint, SkillColumnEntry> skillColumnNodes = [];
 

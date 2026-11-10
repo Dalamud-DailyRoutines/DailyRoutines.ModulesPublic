@@ -3,7 +3,7 @@ using DailyRoutines.Extensions;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCastMovementLock
+internal unsafe partial class AutoCastMovementLock
 {
     protected override void ConfigUI()
     {

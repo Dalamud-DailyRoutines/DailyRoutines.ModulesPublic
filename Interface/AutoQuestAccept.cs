@@ -7,7 +7,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoQuestAccept : ModuleBase
+internal class AutoQuestAccept : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class AutoQuestAccept : ModuleBase
         Description = Lang.Get("AutoQuestAcceptDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoQuestAccept);
 
     protected override void Init() =>
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "JournalAccept", OnAddonSetup);

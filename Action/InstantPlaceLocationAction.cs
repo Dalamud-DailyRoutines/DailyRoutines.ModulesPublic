@@ -11,7 +11,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class InstantPlaceLocationAction : ModuleBase
+internal unsafe class InstantPlaceLocationAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class InstantPlaceLocationAction : ModuleBase
         Description = Lang.Get("InstantPlaceLocationActionDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(InstantPlaceLocationAction);
 
     protected override void Init() =>
         UseActionManager.Instance().RegPreUseAction(OnPreUseAction);

@@ -11,7 +11,7 @@ using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoClaimPVPRewards : ModuleBase
+internal unsafe class AutoClaimPVPRewards : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class AutoClaimPVPRewards : ModuleBase
         Description = Lang.Get("AutoClaimPVPRewardsDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoClaimPVPRewards);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

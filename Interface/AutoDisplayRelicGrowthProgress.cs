@@ -9,7 +9,7 @@ using KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
+internal unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public unsafe class AutoDisplayRelicGrowthProgress : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayRelicGrowthProgress/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoDisplayRelicGrowthProgress);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

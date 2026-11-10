@@ -19,7 +19,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoCheckFoodUsage : ModuleBase
+internal class AutoCheckFoodUsage : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,14 +28,14 @@ public class AutoCheckFoodUsage : ModuleBase
         Category    = ModuleCategory.Combat
     };
 
-    private CompSig countdownInitSig = null!;
+    public override string ModuleName => nameof(AutoCheckFoodUsage);
 
+    private CompSig countdownInitSig = null!;
     public delegate nint CountdownInitDelegate
     (
         nint a1,
         nint a2
     );
-
     private Hook<CountdownInitDelegate>? CountdownInitHook;
 
     private Config config = null!;
@@ -596,7 +596,7 @@ public class AutoCheckFoodUsage : ModuleBase
         !ICondition.Instance().IsOccupiedInEvent    &&
         !ICondition.Instance().IsCasting            &&
         IObjectTable.Instance().LocalPlayer != null &&
-        UIModule.IsScreenReady()                            &&
+        UIModule.IsScreenReady()                    &&
         ActionManager.Instance()->GetActionStatus(ActionType.GeneralAction, 2) == 0;
 
     private bool IsCooldownElapsed() =>

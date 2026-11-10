@@ -27,7 +27,7 @@ using FateState = Dalamud.Game.ClientState.Fates.FateState;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OccultCrescentHelper
+internal partial class OccultCrescentHelper
 {
     private class EventManager
     (

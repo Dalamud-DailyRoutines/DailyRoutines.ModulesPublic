@@ -23,7 +23,7 @@ using GameBattleChara = FFXIVClientStructs.FFXIV.Client.Game.Character.BattleCha
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDisplayMitigationInfo : ModuleBase
+internal class AutoDisplayMitigationInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -32,6 +32,8 @@ public class AutoDisplayMitigationInfo : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["HaKu"]
     };
+
+    public override string ModuleName => nameof(AutoDisplayMitigationInfo);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

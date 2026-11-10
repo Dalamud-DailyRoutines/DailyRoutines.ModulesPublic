@@ -5,7 +5,7 @@ using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot
+internal partial class AutoReplyChatBot
 {
     private sealed class ChatPipeline
     (

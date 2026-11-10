@@ -12,7 +12,7 @@ using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class ContentFinderCommand : ModuleBase
+internal class ContentFinderCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class ContentFinderCommand : ModuleBase
         Description = Lang.Get("ContentFinderCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(ContentFinderCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

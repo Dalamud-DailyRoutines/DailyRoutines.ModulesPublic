@@ -7,7 +7,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSkipBuddyFeedScene : ModuleBase
+internal unsafe class AutoSkipBuddyFeedScene : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,12 +16,16 @@ public unsafe class AutoSkipBuddyFeedScene : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(AutoSkipBuddyFeedScene);
+
     private static readonly CompSig PlayFeedBuddySceneSig =
         new("E8 ?? ?? ?? ?? 48 8B 5C 24 ?? 48 8D 4C 24 ?? E8 ?? ?? ?? ?? 33 C0 48 83 C4 ?? C3 CC CC CC CC CC CC CC CC CC CC CC 48 83 EC");
+
     private delegate void PlayFeedBuddySceneDelegate
     (
         HousingManager* manager
     );
+
     private Hook<PlayFeedBuddySceneDelegate>? PlayFeedBuddySceneHook;
 
     protected override void Init()

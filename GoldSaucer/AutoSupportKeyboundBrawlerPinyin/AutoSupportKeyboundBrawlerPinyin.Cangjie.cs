@@ -2,7 +2,7 @@ using System.Collections.Frozen;
 
 namespace DailyRoutines.ModulesPublic.AutoSupportKeyboundBrawlerPinyin;
 
-public unsafe partial class AutoSupportKeyboundBrawlerPinyin
+internal unsafe partial class AutoSupportKeyboundBrawlerPinyin
 {
     private readonly Dictionary<string, string[][]> cangjieReadings = new(StringComparer.Ordinal);
 

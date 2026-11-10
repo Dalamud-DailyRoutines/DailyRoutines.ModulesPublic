@@ -12,7 +12,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoRecordPartyFinderSetting
+internal unsafe partial class AutoRecordPartyFinderSetting
 {
     private sealed class AutoRecordPartyFinderSettingAddon
     (

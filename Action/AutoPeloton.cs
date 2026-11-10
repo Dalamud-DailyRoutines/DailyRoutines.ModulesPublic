@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoPeloton : ModuleBase
+internal unsafe class AutoPeloton : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,6 +19,8 @@ public unsafe class AutoPeloton : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["yamiYori"]
     };
+
+    public override string ModuleName => nameof(AutoPeloton);
 
     private Config config = null!;
 

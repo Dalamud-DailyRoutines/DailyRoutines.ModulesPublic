@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoAddChatPrefixSuffix : ModuleBase
+internal class AutoAddChatPrefixSuffix : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class AutoAddChatPrefixSuffix : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["那年雪落"]
     };
+
+    public override string ModuleName => nameof(AutoAddChatPrefixSuffix);
 
     private Config? config;
 

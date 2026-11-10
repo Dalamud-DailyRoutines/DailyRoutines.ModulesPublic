@@ -14,7 +14,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedXBMMonsterNotebook : ModuleBase
+internal unsafe class OptimizedXBMMonsterNotebook : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class OptimizedXBMMonsterNotebook : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(OptimizedXBMMonsterNotebook);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -30,11 +32,13 @@ public unsafe class OptimizedXBMMonsterNotebook : ModuleBase
 
     private static readonly CompSig BuildNotebookDetailSig =
         new("40 53 56 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B DA");
+
     private delegate void BuildNotebookDetailDelegate
     (
         AgentXBMMonsterNotebook* agent,
         AtkValue*                values
     );
+
     private Hook<BuildNotebookDetailDelegate>? BuildNotebookDetailHook;
 
     private TextButtonNode? smallButton;

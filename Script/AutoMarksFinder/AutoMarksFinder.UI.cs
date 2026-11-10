@@ -1,22 +1,21 @@
-using System.Globalization;
 using System.Numerics;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
-using FFXIVClientStructs.FFXIV.Client.UI;
+using Dalamud.Interface.Textures;
+using Dalamud.Interface.Textures.TextureWraps;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
 using OmenTools.Dalamud;
+using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.ImGuiOm.Widgets.MapRenderer;
-using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
 using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 using Task = System.Threading.Tasks.Task;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private readonly ImGuiMapRenderer scanMapRenderer = new()
     {
@@ -24,14 +23,20 @@ public partial class AutoMarksFinder
         EnableDefaultMarkers = true
     };
 
-    private ScanZoneCombo? scanZoneCombo;
-    private int            scanResultTrainIndex = -1;
-    private bool           confirmClearScanResults;
+    private ScanZoneCombo?       scanZoneCombo;
+    private bool                 confirmClearScanResults;
+    private MonsterScanner?      scanCoverageSource;
+    private int                  scanCoverageVersion;
+    private IDalamudTextureWrap? scanCoverageTexture;
 
     private Task?                    spawnPointUpdateTask;
     private CancellationTokenSource? spawnPointUpdateCancellation;
 
+    private AetheryteCombo? startAetheryteCombo;
+
     private string trainSearchInput = string.Empty;
+    private string newListNameInput = string.Empty;
+    private string renameTrainInput = string.Empty;
 
     protected override void ConfigUI()
     {
@@ -50,118 +55,80 @@ public partial class AutoMarksFinder
         DrawTabItemSettings();
     }
 
-    private void DrawTabItemTrain()
+    private unsafe void DrawTabItemTrain()
     {
         using var tabTrain = ImRaii.TabItem(Lang.Get("AutoMarksFinder-Routes"));
         if (!tabTrain) return;
 
-        var selected =
-            selectedTrainIndex == -1 ||
-            selectedTrainIndex > config.Trains.Count - 1 ?
-                null :
-                config.Trains[selectedTrainIndex];
-        
-        if (DrawTrainsSelectCombo(300f * GlobalUIScale, ref selectedTrainIndex))
+        DrawTrainsSelectCombo(300f * GlobalUIScale, selection);
+
+        if (movement.IsBusy &&
+            scanner?.IsRunning != true)
         {
-            smallCardMobIndex = 0;
-            StopAutoBroadcast();
-            selected = SelectedTrain;
-        }
-
-        ImGui.SameLine();
-
-        using (ImRaii.Disabled(selected == null))
-        {
-            if (ImGuiOm.ButtonIcon("指定出发点", FontAwesomeIcon.GasPump, Lang.Get("AutoMarksFinder-IntendedStartingPoint")))
-                ImGui.OpenPopup("StartAetherytePopup");
-
-            using (var popup = ImRaii.Popup("StartAetherytePopup"))
-            {
-                if (popup)
-                {
-                    var startAetheryte = selected.StartAetheryte?.RowId ?? 0;
-                    ImGui.SetNextItemWidth(200f * GlobalUIScale);
-                    if (ImGuiOm.SingleSelectCombo
-                        (
-                            "AetheryteSelectCombo",
-                            Sheets.Aetherytes,
-                            ref startAetheryte,
-                            ref startAetheryteInput,
-                            x => $"{x.PlaceName.Value.Name.ToString()} ({x.RowId})",
-                            [new(Lang.Get("Zone"), ImGuiTableColumnFlags.WidthStretch, 0)],
-                            [
-                                x => () =>
-                                {
-                                    if (ImGuiOm.Selectable
-                                        (
-                                            $"{x.PlaceName.Value.Name.ToString()} ({x.RowId})",
-                                            selected.StartAetheryte?.RowId == x.RowId,
-                                            ImGuiSelectableFlags.DontClosePopups
-                                        ))
-                                        selected.StartAetheryte = x;
-                                }
-                            ],
-                            [x => x.PlaceName.Value.Name.ToString(), x => x.RowId.ToString()],
-                            true
-                        ))
-                        selected.StartAetheryte = LuminaGetter.GetRow<Aetheryte>(startAetheryte);
-
-                    ImGui.SameLine();
-
-                    if (ImGui.Button(Lang.Get("AutoMarksFinder-SortAccordingToStartingPoint")))
-                    {
-                        selected.Reorder();
-                        StopAutoBroadcast();
-                        config.Save(this);
-                    }
-                }
-            }
-
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            DrawAutoBroadcastButton();
-
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            ImGui.TextDisabled("|");
-
-            ImGui.SameLine(0, 8f * GlobalUIScale);
-            if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, Lang.Get("Export")))
-                ExportToClipboard(selected!);
-        }
-
-        ImGui.SameLine();
-
-        if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, Lang.Get("Import")))
-        {
-            var imported = ImportFromClipboard<NotoriousMonsterList>();
-
-            if (imported != null)
-            {
-                foreach (var monster in imported.MonstersFound)
-                    monster.SetState(true);
-
-                config.Trains.Add(imported);
-
-                aliveMonitor?.InitializeTracks(imported);
-
-                config.Save(this);
-            }
+            ImGui.SameLine();
+            if (ImGuiOm.ButtonIcon("###StopMovement", FontAwesomeIcon.Stop, Lang.Get("Stop")))
+                movement.Stop();
         }
 
         ImGui.Spacing();
 
-        if (selected == null) return;
+        if (SelectedTrain == null) return;
 
-        var       source = selected.MonstersFound.OrderByDescending(x => x.IsAlive).ToList();
-        using var table  = ImRaii.Table("##TrainTable", 5, ImGuiTableFlags.Resizable | ImGuiTableFlags.Reorderable | ImGuiTableFlags.Hideable);
+        var       source = SelectedTrain.MonstersFound;
+        using var table  = ImRaii.Table("##TrainTable", 4, ImGuiTableFlags.Resizable | ImGuiTableFlags.Reorderable | ImGuiTableFlags.Hideable);
         if (!table) return;
 
         ImGui.TableSetupColumn(Lang.Get("Serial"),                           ImGuiTableColumnFlags.WidthFixed);
         ImGui.TableSetupColumn(Lang.Get("Name"),                             ImGuiTableColumnFlags.WidthFixed);
-        ImGui.TableSetupColumn(Lang.Get("Zone"),                             ImGuiTableColumnFlags.WidthFixed);
         ImGui.TableSetupColumn(Lang.Get("Position"),                         ImGuiTableColumnFlags.WidthFixed);
         ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-NearestAetheryte"), ImGuiTableColumnFlags.WidthStretch);
 
-        ImGui.TableHeadersRow();
+        ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+
+        ImGui.TableNextColumn();
+
+        if (ImGuiOm.ButtonSelectable($"{Lang.Get("AutoMarksFinder-IntendedStartingPoint")}"))
+        {
+            var zones = SelectedTrain.MonstersFound.Select(monster => monster.AetheryteZoneID).ToHashSet();
+            startAetheryteCombo = new
+            (
+                "AutoMarksFinder.StartAetheryte",
+                LuminaGetter.Get<Aetheryte>().Where(aetheryte => aetheryte.IsAetheryte && zones.Contains(aetheryte.Territory.RowId))
+            );
+
+            ImGui.OpenPopup("StartAetherytePopup");
+        }
+
+        using (var popup = ImRaii.Popup("StartAetherytePopup"))
+        {
+            if (popup)
+            {
+                startAetheryteCombo.SelectedID = SelectedTrain.StartAetheryteID;
+                ImGui.SetNextItemWidth(260f * GlobalUIScale);
+
+                if (startAetheryteCombo.DrawRadio())
+                {
+                    SelectedTrain.StartAetheryteID = startAetheryteCombo.SelectedID;
+                    config.Save(this);
+                }
+
+                using (ImRaii.Disabled(SelectedTrain.StartAetheryteID == 0))
+                {
+                    if (ImGui.Button(Lang.Get("AutoMarksFinder-SortAccordingToStartingPoint")))
+                    {
+                        SelectedTrain.Reorder();
+                        config.Save(this);
+                    }
+                }
+            }
+        }
+
+        ImGui.TableNextColumn();
+        ImGui.TableHeader(Lang.Get("Name"));
+        ImGui.TableNextColumn();
+        ImGui.TableHeader(Lang.Get("Position"));
+        ImGui.TableNextColumn();
+        ImGui.TableHeader(Lang.Get("AutoMarksFinder-NearestAetheryte"));
 
         for (var i = 0; i < source.Count; i++)
         {
@@ -174,58 +141,66 @@ public partial class AutoMarksFinder
             ImGui.TableNextColumn();
 
             if (ImGuiOm.ButtonIcon($"删除{info}", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
-            {
-                selected.MonstersFound.Remove(info);
-                aliveMonitor?.RemoveTrack(selected, info);
-                StopAutoBroadcast();
-                config.Save(this);
-            }
+                ImGui.OpenPopup("###DeleteMonsterPopup");
 
-            ImGui.SameLine();
-
-            using (ImRaii.Group())
+            using (var deletePopup = ImRaii.Popup("###DeleteMonsterPopup"))
             {
-                if (info.IsAlive)
+                if (deletePopup)
                 {
-                    ImGui.SameLine();
+                    ImGui.TextUnformatted(Lang.Get("AutoMarksFinder-DeleteConfirm"));
 
-                    using (ImRaii.Disabled(i <= 0))
+                    if (ImGui.Button(Lang.Get("Confirm")))
                     {
-                        if (ImGuiOm.ButtonIcon("上移", FontAwesomeIcon.ArrowUp, Lang.Get("MoveUp")))
-                        {
-                            selected.MonstersFound.Swap
-                            (
-                                selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
-                                selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i - 1]))
-                            );
-                            StopAutoBroadcast();
-                            config.Save(this);
-                        }
-                    }
-
-                    ImGui.SameLine();
-
-                    using (ImRaii.Disabled(i >= source.Count - 1))
-                    {
-                        if (ImGuiOm.ButtonIcon("下移", FontAwesomeIcon.ArrowDown, Lang.Get("MoveDown")))
-                        {
-                            selected.MonstersFound.Swap
-                            (
-                                selected.MonstersFound.FindIndex(x => ReferenceEquals(x, info)),
-                                selected.MonstersFound.FindIndex(x => ReferenceEquals(x, source[i + 1]))
-                            );
-                            StopAutoBroadcast();
-                            config.Save(this);
-                        }
+                        SelectedTrain.RemoveAt(i);
+                        config.Save(this);
+                        ImGui.CloseCurrentPopup();
+                        return;
                     }
                 }
             }
 
             ImGui.SameLine();
-            ImGui.TextUnformatted($"{i + 1:00}");
+            ImGuiOm.ButtonSelectable($"{i + 1:00}");
+
+            if (ImGui.IsItemHovered())
+                ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+
+            using (var dragSource = ImRaii.DragDropSource())
+            {
+                if (dragSource)
+                {
+                    ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
+                    var sourceIndex = i;
+                    ImGui.SetDragDropPayload(MONSTER_DRAG_PAYLOAD, new ReadOnlySpan<byte>(&sourceIndex, sizeof(int)));
+                    ImGui.TextUnformatted(info.GetBNPCName());
+                }
+            }
+
+            using (var dragTarget = ImRaii.DragDropTarget())
+            {
+                if (dragTarget)
+                {
+                    var payload = ImGui.AcceptDragDropPayload(MONSTER_DRAG_PAYLOAD);
+
+                    if ((ImGuiPayload*)payload != null &&
+                        payload.IsDelivery())
+                    {
+                        var sourceIndex = *(int*)payload.Data;
+
+                        if (sourceIndex != i &&
+                            sourceIndex >= 0 &&
+                            sourceIndex < SelectedTrain.MonstersFound.Count)
+                        {
+                            SelectedTrain.Move(sourceIndex, i);
+                            config.Save(this);
+                            return;
+                        }
+                    }
+                }
+            }
 
             ImGui.TableNextColumn();
-            DrawMonsterStatusToggle(selected, info);
+            DrawMonsterStatusToggle(SelectedTrain, info);
 
             ImGui.SameLine();
             using (ImRaii.PushColor
@@ -238,136 +213,10 @@ public partial class AutoMarksFinder
                 ImGui.TextUnformatted($"{info.GetBNPCName()}");
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
-
-            ImGui.TableNextColumn();
-            DrawPositionColumn(info);
+            DrawPositionColumn(info, true);
 
             ImGui.TableNextColumn();
             DrawAetheryteColumn(info);
-        }
-    }
-
-    private void DrawAutoBroadcastButton()
-    {
-        using var disabled = ImRaii.Disabled(MonsterScanner.Scanner?.IsRunning == true);
-        var label = autoBroadcast.On ?
-                        Lang.Get("AutoMarksFinder-AutoBroadcastOn") :
-                        Lang.Get("AutoMarksFinder-AutoBroadcast");
-        var tooltip = autoBroadcast.On ?
-                          Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStop") :
-                          Lang.Get("AutoMarksFinder-AutoBroadcastTooltipStart");
-        
-        if (ImGuiOm.ButtonIcon(label, FontAwesomeIcon.Truck, tooltip))
-            ToggleAutoBroadcast();
-
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
-            ImGui.OpenPopup("AutoBroadcastPopup");
-
-        using var popup = ImRaii.Popup("AutoBroadcastPopup");
-        if (!popup)
-            return;
-
-        using (ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcastDepartTime")))
-        {
-            ImGui.SetNextItemWidth(160f * GlobalUIScale);
-            ImGui.InputText("###AutoBroadcastDepartTime", ref autoBroadcast.DepartTimeInput, 16);
-        }
-
-        ImGui.Spacing();
-        ImGui.Text
-        (
-            Lang.Get
-            (
-                "AutoMarksFinder-AutoBroadcastLocalTime",
-                new Dictionary<string, object> { ["timeText"] = DateTime.Now.ToString("HH:mm:ss") }
-            )
-        );
-
-        if (autoBroadcast.TimeCalibrated)
-        {
-            ImGui.Text
-            (
-                Lang.Get
-                (
-                    "AutoMarksFinder-AutoBroadcastServerTime",
-                    new Dictionary<string, object> { ["timeText"] = CalibratedNow.ToString("HH:mm:ss") }
-                )
-            );
-            ImGui.Text
-            (
-                Lang.Get
-                (
-                    "AutoMarksFinder-AutoBroadcastCalibOffset",
-                    new Dictionary<string, object>
-                    {
-                        ["offsetText"] = autoBroadcast.TimeCalibOffsetSec.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture)
-                    }
-                )
-            );
-        }
-        else
-            ImGui.Text(Lang.Get("AutoMarksFinder-AutoBroadcastServerTimeUncalibrated"));
-
-        var remain = autoBroadcast.DepartAt - CalibratedNow;
-        var status = autoBroadcast switch
-        {
-            { On: true, Departed: false } when remain > TimeSpan.Zero =>
-                Lang.Get
-                (
-                    "AutoMarksFinder-AutoBroadcastRemain",
-                    new Dictionary<string, object> { ["remainingTimeText"] = remain.ToString(@"hh\:mm\:ss") }
-                ),
-            { On: true, Departed: false } => Lang.Get("AutoMarksFinder-AutoBroadcastDepartNow"),
-            { On: true, Departed: true } =>
-                Lang.Get
-                (
-                    "AutoMarksFinder-AutoBroadcastProgress",
-                    new Dictionary<string, object> { ["pointIndex"] = autoBroadcast.Index + 1 }
-                ),
-            _ => string.Empty
-        };
-
-        if (!string.IsNullOrEmpty(status))
-            ImGui.Text(status);
-
-        ImGui.Spacing();
-
-        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastCalibrate")))
-        {
-            var serverNow = Framework.GetServerTime()
-                                     .ToUTCDateTimeFromUnixSeconds()
-                                     .ToLocalTime();
-            autoBroadcast.TimeCalibOffsetSec = (DateTime.Now - serverNow).TotalSeconds;
-            autoBroadcast.TimeCalibrated     = true;
-
-            if (autoBroadcast is { On: true, Departed: false } &&
-                TryParseDepartTime(out var parsed))
-                autoBroadcast.DepartAt = parsed;
-        }
-
-        ImGui.SameLine();
-
-        if (ImGui.Button(Lang.Get("AutoMarksFinder-AutoBroadcastApply")))
-        {
-            if (!TryParseDepartTime(out var parsed))
-            {
-                NotifyHelper.Instance().NotificationWarning
-                    (Lang.Get("AutoMarksFinder-AutoBroadcastInvalidDepartTime"), Lang.Get("AutoMarksFinder-AutoBroadcast"));
-                return;
-            }
-
-            autoBroadcast.DepartAt = parsed;
-            NotifyHelper.Instance().NotificationInfo
-            (
-                Lang.Get
-                (
-                    "AutoMarksFinder-AutoBroadcastDepartTimeSet",
-                    new Dictionary<string, object> { ["timeText"] = autoBroadcast.DepartAt.ToString("HH:mm:ss") }
-                ),
-                Lang.Get("AutoMarksFinder-AutoBroadcast")
-            );
-            ImGui.CloseCurrentPopup();
         }
     }
 
@@ -388,8 +237,10 @@ public partial class AutoMarksFinder
 
                 if (train != null)
                 {
-                    aliveMonitor?.SetManualAlive(train, info, isAlive);
                     info.SetState(isAlive);
+                    if (!autoBroadcast.IsRunning &&
+                        ReferenceEquals(train, SelectedTrain))
+                        selection.FollowAliveState(info);
                 }
 
                 config.Save(this);
@@ -420,23 +271,9 @@ public partial class AutoMarksFinder
         if (info == null) return;
         using var id = ImRaii.PushId(info.ToString());
 
-        if (ImGuiOm.ButtonIcon("传送到目标区域", FontAwesomeIcon.Plane, Lang.Get("AutoMarksFinder-TeleportToMobsZone")))
+        if (ImGuiOm.ButtonIcon("传送到以太之光", FontAwesomeIcon.Plane, Lang.Get("AutoMarksFinder-TeleportToMobsZone")))
         {
-            if (GameState.TerritoryType != info.ZoneID)
-            {
-                TaskHelper.Enqueue(IsAbleToTeleport, "等待停止移动");
-                TaskHelper.Enqueue
-                (
-                    () => info.NearestAetheryteRecord?.TeleportTo(),
-                    "传送至目标区域"
-                );
-            }
-
-            if (info.Instance != 0)
-            {
-                TaskHelper.Enqueue(() => GameState.TerritoryType == info.ZoneID && UIModule.IsScreenReady(), "等待传送完毕");
-                TaskHelper.Enqueue(() => ChatManager.Instance().SendMessage($"/pdr insc {info.Instance}"),   $"切换副本区至 {info.Instance} 线");
-            }
+            movement.Travel(info.ZoneID, info.Instance, info.NearestAetheryteRecord);
         }
     }
 
@@ -463,8 +300,8 @@ public partial class AutoMarksFinder
 
     private void DrawScanRoutePreview()
     {
-        if (MonsterScanner.Scanner is not { IsRunning: true, ScanPoints.Count: > 0 } ||
-            !LuminaGetter.TryGetRow<TerritoryType>(MonsterScanner.Scanner.ZoneID, out var zone))
+        if (scanner is not { IsRunning: true, ScanPoints.Count: > 0 } ||
+            !LuminaGetter.TryGetRow<TerritoryType>(scanner.ZoneID, out var zone))
             return;
 
         ImGui.SetNextWindowSize(ScaledVector2(400,            470), ImGuiCond.FirstUseEver);
@@ -480,10 +317,10 @@ public partial class AutoMarksFinder
             scanMapRenderer.SetMap(zone.Map.RowId);
             scanMapRenderer.ClearMarkers();
 
-            for (var index = 0; index < MonsterScanner.Scanner.ScanPoints.Count; index++)
+            for (var index = 0; index < scanner.ScanPoints.Count; index++)
             {
-                var point   = MonsterScanner.Scanner.ScanPoints[index];
-                var pending = MonsterScanner.Scanner.PendingPoints.Contains(point);
+                var point   = scanner.ScanPoints[index];
+                var pending = scanner.PendingPoints.Contains(point);
                 scanMapRenderer.AddMarker
                 (
                     new()
@@ -503,9 +340,9 @@ public partial class AutoMarksFinder
                 );
             }
 
-            if (MonsterScanner.Scanner.FoundOnes.TryGetValue(MonsterScanner.Scanner.ZoneID, out var found))
+            if (scanner.FoundOnes.TryGetValue(scanner.ZoneID, out var found))
             {
-                foreach (var monster in found.Where(monster => monster.Instance == MonsterScanner.Scanner.Instance))
+                foreach (var monster in found.Where(monster => monster.Instance == scanner.Instance))
                 {
                     scanMapRenderer.AddMarker
                     (
@@ -528,45 +365,59 @@ public partial class AutoMarksFinder
         ImGui.End();
     }
 
-    private static void DrawScanMapCoverage(ImGuiMapRenderer renderer, ImDrawListPtr drawList)
+    private void DrawScanMapCoverage(ImGuiMapRenderer renderer, ImDrawListPtr drawList)
     {
-        if (MonsterScanner.Scanner == null)
+        if (scanner == null)
             return;
 
-        var coverageColor = KnownColor.GreenYellow.ToVector4();
-        coverageColor.W = 0.12f;
+        scanner.UpdateCoverageImage();
 
-        foreach (var position in MonsterScanner.Scanner.ObservedPositions)
+        if (!ReferenceEquals(scanCoverageSource, scanner)  ||
+            scanCoverageVersion != scanner.CoverageVersion ||
+            scanCoverageTexture == null)
         {
-            var center = renderer.WorldToScreen(position);
-            var radius = Vector2.Distance(center, renderer.WorldToScreen(position + new Vector3(MonsterScanner.DETECTION_RADIUS, 0, 0)));
-            drawList.AddCircleFilled(center, radius, ImGui.ColorConvertFloat4ToU32(coverageColor));
-            drawList.AddCircle(center, radius, ImGui.ColorConvertFloat4ToU32(KnownColor.GreenYellow.ToVector4()));
+            var texture = ITextureProvider.Instance().CreateFromRaw
+            (
+                RawImageSpecification.Bgra32(MonsterScanner.COVERAGE_SIZE, MonsterScanner.COVERAGE_SIZE),
+                scanner.CoveragePixels
+            );
+            scanCoverageTexture?.Dispose();
+            scanCoverageTexture = texture;
+            scanCoverageSource  = scanner;
+            scanCoverageVersion = scanner.CoverageVersion;
         }
 
-        for (var index = 1; index < MonsterScanner.Scanner.ActivePath.Count; index++)
+        var bounds = scanner.CoverageBounds;
+        drawList.AddImage
+        (
+            scanCoverageTexture.Handle,
+            renderer.WorldToScreen(new(bounds.Left, 0, bounds.Top)),
+            renderer.WorldToScreen(new(bounds.Right, 0, bounds.Bottom))
+        );
+
+        for (var index = 1; index < scanner.ActivePath.Count; index++)
             drawList.AddLine
             (
-                renderer.WorldToScreen(MonsterScanner.Scanner.ActivePath[index - 1]),
-                renderer.WorldToScreen(MonsterScanner.Scanner.ActivePath[index]),
+                renderer.WorldToScreen(scanner.ActivePath[index - 1]),
+                renderer.WorldToScreen(scanner.ActivePath[index]),
                 ImGui.ColorConvertFloat4ToU32(KnownColor.LightSkyBlue.ToVector4()),
                 2 * GlobalUIScale
             );
     }
 
-    private static void DrawScanMapForeground(ImGuiMapRenderer renderer, ImDrawListPtr drawList)
+    private void DrawScanMapForeground(ImGuiMapRenderer renderer, ImDrawListPtr drawList)
     {
-        if (MonsterScanner.Scanner == null)
+        if (scanner == null)
             return;
 
-        if (MonsterScanner.Scanner.NavigationTarget is { } target)
+        if (scanner.NavigationTarget is { } target)
         {
             var targetPosition = renderer.WorldToScreen(target);
             drawList.AddCircle(targetPosition, 10 * GlobalUIScale, ImGui.ColorConvertFloat4ToU32(KnownColor.Red.ToVector4()), 0, 2 * GlobalUIScale);
         }
 
-        if (GameState.TerritoryType          != MonsterScanner.Scanner.ZoneID   ||
-            InstancesManager.CurrentInstance != MonsterScanner.Scanner.Instance ||
+        if (GameState.TerritoryType          != scanner.ZoneID   ||
+            InstancesManager.CurrentInstance != scanner.Instance ||
             LocalPlayerState.Object is not { } player)
             return;
 
@@ -579,35 +430,67 @@ public partial class AutoMarksFinder
 
     private unsafe void DrawPositionColumn
     (
-        NotoriousMonsterFound? info
+        NotoriousMonsterFound? info,
+        bool                   includeZone = false
     )
     {
         if (info == null) return;
         using var id = ImRaii.PushId($"{info}");
 
-        var agentMap = AgentMap.Instance();
-
-        if (ImGuiOm.ButtonIcon
-            (
-                $"Relay{info}Position",
-                FontAwesomeIcon.Microphone,
-                Lang.Get("AutoMarksFinder-RelayPosition")
-            ))
-            Relay(RelayType.Position, info);
+        using (ImRaii.Disabled(relay.IsBusy))
+        {
+            if (ImGuiOm.ButtonIcon
+                (
+                    $"Relay{info}Position",
+                    FontAwesomeIcon.Microphone,
+                    Lang.Get("AutoMarksFinder-RelayPosition")
+                ))
+                relay.Send(RelayType.Position, SelectedTrain, info);
+        }
 
         ImGui.SameLine();
+
+        using (ImRaii.Disabled(scanner?.IsRunning == true || !GameState.IsLoggedIn))
+        {
+            if (movement.IsBusy)
+            {
+                ImGui.SameLine();
+                if (ImGuiOm.ButtonIcon("###StopMovement", FontAwesomeIcon.Stop, Lang.Get("Stop")))
+                    movement.Stop();
+            }
+            else
+            {
+                if (ImGuiOm.ButtonIcon($"Navigate{info}", FontAwesomeIcon.Route, Lang.Get("AutoMarksFinder-NavigateToMonster")))
+                    movement.NavigateToMonster(info);
+            }
+        }
+
+        ImGui.SameLine();
+
+        var isItemHovered = false;
+        var isItemClicked = false;
+
+        if (includeZone)
+        {
+            ImGui.TextUnformatted(FormatZoneInfo(info.GetZoneName(), info.Instance));
+            if (ImGui.IsItemHovered())
+                isItemHovered = true;
+            if (ImGui.IsItemClicked())
+                isItemClicked = true;
+
+            ImGui.SameLine();
+        }
+
         ImGui.TextUnformatted($"[{info.Position.X:F1}, {info.Position.Y:F1}, {info.Position.Z:F1}]");
         if (ImGui.IsItemHovered())
+            isItemHovered = true;
+        if (ImGui.IsItemClicked())
+            isItemClicked = true;
+
+        if (isItemHovered)
             ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
-
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
-        {
-            var title =
-                $"{info.GetBNPCName()}" +
-                $"（{FormatZoneInfo(info.GetZoneName(), info.Instance)}）";
-
-            agentMap->SetMapFlagAndOpen(info.GetMapID(), info.Position, title);
-        }
+        if (isItemClicked)
+            info.OpenMap();
     }
 
     private void DrawAetheryteColumn
@@ -618,16 +501,20 @@ public partial class AutoMarksFinder
         if (info == null) return;
         using var id = ImRaii.PushId($"{info}");
 
-        if (ImGuiOm.ButtonIcon
-            (
-                $"Relay{info}Nearest",
-                FontAwesomeIcon.Microphone,
-                Lang.Get("AutoMarksFinder-RelayAetheryte")
-            ))
-            Relay(RelayType.WaitAetheryte, info);
+        using (ImRaii.Disabled(relay.IsBusy))
+        {
+            if (ImGuiOm.ButtonIcon
+                (
+                    $"Relay{info}Nearest",
+                    FontAwesomeIcon.Microphone,
+                    Lang.Get("AutoMarksFinder-RelayAetheryte")
+                ))
+                relay.Send(RelayType.WaitAetheryte, SelectedTrain, info);
+        }
 
         ImGui.SameLine();
-        DrawTeleportToMonsterZone(info);
+        using (ImRaii.Disabled(scanner?.IsRunning == true || movement.IsBusy))
+            DrawTeleportToMonsterZone(info);
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(-1);
@@ -661,7 +548,7 @@ public partial class AutoMarksFinder
                 $"（{Lang.Get("AutoMarksFinder-ScanPoints")}: {(isZoneValid ? infos.Count : 0)}）"
             );
 
-            using (ImRaii.Disabled(spawnPointUpdateTask is { IsCompleted: false } || MonsterScanner.Scanner?.IsRunning == true))
+            using (ImRaii.Disabled(spawnPointUpdateTask is { IsCompleted: false } || scanner?.IsRunning == true))
             {
                 if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-UpdateSpawnPoints")))
                     spawnPointUpdateTask = UpdateSpawnPoints(spawnPointUpdateCancellation.Token);
@@ -688,9 +575,13 @@ public partial class AutoMarksFinder
                     config.SelectedZones.IntersectWith(parsed.Where(pair => pair.Value.Count > 0).Select(pair => pair.Key));
                     scanZoneCombo = null;
                     config.Save(this);
+                    
                     NotifyHelper.Instance().NotificationInfo
                     (
-                        Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", new Dictionary<string, object> { ["count"] = parsed.Sum(pair => pair.Value.Count) }),
+                        Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", new Dictionary<string, object>
+                        {
+                            ["count"] = parsed.Sum(pair => pair.Value.Count)
+                        }),
                         Lang.Get("AutoMarksFinderTitle")
                     );
                 }
@@ -701,7 +592,11 @@ public partial class AutoMarksFinder
             if (!cancellationToken.IsCancellationRequested)
             {
                 DLog.Error(exception);
-                NotifyHelper.Instance().NotificationWarning(Lang.Get("AutoMarksFinder-UpdateSpawnPointsFailed"), Lang.Get("AutoMarksFinderTitle"));
+                NotifyHelper.Instance().NotificationWarning
+                (
+                    Lang.Get("AutoMarksFinder-UpdateSpawnPointsFailed"),
+                    Lang.Get("AutoMarksFinderTitle")
+                );
             }
         }
     }
@@ -712,33 +607,36 @@ public partial class AutoMarksFinder
 
         using (ImRaii.Disabled
                (
-                   MonsterScanner.Scanner?.IsRunning       == true ||
-                   MonsterScanner.Scanner?.FoundOnes.Count > 0     ||
-                   config.SelectedZones.Count              == 0    ||
-                   spawnPointUpdateTask is { IsCompleted: false }  ||
-                   TaskHelper.IsBusy                               ||
-                   autoBroadcast.On
+                   scanner?.IsRunning         == true             ||
+                   scanner?.FoundOnes.Count   > 0                 ||
+                   config.SelectedZones.Count == 0                ||
+                   spawnPointUpdateTask is { IsCompleted: false } ||
+                   movement.IsBusy                                ||
+                   autoBroadcast.IsRunning
                ))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Play, Lang.Get("Start")))
             {
-                MonsterScanner.ClearScanner();
-                MonsterScanner.Scanner = new(this);
-                MonsterScanner.Scanner.StartScan();
+                scanner?.Dispose();
+                scanner = new(this);
+                scanCoverageTexture?.Dispose();
+                scanCoverageTexture = null;
+                scanCoverageSource  = null;
+                scanner.StartScan();
             }
         }
 
         ImGui.SameLine();
 
-        using (ImRaii.Disabled(MonsterScanner.Scanner?.IsRunning != true))
+        using (ImRaii.Disabled(scanner?.IsRunning != true))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.Stop, Lang.Get("Stop")))
-                MonsterScanner.Scanner?.Dispose();
+                scanner?.Dispose();
         }
 
         ImGui.SameLine();
 
-        using (ImRaii.Disabled(MonsterScanner.Scanner == null || MonsterScanner.Scanner.IsRunning))
+        using (ImRaii.Disabled(scanner == null || scanner.IsRunning))
         {
             if (ImGuiOm.ButtonIconWithText(FontAwesomeIcon.TrashAlt, Lang.Get("Clear")))
                 confirmClearScanResults = true;
@@ -758,7 +656,11 @@ public partial class AutoMarksFinder
 
             if (ImGui.Button(Lang.Get("Confirm")))
             {
-                MonsterScanner.ClearScanner();
+                scanner?.Dispose();
+                scanner = null;
+                scanCoverageTexture?.Dispose();
+                scanCoverageTexture = null;
+                scanCoverageSource  = null;
                 ImGui.CloseCurrentPopup();
             }
         }
@@ -769,7 +671,7 @@ public partial class AutoMarksFinder
         using var heading = ImRaii.Heading1(Lang.Get("AutoMarksFinder-TargetZones"));
         scanZoneCombo ??= new(config);
         ImGui.SetNextItemWidth(350f * GlobalUIScale);
-        using var disabled = ImRaii.Disabled(MonsterScanner.Scanner?.IsRunning == true);
+        using var disabled = ImRaii.Disabled(scanner?.IsRunning == true);
         if (scanZoneCombo.DrawCheckbox())
             config.Save(this);
     }
@@ -778,63 +680,40 @@ public partial class AutoMarksFinder
     {
         using var heading = ImRaii.Heading1(Lang.Get("AutoMarksFinder-ScanResults"));
 
-        if (MonsterScanner.Scanner == null)
+        if (scanner == null)
         {
             ImGuiOm.TextDisabledWrapped(Lang.Get("AutoMarksFinder-NoRunningScanner"));
             return;
         }
 
-        using (ImRaii.Disabled(MonsterScanner.Scanner.IsRunning || MonsterScanner.Scanner.FoundOnes.Count == 0))
+        using (ImRaii.Disabled(scanner.IsRunning || scanner.FoundOnes.Count == 0))
         {
-            DrawTrainsSelectCombo(300f * GlobalUIScale, ref scanResultTrainIndex);
+            DrawTrainsSelectCombo(300f * GlobalUIScale, scanResultSelection);
             ImGui.SameLine();
 
-            using (ImRaii.Disabled(scanResultTrainIndex < 0 || scanResultTrainIndex >= config.Trains.Count))
+            using (ImRaii.Disabled(scanResultSelection.Train == null))
             {
-                var overwrite = ImGui.Button(Lang.Get("AutoMarksFinder-OverwriteResults"));
+                var overwrite = ImGui.Button(Lang.Get("Overwrite"));
+
                 ImGui.SameLine();
-                var append = ImGui.Button(Lang.Get("AutoMarksFinder-AppendResults"));
+                var append = ImGui.Button(Lang.Get("Append"));
 
                 if (overwrite || append)
                 {
-                    var train = config.Trains[scanResultTrainIndex];
-                    var found = MonsterScanner.Scanner.FoundOnes.SelectMany(pair => pair.Value).ToHashSet();
-
-                    if (ReferenceEquals(train, SelectedTrain))
-                    {
-                        StopAutoBroadcast();
-                        smallCardMobIndex = 0;
-                    }
-
-                    if (overwrite)
-                    {
-                        aliveMonitor?.RemoveTrain(train);
-                        train.MonstersFound = [.. found.Select(monster => monster.Copy())];
-                        aliveMonitor?.InitializeTracks(train);
-                    }
-                    else
-                    {
-                        for (var index = 0; index < train.MonstersFound.Count; index++)
-                        {
-                            if (!found.TryGetValue(train.MonstersFound[index], out var observed))
-                                continue;
-
-                            aliveMonitor?.RemoveTrack(train, train.MonstersFound[index]);
-                            train.MonstersFound[index] = observed.Copy();
-                            found.Remove(observed);
-                        }
-
-                        train.MonstersFound.AddRange(found.Select(monster => monster.Copy()));
-                    }
-
-                    aliveMonitor?.RefreshTracking();
+                    var train = scanResultSelection.Train;
+                    train.Merge(scanner.FoundOnes.SelectMany(pair => pair.Value), overwrite);
                     config.Save(this);
-                    NotifyHelper.Instance().NotificationInfo(Lang.Get("SavedSuccessfully"));
+
+                    NotifyHelper.Instance().NotificationInfo
+                    (
+                        Lang.Get("SavedSuccessfully"),
+                        Lang.Get("AutoMarksFinderTitle")
+                    );
                 }
             }
         }
 
-        foreach (var info in MonsterScanner.Scanner.FoundOnes)
+        foreach (var info in scanner.FoundOnes)
         {
             if (ImGui.CollapsingHeader($"{LuminaGetter.GetRow<TerritoryType>(info.Key)?.ExtractPlaceName()} ({info.Value.Count})###ScanResults_{info.Key}"))
             {
@@ -870,16 +749,13 @@ public partial class AutoMarksFinder
         }
     }
 
-    private bool DrawTrainsSelectCombo
+    private void DrawTrainsSelectCombo
     (
-        float   width,
-        ref int selectedIndex
+        float         width,
+        HuntSelection targetSelection
     )
     {
-        var changed = false;
-        var selected = selectedIndex < 0 || selectedIndex >= config.Trains.Count ?
-                           null :
-                           config.Trains[selectedIndex];
+        var selected = targetSelection.Train;
 
         ImGui.SetNextItemWidth(width);
         ImGui.SetNextWindowSizeConstraints(ScaledVector2(760, 400), ScaledVector2(760, 400));
@@ -888,43 +764,54 @@ public partial class AutoMarksFinder
             "###TrainsSelectCombo",
             selected == null ?
                 $"({Lang.Get("None")})" :
-                $"{selected.Name} ({selected.MonstersFound.Count})",
+                $"{selected.Name}",
             ImGuiComboFlags.HeightLarge
         );
-        if (!combo) return changed;
+        if (!combo)
+            return;
 
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
         ImGui.InputTextWithHint("###TrainSearch", $"{Lang.Get("PleaseSearch")}……", ref trainSearchInput, 128);
 
-        ImGui.SetNextItemWidth(-ImGui.GetFrameHeightWithSpacing());
+        ImGui.SetNextItemWidth(-2 * ImGui.GetFrameHeightWithSpacing());
         var create = ImGui.InputTextWithHint
         (
             "###AddNewTrainList",
             Lang.Get("AutoMarksFinder-NewTrainListTip"),
             ref newListNameInput,
-            128,
+            256,
             ImGuiInputTextFlags.EnterReturnsTrue
         );
+
         ImGui.SameLine();
         using (ImRaii.Disabled(string.IsNullOrWhiteSpace(newListNameInput)))
             create |= ImGuiOm.ButtonIcon("###CreateTrain", FontAwesomeIcon.Plus, Lang.Get("Add"));
 
+        ImGui.SameLine();
+
+        if (ImGuiOm.ButtonIcon("导入", FontAwesomeIcon.FileImport, Lang.Get("Import")))
+        {
+            var imported = ImportFromClipboard<NotoriousMonsterList>();
+
+            if (imported != null)
+            {
+                foreach (var monster in imported.MonstersFound)
+                    monster.Observe(false, true);
+
+                config.Trains.Add(imported);
+                config.Save(this);
+            }
+        }
+
         if (create &&
             !string.IsNullOrWhiteSpace(newListNameInput))
         {
-            var activeTrain = SelectedTrain;
-            var resultTrain = scanResultTrainIndex >= 0 && scanResultTrainIndex < config.Trains.Count ?
-                                  config.Trains[scanResultTrainIndex] :
-                                  null;
-            var train = new NotoriousMonsterList(newListNameInput.Trim());
+            var train = new NotoriousMonsterList { Name = newListNameInput.Trim() };
             config.Trains.Insert(0, train);
-            selectedTrainIndex   = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, activeTrain));
-            scanResultTrainIndex = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, resultTrain));
-            selectedIndex        = 0;
-            selected             = train;
-            newListNameInput     = string.Empty;
-            trainSearchInput     = string.Empty;
-            changed              = true;
+            targetSelection.Select(train);
+            selected         = train;
+            newListNameInput = string.Empty;
+            trainSearchInput = string.Empty;
             config.Save(this);
         }
 
@@ -941,13 +828,13 @@ public partial class AutoMarksFinder
             ScaledVector2(0, 300)
         );
         if (!table)
-            return changed;
+            return;
 
-        ImGui.TableSetupColumn(Lang.Get("Name"),                         ImGuiTableColumnFlags.WidthStretch, 50);
-        ImGui.TableSetupColumn(Lang.Get("Zone"),                         ImGuiTableColumnFlags.WidthStretch, 10);
-        ImGui.TableSetupColumn(Lang.Get("Count"),                        ImGuiTableColumnFlags.WidthStretch, 10);
-        ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-CreationTime"), ImGuiTableColumnFlags.WidthStretch, 40);
-        ImGui.TableSetupColumn("###Actions",                             ImGuiTableColumnFlags.WidthFixed,   3   * ImGui.GetFrameHeightWithSpacing());
+        ImGui.TableSetupColumn(Lang.Get("Name"),                         ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("Zone"),                         ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("Count"),                        ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(Lang.Get("AutoMarksFinder-CreationTime"), ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("###Actions",                             ImGuiTableColumnFlags.WidthFixed, 3 * ImGui.GetFrameHeightWithSpacing());
         ImGui.TableSetupScrollFreeze(0, 1);
         ImGui.TableHeadersRow();
 
@@ -957,17 +844,21 @@ public partial class AutoMarksFinder
             if (!train.Name.Contains(trainSearchInput, StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            train.GeneratedDateTime ??= train.GeneratedTime.ToUTCDateTimeFromUnixSeconds().ToLocalTime();
-
             using var rowID = ImRaii.PushId(i);
+
             ImGui.TableNextRow();
+
             ImGui.TableNextColumn();
 
-            if (ImGui.Selectable(train.Name, ReferenceEquals(selected, train)))
+            using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.LawnGreen.ToUInt(), ReferenceEquals(selected, train)))
             {
-                selectedIndex = i;
-                changed       = true;
-                selected      = train;
+                if (ImGui.Selectable(train.Name))
+                {
+                    targetSelection.Select(train);
+                    selected = train;
+
+                    ImGui.CloseCurrentPopup();
+                }
             }
 
             ImGui.TableNextColumn();
@@ -982,8 +873,10 @@ public partial class AutoMarksFinder
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{train.MonstersFound.Count(monster => monster.IsAlive)}/{train.MonstersFound.Count}");
+
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{train.GeneratedDateTime:g}");
+
             ImGui.TableNextColumn();
 
             if (ImGuiOm.ButtonIcon("###RenameTrain", FontAwesomeIcon.Edit, Lang.Get("Rename")))
@@ -1013,6 +906,10 @@ public partial class AutoMarksFinder
             }
 
             ImGui.SameLine();
+            if (ImGuiOm.ButtonIcon("导出", FontAwesomeIcon.FileExport, Lang.Get("Export")))
+                ExportToClipboard(train);
+
+            ImGui.SameLine();
             if (ImGuiOm.ButtonIcon("###DeleteTrain", FontAwesomeIcon.TrashAlt, Lang.Get("Delete")))
                 ImGui.OpenPopup("###DeleteTrainPopup");
 
@@ -1020,37 +917,30 @@ public partial class AutoMarksFinder
 
             if (deletePopup)
             {
-                ImGui.TextUnformatted(train.Name);
+                ImGui.TextUnformatted(Lang.Get("AutoMarksFinder-DeleteConfirm"));
 
-                if (ImGui.Button(Lang.Get("Delete")))
+                if (ImGui.Button(Lang.Get("Confirm")))
                 {
-                    var activeTrain = SelectedTrain;
-                    var resultTrain = scanResultTrainIndex >= 0 && scanResultTrainIndex < config.Trains.Count ?
-                                          config.Trains[scanResultTrainIndex] :
-                                          null;
                     config.Trains.RemoveAt(i);
-                    selectedTrainIndex   = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, activeTrain));
-                    scanResultTrainIndex = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, resultTrain));
-                    selectedIndex        = config.Trains.FindIndex(candidate => ReferenceEquals(candidate, selected));
-                    aliveMonitor?.RemoveTrain(train);
+                    if (ReferenceEquals(selection.Train, train))
+                        selection.Select(null);
 
-                    if (ReferenceEquals(activeTrain, train))
-                    {
-                        StopAutoBroadcast();
-                        smallCardMobIndex = 0;
-                    }
+                    if (ReferenceEquals(scanResultSelection.Train, train))
+                        scanResultSelection.Select(null);
 
                     config.Save(this);
                     aliveMonitor?.RefreshTracking();
                     ImGui.CloseCurrentPopup();
-                    return true;
+                    return;
                 }
             }
         }
 
-        if (changed)
-            aliveMonitor?.RefreshTracking();
-
-        return changed;
     }
+
+    #region 常量
+
+    private const string MONSTER_DRAG_PAYLOAD = "AutoMarksFinderMonster";
+
+    #endregion
 }

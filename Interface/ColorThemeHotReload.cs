@@ -23,7 +23,7 @@ using ExpansionTextNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkTe
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ColorThemeHotReload : ModuleBase
+internal unsafe class ColorThemeHotReload : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -32,13 +32,15 @@ public unsafe class ColorThemeHotReload : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(ColorThemeHotReload);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
     };
 
     private Hook<AtkUIColorHolder.Delegates.LoadColors>? LoadColorsHook;
-    private Hook<AtkUnitBase.Delegates.LoadUldByName>?         LoadUldByNameHook;
+    private Hook<AtkUnitBase.Delegates.LoadUldByName>?   LoadUldByNameHook;
 
     private readonly Dictionary<nint, string>              addonPaths      = [];
     private readonly Dictionary<nint, string[]>            loaderPaths     = [];

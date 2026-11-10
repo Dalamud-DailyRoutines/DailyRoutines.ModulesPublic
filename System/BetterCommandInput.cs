@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterCommandInput : ModuleBase
+internal partial class BetterCommandInput : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public partial class BetterCommandInput : ModuleBase
         Description = Lang.Get("BetterCommandInputDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(BetterCommandInput);
 
     private Config config = null!;
 

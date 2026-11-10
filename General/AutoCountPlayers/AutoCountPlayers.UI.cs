@@ -13,7 +13,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoCountPlayers
+internal unsafe partial class AutoCountPlayers
 {
     protected override void ConfigUI()
     {

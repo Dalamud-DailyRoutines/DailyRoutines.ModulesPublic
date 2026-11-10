@@ -6,7 +6,7 @@ using GameObjectId = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private Hook<PacketDispatcher.Delegates.HandleSpawnNpcPacket>?     OnSpawnNPCHook;
     private Hook<PacketDispatcher.Delegates.HandleActorControlPacket>? OnActorControlHook;
@@ -26,7 +26,7 @@ public partial class AutoMarksFinder
 
         aliveMonitor?.ObserveMonster(targetID, baseID, position, isDead);
         if (!isDead)
-            MonsterScanner.Scanner?.ObserveMonster(baseID, position);
+            scanner?.ObserveMonster(baseID, position);
     }
 
     private void OnActorControlDetour

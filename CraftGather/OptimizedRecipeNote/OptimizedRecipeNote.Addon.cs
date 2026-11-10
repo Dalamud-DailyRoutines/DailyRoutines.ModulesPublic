@@ -22,7 +22,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OptimizedRecipeNote
+internal partial class OptimizedRecipeNote
 {
     private class AddonActionsPreview
     (

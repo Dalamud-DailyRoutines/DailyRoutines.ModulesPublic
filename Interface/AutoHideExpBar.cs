@@ -7,7 +7,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHideExpBar : ModuleBase
+internal unsafe class AutoHideExpBar : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,7 +20,9 @@ public unsafe class AutoHideExpBar : ModuleBase
     {
         AllDefaultEnabled = true
     };
-    
+
+    public override string ModuleName => nameof(AutoHideExpBar);
+
     private Hook<AgentHUD.Delegates.UpdateExp>? UpdateExpHook;
 
     protected override void Init()

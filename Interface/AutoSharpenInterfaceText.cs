@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSharpenInterfaceText : ModuleBase
+internal unsafe class AutoSharpenInterfaceText : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class AutoSharpenInterfaceText : ModuleBase
         Description = Lang.Get("AutoSharpenInterfaceTextDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoSharpenInterfaceText);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

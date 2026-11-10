@@ -21,7 +21,7 @@ using GCShopEventHandler = FFXIVClientStructs.Expansion.FFXIV.Client.Game.Event.
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastGrandCompanyExchange : ModuleBase
+internal unsafe class FastGrandCompanyExchange : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -37,6 +37,8 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
         Category = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(FastGrandCompanyExchange);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -48,19 +50,23 @@ public unsafe class FastGrandCompanyExchange : ModuleBase
 
     private static readonly CompSig GCShopExchangeSig =
         new("84 D2 0F 84 ?? ?? ?? ?? 4C 8B DC 49 89 7B");
+
     private delegate void GCShopExchangeDelegate
     (
         nint                               purchaseInterface,
         [MarshalAs(UnmanagedType.U1)] bool send
     );
+
     private GCShopExchangeDelegate? GCShopExchange;
 
     private static readonly CompSig GCShopReloadSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 48 8B 81 ?? ?? ?? ?? 48 8B F9 48 85 C0");
+
     private delegate void GCShopReloadDelegate
     (
         GCShopEventHandler* handler
     );
+
     private GCShopReloadDelegate? GCShopReload;
 
     private (uint ItemID, int Count, byte SubCategory, byte Tier) pendingExchange;

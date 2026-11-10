@@ -6,7 +6,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCheckQuickGathering : ModuleBase
+internal unsafe class AutoCheckQuickGathering : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public unsafe class AutoCheckQuickGathering : ModuleBase
         Category    = ModuleCategory.CraftGather
     };
 
+    public override string ModuleName => nameof(AutoCheckQuickGathering);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -22,7 +24,7 @@ public unsafe class AutoCheckQuickGathering : ModuleBase
 
     protected override void Init() =>
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "Gathering", OnAddon);
-    
+
     protected override void Uninit() =>
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
 
@@ -34,7 +36,7 @@ public unsafe class AutoCheckQuickGathering : ModuleBase
     {
         var addon = args.Addon.ToStruct();
         if (addon == null) return;
-        
+
         addon->Callback(130, true);
     }
 }

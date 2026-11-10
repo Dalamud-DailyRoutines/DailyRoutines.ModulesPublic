@@ -8,7 +8,7 @@ using TinyPinyin;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class JobSwitchCommand : ModuleBase
+internal class JobSwitchCommand : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class JobSwitchCommand : ModuleBase
         Description = Lang.Get("JobSwitchCommandDescription", COMMAND),
         Category    = ModuleCategory.Assist
     };
+
+    public override string ModuleName => nameof(JobSwitchCommand);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

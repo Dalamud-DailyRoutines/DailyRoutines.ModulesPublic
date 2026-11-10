@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSplitStacks : ModuleBase
+internal unsafe class AutoSplitStacks : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoSplitStacks : ModuleBase
         Description = Lang.Get("AutoSplitStacksDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoSplitStacks);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -33,10 +35,10 @@ public unsafe class AutoSplitStacks : ModuleBase
 
     private ItemSelectCombo    itemSelectCombo        = null!;
     private FastSplitItemStack fastSplitItemStackMenu = null!;
-    private InputNumericAddon?    drInputNumeric;
-    
+    private InputNumericAddon? drInputNumeric;
+
     private int splitAmountInput = 1;
-    
+
     protected override void Init()
     {
         itemSelectCombo = new
@@ -276,13 +278,13 @@ public unsafe class AutoSplitStacks : ModuleBase
                     Message = fullMessage
                 }
             );
-            
+
             return true;
         }
 
         foreach (var type in Inventories.Player)
         {
-            var  container = manager->GetInventoryContainer(type);
+            var container = manager->GetInventoryContainer(type);
             if (container == null) continue;
 
             for (var i = 0; i < container->Size; i++)
@@ -301,7 +303,7 @@ public unsafe class AutoSplitStacks : ModuleBase
                 }
             }
         }
-        
+
         if (finishRound == 0)
         {
             var noFoundMessage = Lang.Get("AutoSplitStacks-Notification-ItemNoFound");
@@ -321,7 +323,7 @@ public unsafe class AutoSplitStacks : ModuleBase
             NotifyHelper.Toast(finishMessage);
             NotifyHelper.Instance().Chat(finishMessage);
         }
-        
+
         return true;
     }
 
@@ -386,7 +388,7 @@ public unsafe class AutoSplitStacks : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.TargetInventoryItem is not { } item) 
+            if (args.TargetInventoryItem is not { } item)
                 return null;
 
             var quantity = item.GetQuantity();

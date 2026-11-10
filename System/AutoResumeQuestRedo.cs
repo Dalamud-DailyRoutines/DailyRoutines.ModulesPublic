@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoResumeQuestRedo : ModuleBase
+internal class AutoResumeQuestRedo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class AutoResumeQuestRedo : ModuleBase
         Description = Lang.Get("AutoResumeQuestRedoDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoResumeQuestRedo);
 
     protected override void Init()
     {
@@ -26,7 +28,7 @@ public class AutoResumeQuestRedo : ModuleBase
         IClientState.Instance().TerritoryChanged -= OnZoneChanged;
         GameState.Instance().Login               -= OnLogin;
     }
-    
+
     private static void OnZoneChanged
     (
         uint zone

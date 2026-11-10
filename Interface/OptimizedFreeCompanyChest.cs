@@ -27,7 +27,7 @@ using AgentFreeCompanyChest = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedFreeCompanyChest : ModuleBase
+internal unsafe class OptimizedFreeCompanyChest : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -40,6 +40,8 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
         ]
     };
 
+    public override string ModuleName => nameof(OptimizedFreeCompanyChest);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -47,11 +49,13 @@ public unsafe class OptimizedFreeCompanyChest : ModuleBase
 
     private static readonly CompSig SendInventoryRefreshSig =
         new("48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 8B DA 48 8B F1 33 D2 0F B7 FA");
+
     private delegate bool SendInventoryRefreshDelegate
     (
         InventoryManager* instance,
         int               inventoryType
     );
+
     private Hook<SendInventoryRefreshDelegate>? SendInventoryRefreshHook;
 
     private Config config = null!;

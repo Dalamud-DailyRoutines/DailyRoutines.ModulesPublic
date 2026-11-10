@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ClipboardMultiLineToOneLine : ModuleBase
+internal unsafe class ClipboardMultiLineToOneLine : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -19,12 +19,16 @@ public unsafe class ClipboardMultiLineToOneLine : ModuleBase
         Category    = ModuleCategory.System
     };
 
-    private static readonly CompSig GetClipboardDataSig = 
+    public override string ModuleName => nameof(ClipboardMultiLineToOneLine);
+
+    private static readonly CompSig GetClipboardDataSig =
         new("40 53 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B F1 BA");
+
     private delegate Utf8String* GetClipboardDataDelegate
     (
         ClipBoard* clipBoard
     );
+
     private Hook<GetClipboardDataDelegate>? GetClipboardDataHook;
 
     protected override void Init()

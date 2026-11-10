@@ -22,7 +22,7 @@ using MapType = FFXIVClientStructs.FFXIV.Client.UI.Agent.MapType;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoReplaceLocationAction : ModuleBase
+internal unsafe class AutoReplaceLocationAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe class AutoReplaceLocationAction : ModuleBase
         Description = Lang.Get("AutoReplaceLocationActionDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoReplaceLocationAction);
 
     private Hook<PronounModule.Delegates.ResolvePlaceholder>? ParseActionCommandArgHook;
 

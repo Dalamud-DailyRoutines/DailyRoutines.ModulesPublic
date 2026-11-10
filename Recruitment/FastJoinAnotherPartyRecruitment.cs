@@ -18,7 +18,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
+internal unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,6 +26,8 @@ public unsafe class FastJoinAnotherPartyRecruitment : ModuleBase
         Description = Lang.Get("FastJoinAnotherPartyRecruitmentDescription"),
         Category    = ModuleCategory.Recruitment
     };
+
+    public override string ModuleName => nameof(FastJoinAnotherPartyRecruitment);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

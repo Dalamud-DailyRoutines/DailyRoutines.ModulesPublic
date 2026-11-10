@@ -7,7 +7,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoShowChatLogInKeyboundBrawler : ModuleBase
+internal unsafe class AutoShowChatLogInKeyboundBrawler : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public unsafe class AutoShowChatLogInKeyboundBrawler : ModuleBase
         Category            = ModuleCategory.GoldSaucer,
         ModulesPrerequisite = ["AutoKeyboundBrawler"]
     };
+
+    public override string ModuleName => nameof(AutoShowChatLogInKeyboundBrawler);
 
     private Hook<AgentChatLog.Delegates.HideLogWindow> HideLogWindowHook;
     private Hook<AgentKTGHud.Delegates.HideChatLog>    HideChatLogHook;

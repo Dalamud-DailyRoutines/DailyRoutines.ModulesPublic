@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoDrawMotifs : ModuleBase
+internal class AutoDrawMotifs : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoDrawMotifs : ModuleBase
         Description = Lang.Get("AutoDrawMotifsDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoDrawMotifs);
 
     private Config config = null!;
 

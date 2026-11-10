@@ -23,13 +23,12 @@ using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons;
-using OmenTools.OmenService;
 using OmenTools.Threading.TaskHelper.Enums;
 using GrandCompany = FFXIVClientStructs.FFXIV.Client.UI.Agent.GrandCompany;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoExpertDelivery : ModuleBase
+internal unsafe class AutoExpertDelivery : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -38,6 +37,8 @@ public unsafe class AutoExpertDelivery : ModuleBase
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["FastGrandCompanyExchange"]
     };
+
+    public override string ModuleName => nameof(AutoExpertDelivery);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -157,7 +158,7 @@ public unsafe class AutoExpertDelivery : ModuleBase
         TaskHelper.Enqueue(() => new EventStartPackt(IObjectTable.Instance().LocalPlayer.GameObjectID, info.EventID).Send());
         TaskHelper.Enqueue(() => GrandCompanyExchange->IsAddonAndNodesReady());
 
-        if (isAutoExchange && ModuleManager.Instance().IsModuleEnabled(typeof(FastGrandCompanyExchange)))
+        if (isAutoExchange && ModuleManager.Instance().IsModuleEnabled("FastGrandCompanyExchange") == true)
         {
             TaskHelper.Enqueue
             (

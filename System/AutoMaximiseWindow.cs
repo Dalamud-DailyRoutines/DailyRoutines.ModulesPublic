@@ -7,7 +7,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoMaximiseWindow : ModuleBase
+internal class AutoMaximiseWindow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class AutoMaximiseWindow : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Bill"]
     };
+
+    public override string ModuleName => nameof(AutoMaximiseWindow);
 
     protected override void Init()
     {

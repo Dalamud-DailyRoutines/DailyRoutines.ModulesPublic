@@ -25,7 +25,7 @@ using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSendMoney : ModuleBase
+internal unsafe class AutoSendMoney : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -36,6 +36,8 @@ public unsafe class AutoSendMoney : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(AutoSendMoney);
 
     private bool IsRunning => runtime != null;
 

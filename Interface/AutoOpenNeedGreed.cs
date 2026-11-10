@@ -9,7 +9,7 @@ using AgentId = FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoOpenNeedGreed : ModuleBase
+internal class AutoOpenNeedGreed : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class AutoOpenNeedGreed : ModuleBase
         Description = Lang.Get("AutoOpenNeedGreedDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoOpenNeedGreed);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

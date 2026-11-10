@@ -20,7 +20,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoTenChiJin : ModuleBase
+internal unsafe class AutoTenChiJin : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public unsafe class AutoTenChiJin : ModuleBase
         Description = Lang.Get("AutoTenChiJinDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoTenChiJin);
 
     private Hook<RaptureHotbarModule.HotbarSlot.Delegates.IsSlotUsable>? IsSlotUsableHook;
     private Hook<ActionManager.Delegates.GetHotbarCooldownInfo>?         GetHotbarCooldownInfoHook;

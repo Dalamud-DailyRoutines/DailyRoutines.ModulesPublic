@@ -16,14 +16,12 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 using LuaFunctionDelegate = FFXIVClientStructs.Expansion.FFXIV.Common.Lua.LuaFunctionDelegate;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoCutsceneSkip : ModuleBase
+internal unsafe class AutoCutsceneSkip : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -34,29 +32,37 @@ public unsafe class AutoCutsceneSkip : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
 
+    public override string ModuleName => nameof(AutoCutsceneSkip);
+
     private static readonly CompSig CutsceneHandleInputSig = new("E8 ?? ?? ?? ?? 44 0F B6 E0 48 8B 4E 08");
+
     private delegate byte CutsceneHandleInputDelegate
     (
         UIInputModule* module,
         float          a2
     );
+
     private Hook<CutsceneHandleInputDelegate>? CutsceneHandleInputHook;
 
     private static readonly CompSig PlayCutsceneSig =
         new("40 53 55 57 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 48 8B 59");
+
     private delegate nint PlayCutsceneDelegate
     (
         EventFramework* a1,
         lua_State*      state
     );
+
     private Hook<PlayCutsceneDelegate>? PlayCutsceneHook;
 
     private static readonly CompSig IsCutsceneSeenSig = new("E8 ?? ?? ?? ?? 33 D2 0F B6 CB 3A C3");
+
     private delegate bool IsCutsceneSeenDelegate
     (
         UIState* state,
         uint     cutsceneID
     );
+
     private Hook<IsCutsceneSeenDelegate>? IsCutsceneSeenHook;
 
     private static readonly CompSig LuaBaseSig01 = new

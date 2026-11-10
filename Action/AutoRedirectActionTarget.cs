@@ -15,7 +15,7 @@ using Action = Lumina.Excel.Sheets.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRedirectActionTarget : ModuleBase
+internal unsafe class AutoRedirectActionTarget : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoRedirectActionTarget : ModuleBase
         Description = Lang.Get("AutoRedirectActionTargetDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoRedirectActionTarget);
 
     private Config config = null!;
 

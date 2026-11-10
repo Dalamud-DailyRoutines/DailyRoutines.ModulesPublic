@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class UnlimitedMacroIcon : ModuleBase
+internal unsafe class UnlimitedMacroIcon : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class UnlimitedMacroIcon : ModuleBase
         Description = Lang.Get("UnlimitedMacroIconDescription", COMMAND),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(UnlimitedMacroIcon);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -111,6 +113,7 @@ public unsafe class UnlimitedMacroIcon : ModuleBase
         }
 
         var addon = (AddonMacro*)args.Addon.Address;
+
         if (type == AddonEvent.PostSetup)
         {
             BindInputCallback(addon);
@@ -183,8 +186,8 @@ public unsafe class UnlimitedMacroIcon : ModuleBase
     )
     {
         var agent = AgentMacro.Instance();
-        if (agent == null || 
-            agent->SelectedMacroSet >= MACRO_SET_COUNT ||
+        if (agent                     == null            ||
+            agent->SelectedMacroSet   >= MACRO_SET_COUNT ||
             agent->SelectedMacroIndex >= MACROS_PER_SET)
             return;
 
@@ -219,8 +222,8 @@ public unsafe class UnlimitedMacroIcon : ModuleBase
         uint*                               outItemID
     )
     {
-        if ((uint)setID >= MACRO_SET_COUNT || 
-            macroID >= MACROS_PER_SET)
+        if ((uint)setID >= MACRO_SET_COUNT ||
+            macroID     >= MACROS_PER_SET)
             return TryResolveMacroIconHook.Original(module, uiModule, outType, outRowID, setID, macroID, outItemID);
 
         var   key    = ((uint)setID << 8) | macroID;
@@ -274,7 +277,7 @@ public unsafe class UnlimitedMacroIcon : ModuleBase
             hotbarModule->ReloadAllMacroSlots();
 
         var agent = AgentMacro.Instance();
-        if (agent == null || 
+        if (agent == null ||
             !Macro->IsAddonAndNodesReady())
             return;
 

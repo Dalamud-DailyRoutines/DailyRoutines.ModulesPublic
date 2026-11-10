@@ -14,7 +14,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRestoreFurniture : ModuleBase
+internal unsafe class AutoRestoreFurniture : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoRestoreFurniture : ModuleBase
         Description = Lang.Get("AutoRestoreFurnitureDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(AutoRestoreFurniture);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

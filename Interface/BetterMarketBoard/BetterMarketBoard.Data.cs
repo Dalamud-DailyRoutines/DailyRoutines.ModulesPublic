@@ -16,7 +16,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class BetterMarketBoard
+internal unsafe partial class BetterMarketBoard
 {
     private readonly record struct SearchCategoryGroup
     (

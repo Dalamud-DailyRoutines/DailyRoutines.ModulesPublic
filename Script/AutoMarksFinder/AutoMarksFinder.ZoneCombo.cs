@@ -4,7 +4,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder
+internal partial class AutoMarksFinder
 {
     private sealed class ScanZoneCombo : LuminaComboBase<TerritoryType>
     {
@@ -75,7 +75,7 @@ public partial class AutoMarksFinder
         protected override bool DrawDataColumns(TerritoryType item, ComboSelectionMode mode, bool isSelected)
         {
             ImGui.TableNextColumn();
-            var changed = ImGui.Selectable(item.ExtractPlaceName(), isSelected, ImGuiSelectableFlags.DontClosePopups);
+            var changed = ImGui.Selectable(item.ExtractPlaceName(), isSelected, ImGuiSelectableFlags.DontClosePopups | ImGuiSelectableFlags.SpanAllColumns);
             ImGui.TableNextColumn();
             var points = config.ScanPoints[item.RowId];
             ImGui.TextUnformatted($"{points.Count}");

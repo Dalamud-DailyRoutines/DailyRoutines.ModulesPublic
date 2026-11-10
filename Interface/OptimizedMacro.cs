@@ -1,4 +1,3 @@
-using System.Text;
 using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Info;
 using DailyRoutines.Common.Module.Abstractions;
@@ -6,6 +5,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using InteropGenerator.Runtime;
@@ -14,14 +14,12 @@ using KamiToolKit.Nodes;
 using OmenTools.Interop.Game.Lumina;
 using OmenTools.KamiToolKit.Addons.InputString;
 using OmenTools.KamiToolKit.Addons.SelectYesno;
-using OmenTools.KamiToolKit.Nodes;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
-using OmenTools.OmenService;
 using ExpansionAtkResNode = FFXIVClientStructs.Expansion.FFXIV.Component.GUI.AtkResNode;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedMacro : ModuleBase
+internal unsafe class OptimizedMacro : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +28,8 @@ public unsafe class OptimizedMacro : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Rorinnn"]
     };
+
+    public override string ModuleName => nameof(OptimizedMacro);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -46,6 +46,7 @@ public unsafe class OptimizedMacro : ModuleBase
         CStringPointer    evaluatedString,
         int               eventKind
     );
+
     private Hook<InputCallbackDelegate>? InputCallbackHook;
 
     private AddonController? macroController;
@@ -57,8 +58,8 @@ public unsafe class OptimizedMacro : ModuleBase
     private CircleButtonNode? saveButtonNode;
     private CircleButtonNode? deleteButtonNode;
 
-    private TextMultiLineInputNode? lineNumberContainerNode;
-    private int?                    lastLineCount;
+    private TextNode? lineNumberNode;
+    private int?      lastLineCount;
 
     protected override void Init()
     {
@@ -179,21 +180,19 @@ public unsafe class OptimizedMacro : ModuleBase
             InputCallbackHook.Enable();
         }
 
-        lineNumberContainerNode = new()
+        lineNumberNode = new()
         {
-            Position  = new(457, 114),
-            Size      = new(32, 400),
-            IsVisible = false
+            Position      = new(467, 120),
+            Size          = new(12, 390),
+            AlignmentType = AlignmentType.TopRight,
+            FontType      = FontType.MiedingerMed,
+            TextFlags     = TextFlags.MultiLine,
+            LineSpacing   = 14,
+            IsVisible     = false
         };
-        lineNumberContainerNode.BackgroundNode.IsVisible = false;
-        var textNode = lineNumberContainerNode.CurrentTextNode;
-        textNode.RemoveTextFlags(TextFlags.OverflowHidden);
-        textNode.RemoveTextFlags(TextFlags.WordWrap);
-        textNode.AlignmentType = AlignmentType.TopRight;
-        textNode.FontType      = FontType.MiedingerMed;
-        AtkColors.ListFooter.ApplyTo(textNode);
+        AtkColors.ListFooter.ApplyTo(lineNumberNode);
 
-        lineNumberContainerNode.AttachNode(addon);
+        lineNumberNode.AttachNode(addon);
 
         lastLineCount = null;
 
@@ -242,7 +241,29 @@ public unsafe class OptimizedMacro : ModuleBase
                 if (string.IsNullOrEmpty(selectedPreset) || selectedPreset == DEFAULT_OPTION)
                     return;
 
-                LoadPreset(selectedPreset);
+                SelectYesnoAddon.Open
+                (
+                    new()
+                    {
+                        ParentID        = addon->Id,
+                        BlockedParentID = addon->Id,
+                        Prompt = Lang.Get
+                        (
+                            "OptimizedMacro-Dialogue-Load",
+                            new Dictionary<string, object>
+                            {
+                                ["presetName"] = selectedPreset
+                            }
+                        ),
+                        Callback = (_, result) =>
+                        {
+                            if (result != SelectYesnoAddonResult.Yes)
+                                return;
+
+                            LoadPreset(selectedPreset);
+                        }
+                    }
+                );
             },
             IsEnabled = false
         };
@@ -368,9 +389,9 @@ public unsafe class OptimizedMacro : ModuleBase
         controlListNode?.Dispose();
         controlListNode = null;
 
-        lineNumberContainerNode?.Dispose();
-        lineNumberContainerNode = null;
-        lastLineCount           = null;
+        lineNumberNode?.Dispose();
+        lineNumberNode = null;
+        lastLineCount  = null;
 
         InputCallbackHook?.Dispose();
         InputCallbackHook = null;
@@ -386,13 +407,13 @@ public unsafe class OptimizedMacro : ModuleBase
         var nodeMacroInput = (AtkComponentTextInput*)addon->GetComponentByNodeId(119);
         if (nodeMacroInput == null)
             return;
-        if (lineNumberContainerNode == null)
+        if (lineNumberNode == null)
             return;
 
         var macro = nodeMacroInput->EvaluatedString.ToString();
         var lines = string.IsNullOrWhiteSpace(macro) ?
                         0 :
-                        macro.Split('\r').Length;
+                        macro.AsSpan().Count('\r') + 1;
 
         if (lines == lastLineCount)
             return;
@@ -401,15 +422,22 @@ public unsafe class OptimizedMacro : ModuleBase
 
         if (lines == 0)
         {
-            lineNumberContainerNode.IsVisible = false;
+            lineNumberNode.IsVisible = false;
             return;
         }
 
-        var builder = new StringBuilder();
-        for (var i = 0; i < lines; i++)
-            builder.AppendLine($"{i + 1}");
-        lineNumberContainerNode.String    = builder.ToString().Trim();
-        lineNumberContainerNode.IsVisible = true;
+        using var builder = new RentedSeStringBuilder();
+
+        for (var lineNumber = 1; lineNumber <= lines; lineNumber++)
+        {
+            if (lineNumber > 1)
+                builder.AppendNewLine();
+
+            builder.Append(lineNumber);
+        }
+
+        lineNumberNode.String    = builder.ToReadOnlySeString();
+        lineNumberNode.IsVisible = true;
     }
 
     #endregion
@@ -472,7 +500,6 @@ public unsafe class OptimizedMacro : ModuleBase
                 IndividualMacros = [.. exsited.IndividualMacros],
                 SharedMacros     = [.. exsited.SharedMacros]
             };
-            createdAt = exsited.CreatedAt;
         }
         else
         {
@@ -494,7 +521,7 @@ public unsafe class OptimizedMacro : ModuleBase
 
         config.Save(this);
 
-        var message = string.Empty;
+        string message;
 
         if (isUpdate)
         {
@@ -687,17 +714,17 @@ public unsafe class OptimizedMacro : ModuleBase
 
     private class MacroData
     {
-        public uint                    Index  { get; set; }
-        public uint                    IconID { get; set; }
-        public byte[]?                 Name   { get; set; }
+        public uint                    Index  { get; init; }
+        public uint                    IconID { get; init; }
+        public byte[]?                 Name   { get; init; }
         public Dictionary<int, byte[]> Lines  { get; set; } = [];
     }
 
     private class PresetData
     {
-        public DateTime        CreatedAt        { get; set; } = StandardTimeManager.Instance().Now;
-        public List<MacroData> IndividualMacros { get; set; } = [];
-        public List<MacroData> SharedMacros     { get; set; } = [];
+        public DateTime        CreatedAt        { get; init; } = StandardTimeManager.Instance().Now;
+        public List<MacroData> IndividualMacros { get; init; } = [];
+        public List<MacroData> SharedMacros     { get; init; } = [];
     }
 
     #endregion

@@ -8,7 +8,7 @@ using TinyPinyin;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class BetterNameSort : ModuleBase
+internal class BetterNameSort : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -16,6 +16,8 @@ public class BetterNameSort : ModuleBase
         Description = "将多个游戏系统 (情感动作、无人岛、成就等) 中的项目名称排序方式, 由按 Unicode 码点排序改为按汉语拼音排序, 使界面显示更直观",
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(BetterNameSort);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -26,6 +28,7 @@ public class BetterNameSort : ModuleBase
     };
 
     private static readonly CompSig CompareStringByCodePointSig = new("48 89 5C 24 ?? 55 56 57 48 83 EC ?? 33 C0 48 8D 35");
+
     private delegate int CompareStringByCodePointDelegate
     (
         CStringPointer strA,
@@ -33,6 +36,7 @@ public class BetterNameSort : ModuleBase
         bool           useASCIICaseMap,
         bool           foldKana
     );
+
     private Hook<CompareStringByCodePointDelegate> CompareStringByCodePointHook;
 
     protected override void Init()

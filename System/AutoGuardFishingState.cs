@@ -12,7 +12,7 @@ using OmenTools.OmenService;
 namespace DailyRoutines.ModulesPublic;
 
 // TODO: 加一个提示避免不知道怎么退出
-public class AutoGuardFishingState : ModuleBase
+internal class AutoGuardFishingState : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -24,6 +24,8 @@ public class AutoGuardFishingState : ModuleBase
         ),
         Category = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoGuardFishingState);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

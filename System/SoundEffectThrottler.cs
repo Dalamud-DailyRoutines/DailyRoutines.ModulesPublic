@@ -8,7 +8,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class SoundEffectThrottler : ModuleBase
+internal class SoundEffectThrottler : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,7 +17,10 @@ public class SoundEffectThrottler : ModuleBase
         Category    = ModuleCategory.System
     };
 
+    public override string ModuleName => nameof(SoundEffectThrottler);
+
     private static readonly CompSig PlaySoundEffectSig = new("E9 ?? ?? ?? ?? C6 41 28 01");
+
     private delegate void PlaySoundEffectDelegate
     (
         uint sound,
@@ -25,6 +28,7 @@ public class SoundEffectThrottler : ModuleBase
         nint a3,
         byte a4
     );
+
     private Hook<PlaySoundEffectDelegate>? PlaySoundEffectHook;
 
     private Config? config;

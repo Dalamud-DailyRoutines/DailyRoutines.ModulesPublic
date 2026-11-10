@@ -15,7 +15,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoHighlightCursor : ModuleBase
+internal class AutoHighlightCursor : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,7 +23,9 @@ public class AutoHighlightCursor : ModuleBase
         Description = Lang.Get("AutoHighlightCursorDescription"),
         Category    = ModuleCategory.Interface
     };
-    
+
+    public override string ModuleName => nameof(AutoHighlightCursor);
+
     private Config             config = null!;
     private OverlayController? controller;
 

@@ -1,4 +1,4 @@
-﻿using DailyRoutines.Extensions;
+using DailyRoutines.Extensions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.OmenService;
@@ -6,7 +6,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoRetainerWork
+internal unsafe partial class AutoRetainerWork
 {
     private class TownDispatchWorker
     (

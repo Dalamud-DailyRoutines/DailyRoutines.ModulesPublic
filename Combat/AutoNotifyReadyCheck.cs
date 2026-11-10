@@ -6,7 +6,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoNotifyReadyCheck : ModuleBase
+internal class AutoNotifyReadyCheck : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -14,6 +14,8 @@ public class AutoNotifyReadyCheck : ModuleBase
         Description = Lang.Get("AutoNotifyReadyCheckDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(AutoNotifyReadyCheck);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -32,7 +34,7 @@ public class AutoNotifyReadyCheck : ModuleBase
         LogMessageQueueItem item
     )
     {
-        if (logMessageID is not (3790 or 3791)) 
+        if (logMessageID is not (3790 or 3791))
             return;
 
         NotifyHelper.Instance().TrayInfo(item.ToReadOnlySeString().ToString());

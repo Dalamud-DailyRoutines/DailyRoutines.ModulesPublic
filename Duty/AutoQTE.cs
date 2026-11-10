@@ -12,7 +12,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoQTE : ModuleBase
+internal class AutoQTE : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class AutoQTE : ModuleBase
         Description = Lang.Get("AutoQTEDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoQTE);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

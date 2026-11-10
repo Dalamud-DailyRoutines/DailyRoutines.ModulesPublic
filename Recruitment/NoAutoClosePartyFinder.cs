@@ -9,7 +9,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class NoAutoClosePartyFinder : ModuleBase
+internal unsafe class NoAutoClosePartyFinder : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class NoAutoClosePartyFinder : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["Nyy", "YLCHEN"]
     };
+
+    public override string ModuleName => nameof(NoAutoClosePartyFinder);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

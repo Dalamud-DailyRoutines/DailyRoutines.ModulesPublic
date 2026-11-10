@@ -5,7 +5,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterMarketBoard
+internal partial class BetterMarketBoard
 {
     private static void DrawMetricDashboard
     (

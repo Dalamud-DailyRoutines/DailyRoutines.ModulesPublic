@@ -1,16 +1,11 @@
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Network;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using OmenTools.Interop.Game.Lumina;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoMarksFinder : ModuleBase
+internal partial class AutoMarksFinder : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,22 +22,35 @@ public partial class AutoMarksFinder : ModuleBase
         Author              = ["AtmoOmen", "KirisameVanilla"]
     };
 
-    public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+    public override string ModuleName => nameof(AutoMarksFinder);
 
-    private Config                   config = null!;
-    private MonsterAliveMonitor?     aliveMonitor;
-    private int                      smallCardMobIndex;
-    private int                      selectedTrainIndex;
-    private string                   newListNameInput    = string.Empty;
-    private string                   startAetheryteInput = string.Empty;
-    private string                   renameTrainInput    = string.Empty;
+    public override ModuleBehaviour Behaviour { get; } = new()
+    {
+        NeedAuth = true
+    };
+
+    private NotoriousMonsterList? SelectedTrain => selection.Train;
+
+    private Config config = null!;
+
+    private HuntRelay         relay         = null!;
+    private HuntAutoBroadcast autoBroadcast = null!;
+    private HuntMovement      movement      = null!;
+    private MonsterScanner?   scanner;
+
+    private readonly HuntSelection selection           = new();
+    private readonly HuntSelection scanResultSelection = new();
+
+    private MonsterAliveMonitor? aliveMonitor;
 
     protected override unsafe void Init()
     {
-        config                       =   Config.Load(this) ?? new();
-        spawnPointUpdateCancellation =   new();
-        TaskHelper                   ??= new() { TimeoutMS = 180_000, ShowDebug = IS_SHOW_DEBUG };
-        relayTaskHelper              ??= new() { ShowDebug = IS_SHOW_DEBUG };
+        config                       = Config.Load(this) ?? new();
+        spawnPointUpdateCancellation = new();
+        movement                     = new(config);
+        relay                        = new(config, movement);
+        autoBroadcast                = new(this);
+        selection.Select(config.Trains.FirstOrDefault());
 
         Overlay = new(this, Lang.Get("AutoMarksFinder-SmallCardTitle"))
         {
@@ -50,9 +58,18 @@ public partial class AutoMarksFinder : ModuleBase
             RespectCloseHotkey = false
         };
 
-        CommandManager.Instance().AddCommand(COMMAND, new(OnCommand) { HelpMessage = Lang.Get("AutoMarksFinder-HelpMessage") });
+        CommandManager.Instance().AddSubCommand
+        (
+            COMMAND,
+            new(OnCommand)
+            {
+                HelpMessage = Lang.Get("AutoMarksFinder-HelpMessage")
+            }
+        );
 
-        aliveMonitor = new(this);
+        aliveMonitor      =  new(this);
+        selection.Changed += aliveMonitor.RefreshTracking;
+
         OnSpawnNPCHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(PacketDispatcher.MemberFunctionPointers),
@@ -60,6 +77,7 @@ public partial class AutoMarksFinder : ModuleBase
             (PacketDispatcher.Delegates.HandleSpawnNpcPacket)OnSpawnNPCDetour
         );
         OnSpawnNPCHook.Enable();
+
         OnActorControlHook = IGameInteropProvider.Instance().HookFromMemberFunction
         (
             typeof(PacketDispatcher.MemberFunctionPointers),
@@ -67,7 +85,7 @@ public partial class AutoMarksFinder : ModuleBase
             (PacketDispatcher.Delegates.HandleActorControlPacket)OnActorControlDetour
         );
         OnActorControlHook.Enable();
-        FrameworkManager.Instance().Reg(UpdateAutoBroadcast, AUTO_BROADCAST_TICK_MS);
+
         scanMapRenderer.OnCustomMapDraw        =  DrawScanMapCoverage;
         scanMapRenderer.OnCustomForegroundDraw =  DrawScanMapForeground;
         WindowManager.Instance().PostDraw      += DrawScanRoutePreview;
@@ -75,34 +93,41 @@ public partial class AutoMarksFinder : ModuleBase
 
     protected override void Uninit()
     {
+        CommandManager.Instance().RemoveSubCommand(COMMAND);
+
         WindowManager.Instance().PostDraw -= DrawScanRoutePreview;
-        
+
         spawnPointUpdateCancellation?.Cancel();
         spawnPointUpdateCancellation?.Dispose();
         spawnPointUpdateCancellation = null;
 
         scanZoneCombo = null;
 
-        FrameworkManager.Instance().Unreg(UpdateAutoBroadcast);
-        StopAutoBroadcast();
-        
-        relayTaskHelper?.Dispose();
-        relayTaskHelper = null;
-        
-        aliveMonitor?.Dispose();
+        autoBroadcast.Dispose();
+        relay.Dispose();
+
+        if (aliveMonitor != null)
+        {
+            selection.Changed -= aliveMonitor.RefreshTracking;
+            aliveMonitor.Dispose();
+        }
+
         aliveMonitor = null;
 
         config.Save(this);
 
-        MonsterScanner.ClearScanner();
+        scanner?.Dispose();
+        scanner = null;
 
-        CommandManager.Instance().RemoveCommand(COMMAND);
+        scanCoverageTexture?.Dispose();
+        scanCoverageTexture = null;
+        scanCoverageSource  = null;
 
-        selectedTrainIndex            = 0;
-        smallCardMobIndex             = 0;
-        newListNameInput              = string.Empty;
-        startAetheryteInput           = string.Empty;
-        autoBroadcast.DepartTimeInput = string.Empty;
+        movement.Dispose();
+
+        selection.Select(null);
+        scanResultSelection.Select(null);
+        startAetheryteCombo = null;
     }
 
     private void OnCommand
@@ -112,49 +137,19 @@ public partial class AutoMarksFinder : ModuleBase
     ) =>
         Overlay.IsOpen ^= true;
 
-    #region 工具
-
-    private static bool IsAbleToTeleport() =>
-        !LocalPlayerState.Instance().IsMoving             &&
-        !ICondition.Instance().Any(ConditionFlag.Casting) &&
-        !ICondition.Instance().IsBetweenAreas             &&
-        UIModule.IsScreenReady();
-
-    #endregion
-
-    private class Config : ModuleConfig
-    {
-        public List<string> RelayCommands = [];
-
-        public string AutoRelayBeforeStartPattern = string.Empty;
-        public string AutoRelayAfterEndPattern    = string.Empty;
-
-        public string RelayPositionPattern      = Lang.Get("AutoMarksFinder-Relay-Default-Position");
-        public string RelayWaitAetherytePattern = Lang.Get("AutoMarksFinder-Relay-Default-WaitAetheryte");
-
-        public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints    = [];
-        public HashSet<uint>                                     SelectedZones = [];
-        public List<NotoriousMonsterList>                        Trains        = [];
-    }
-
     #region 常量
 
-#if DEBUG
-    private const bool IS_SHOW_DEBUG = true;
-#else
-    private const bool IS_SHOW_DEBUG = false;
-#endif
-
-    private const string COMMAND = "/pdrmf";
+    private const string COMMAND = "mf";
     private const string SPAWN_POINTS_URL =
         "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
 
     private static readonly string[] SUPPORTED_RELAY_COMMANDS =
     [
+        "/e",
+        "/p",
         "/sh",
         "/y",
         "/b",
-        "/p",
         "/fc",
         "/cwl1",
         "/cwl2",

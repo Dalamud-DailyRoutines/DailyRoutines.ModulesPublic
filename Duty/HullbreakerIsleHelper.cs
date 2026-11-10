@@ -4,13 +4,11 @@ using DailyRoutines.Common.Module.Models;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using OmenTools.Interop.Game.Lumina;
 using OmenTools.OmenService.ZoneIndicator;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class HullbreakerIsleHelper : ModuleBase
+internal unsafe class HullbreakerIsleHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +16,8 @@ public unsafe class HullbreakerIsleHelper : ModuleBase
         Description = Lang.Get("HullbreakerIsleHelperDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(HullbreakerIsleHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

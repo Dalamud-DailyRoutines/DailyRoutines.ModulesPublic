@@ -3,7 +3,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoRecordSubTimeLeft
+internal partial class AutoRecordSubTimeLeft
 {
     protected override void ConfigUI()
     {
@@ -15,7 +15,7 @@ public partial class AutoRecordSubTimeLeft
 
         DrawPlaytimeStatistics();
     }
-    
+
     private void DrawSubscriptionInfo
     (
         ulong contentID

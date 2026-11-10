@@ -19,7 +19,7 @@ using TimeAgo;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedFriendList
+internal unsafe partial class OptimizedFriendList
 {
     private sealed class DRFriendlistUsedNames : NativeAddon
     {

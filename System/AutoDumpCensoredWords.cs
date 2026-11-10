@@ -11,7 +11,7 @@ using Task = System.Threading.Tasks.Task;
 namespace DailyRoutines.ModulesPublic;
 
 // DumpCensorship
-public unsafe class AutoDumpCensoredWords : ModuleBase
+internal unsafe class AutoDumpCensoredWords : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,8 +22,10 @@ public unsafe class AutoDumpCensoredWords : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new() { CNOnly = true };
 
+    public override string ModuleName => nameof(AutoDumpCensoredWords);
+
     private static readonly CompSig VulgarInstanceOffsetBaseSig = new(VULGAR_INSTANCE_OFFSET_BASE_PATTERN);
-    
+
     private static readonly long HashProbeSalt = ComputeHashProbeSalt();
 
     private nint vulgarInstanceOffset;
@@ -315,9 +317,9 @@ public unsafe class AutoDumpCensoredWords : ModuleBase
             return results;
         }
     }
-    
+
     #region 常量
-    
+
     private const string VULGAR_INSTANCE_OFFSET_BASE_PATTERN = "48 8B 81 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B D3";
 
     private const int HASH_BUCKET_COUNT = 1024;
@@ -325,9 +327,9 @@ public unsafe class AutoDumpCensoredWords : ModuleBase
     private const int TRIE_OFFSET_TABLE_BASE = 0x8110;
 
     private const ulong HASH_PROBE_SALT_MASK = 0xFFFF_FFFF_FFFFUL;
-    
+
     private static readonly int[] TrieLevels = [0, 1, 2, 4];
-    
+
     #endregion
 }
 

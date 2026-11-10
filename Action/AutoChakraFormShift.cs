@@ -10,7 +10,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoChakraFormShift : ModuleBase
+internal class AutoChakraFormShift : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoChakraFormShift : ModuleBase
         Description = Lang.Get("AutoChakraFormShiftDescription"),
         Category    = ModuleCategory.Action
     };
+
+    public override string ModuleName => nameof(AutoChakraFormShift);
 
     protected override void Init()
     {

@@ -17,7 +17,7 @@ using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterPartyFinderFilter
+internal partial class BetterPartyFinderFilter
 {
     private TextButtonNode?               buttonNode;
     private BetterPartyFinderFilterAddon? addon;

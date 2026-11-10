@@ -25,7 +25,7 @@ using Treasure = FFXIVClientStructs.FFXIV.Client.Game.Object.Treasure;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class FastObjectInteract : ModuleBase
+internal unsafe partial class FastObjectInteract : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -36,6 +36,8 @@ public unsafe partial class FastObjectInteract : ModuleBase
     };
 
     public override ModuleBehaviour Behaviour { get; } = new() { NeedAuth = true };
+
+    public override string ModuleName => nameof(FastObjectInteract);
 
     private Config config = null!;
 
@@ -64,7 +66,7 @@ public unsafe partial class FastObjectInteract : ModuleBase
 
         TaskHelper ??= new() { TimeoutMS = 5_000, ShowDebug = true };
 
-        Overlay = new Overlay(this, $"##{nameof(FastObjectInteract)}")
+        Overlay = new(this)
         {
             Flags = ImGuiWindowFlags.NoScrollbar           |
                     ImGuiWindowFlags.AlwaysAutoResize      |

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using Lumina.Excel.Sheets;
@@ -8,7 +8,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class OptimizedSalvage
+internal unsafe partial class OptimizedSalvage
 {
     private static unsafe void OnItemTooltip
     (

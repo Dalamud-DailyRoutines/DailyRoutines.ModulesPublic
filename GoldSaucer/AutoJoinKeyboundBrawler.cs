@@ -14,7 +14,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoJoinKeyboundBrawler : ModuleBase
+internal class AutoJoinKeyboundBrawler : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -156,7 +156,7 @@ public class AutoJoinKeyboundBrawler : ModuleBase
 
         var group = GroupManager.Instance()->GetGroupWithCheck();
 
-        if (config.StopOnInvalidParty && 
+        if (config.StopOnInvalidParty &&
             group->MemberCount is not (1 or 4))
         {
             isRunning = false;
@@ -181,7 +181,7 @@ public class AutoJoinKeyboundBrawler : ModuleBase
             var member = group->GetPartyMemberByIndex(index);
             if (member == null)
                 continue;
-            
+
             if (!LuminaGetter.TryGetRow<TerritoryType>(member->TerritoryType, out var zoneRow) ||
                 zoneRow.ContentFinderCondition.RowId > 0)
                 return false;
@@ -215,7 +215,7 @@ public class AutoJoinKeyboundBrawler : ModuleBase
     private const uint TERRITORY_ID = 1360;
 
     private const uint EVENT_ID = 721882;
-    
+
     private const int REGISTRATION_RETRY_INTERVAL_MS = 3000;
 
     #endregion

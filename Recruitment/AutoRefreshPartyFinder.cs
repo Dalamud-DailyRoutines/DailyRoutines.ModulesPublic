@@ -15,7 +15,7 @@ using Timer = System.Timers.Timer;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoRefreshPartyFinder : ModuleBase
+internal unsafe class AutoRefreshPartyFinder : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -23,6 +23,8 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
         Description = Lang.Get("AutoRefreshPartyFinderDescription"),
         Category    = ModuleCategory.Recruitment
     };
+
+    public override string ModuleName => nameof(AutoRefreshPartyFinder);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -183,11 +185,11 @@ public unsafe class AutoRefreshPartyFinder : ModuleBase
 
         refreshIntervalNode ??= new()
         {
-            Size      = new(150f, 30f),
-            Position  = new(0, 2),
-            Min       = 5,
-            Max       = 10000,
-            Step      = 5,
+            Size     = new(150f, 30f),
+            Position = new(0, 2),
+            Min      = 5,
+            Max      = 10000,
+            Step     = 5,
             OnValueUpdate = newValue =>
             {
                 config.RefreshInterval = newValue;

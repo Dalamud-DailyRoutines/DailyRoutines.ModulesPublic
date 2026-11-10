@@ -3,7 +3,7 @@ using OmenTools.ImGuiOm.Widgets;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoRecordSubTimeLeft
+internal partial class AutoRecordSubTimeLeft
 {
     private sealed class Config : ModuleConfig
     {

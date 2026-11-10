@@ -6,7 +6,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class DisregardFollowQuest : ModuleBase
+internal class DisregardFollowQuest : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -15,6 +15,8 @@ public class DisregardFollowQuest : ModuleBase
         Category    = ModuleCategory.System,
         Author      = ["Errer"]
     };
+
+    public override string ModuleName => nameof(DisregardFollowQuest);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

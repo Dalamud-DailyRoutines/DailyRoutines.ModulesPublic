@@ -17,7 +17,7 @@ using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoFCWSDeliver : ModuleBase
+internal unsafe class AutoFCWSDeliver : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,6 +26,8 @@ public unsafe class AutoFCWSDeliver : ModuleBase
         Category            = ModuleCategory.Interface,
         ModulesPrerequisite = ["AutoRequestItemSubmit", "AutoCutsceneSkip"]
     };
+
+    public override string ModuleName => nameof(AutoFCWSDeliver);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

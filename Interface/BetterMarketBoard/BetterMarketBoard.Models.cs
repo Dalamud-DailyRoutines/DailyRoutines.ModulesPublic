@@ -5,7 +5,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterMarketBoard
+internal partial class BetterMarketBoard
 {
     private readonly record struct MetricItem
     (

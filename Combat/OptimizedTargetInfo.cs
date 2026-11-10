@@ -20,7 +20,7 @@ using ObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedTargetInfo : ModuleBase
+internal unsafe class OptimizedTargetInfo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public unsafe class OptimizedTargetInfo : ModuleBase
         Description = Lang.Get("OptimizedTargetInfoDescription"),
         Category    = ModuleCategory.Combat
     };
+
+    public override string ModuleName => nameof(OptimizedTargetInfo);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

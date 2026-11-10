@@ -4,7 +4,7 @@ using OmenTools.Threading.TaskHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoRetainerWork
+internal partial class AutoRetainerWork
 {
     private class RefreshWorker
     (

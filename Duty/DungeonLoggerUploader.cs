@@ -12,7 +12,7 @@ using NotifyHelper = OmenTools.OmenService.NotifyHelper;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class DungeonLoggerUploader : ModuleBase
+internal class DungeonLoggerUploader : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,7 +21,9 @@ public class DungeonLoggerUploader : ModuleBase
         Category    = ModuleCategory.Duty,
         Author      = ["Middo"]
     };
-    
+
+    public override string ModuleName => nameof(DungeonLoggerUploader);
+
     private HttpClient HTTPClient
     {
         get
@@ -62,7 +64,7 @@ public class DungeonLoggerUploader : ModuleBase
         using var itemWidth = ImRaii.ItemWidth(300f * GlobalUIScale);
 
         var changed = false;
-        
+
         ImGui.InputText("服务器地址", ref config.ServerURL, 256);
         if (ImGui.IsItemDeactivatedAfterEdit())
             changed = true;
@@ -88,7 +90,7 @@ public class DungeonLoggerUploader : ModuleBase
             ImGui.TextColored(KnownColor.LawnGreen.ToVector4(), "已登录");
         else
             ImGui.TextColored(KnownColor.Red.ToVector4(), "未登录");
-        
+
         if (changed)
         {
             config.Save(this);

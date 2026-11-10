@@ -9,7 +9,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoStellarSprint : ModuleBase
+internal class AutoStellarSprint : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public class AutoStellarSprint : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["Due"]
     };
+
+    public override string ModuleName => nameof(AutoStellarSprint);
 
     protected override void Init()
     {

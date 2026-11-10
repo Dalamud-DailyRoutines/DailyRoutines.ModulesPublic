@@ -8,7 +8,7 @@ using Lumina.Excel.Sheets;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class UnifiedGlamourManager : ModuleBase
+internal partial class UnifiedGlamourManager : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public partial class UnifiedGlamourManager : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["ErxCharlotte"]
     };
+
+    public override string ModuleName => nameof(UnifiedGlamourManager);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -7,7 +7,7 @@ using OmenTools.KamiToolKit.Addons;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe partial class AutoRetainerWork
+internal unsafe partial class AutoRetainerWork
 {
     private class DRAutoRetainerWork
     (

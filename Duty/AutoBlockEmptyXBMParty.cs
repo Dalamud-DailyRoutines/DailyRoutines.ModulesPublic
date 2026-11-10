@@ -9,7 +9,7 @@ using AgentReceiveEventDelegate = FFXIVClientStructs.Expansion.FFXIV.Client.UI.A
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoBlockEmptyXBMParty : ModuleBase
+internal unsafe class AutoBlockEmptyXBMParty : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class AutoBlockEmptyXBMParty : ModuleBase
         Description = Lang.Get("AutoBlockEmptyXBMPartyDescription"),
         Category    = ModuleCategory.Duty
     };
+
+    public override string ModuleName => nameof(AutoBlockEmptyXBMParty);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

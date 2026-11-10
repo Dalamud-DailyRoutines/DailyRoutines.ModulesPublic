@@ -19,7 +19,7 @@ using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class ExpandMacroTargetParameters : ModuleBase
+internal unsafe class ExpandMacroTargetParameters : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -27,6 +27,8 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
         Description = Lang.Get("ExpandMacroTargetParametersDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(ExpandMacroTargetParameters);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -436,7 +438,7 @@ public unsafe class ExpandMacroTargetParameters : ModuleBase
     (
         BattleChara* chara
     );
-    
+
     #region 常量
 
     private static readonly FrozenDictionary<string, (string Description, Func<nint> Handler)> Arguments =

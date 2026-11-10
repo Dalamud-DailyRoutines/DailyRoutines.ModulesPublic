@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class SimplifiedSystemMenu : ModuleBase
+internal unsafe class SimplifiedSystemMenu : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class SimplifiedSystemMenu : ModuleBase
         Description = Lang.Get("SimplifiedSystemMenuDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(SimplifiedSystemMenu);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -28,6 +30,7 @@ public unsafe class SimplifiedSystemMenu : ModuleBase
 
     private static readonly CompSig GenerateSystemMenuSig = new
         ("40 53 55 56 57 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? ?? ?? 49 8B D9");
+
     private delegate byte GenerateSystemMenuDelegate
     (
         AgentHUD* agent,
@@ -35,6 +38,7 @@ public unsafe class SimplifiedSystemMenu : ModuleBase
         int       valueCount,
         ulong     eventKind
     );
+
     private Hook<GenerateSystemMenuDelegate> GenerateSystemMenuHook;
 
     protected override void Init()

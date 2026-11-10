@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoMiniCactpot : ModuleBase
+internal unsafe class AutoMiniCactpot : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class AutoMiniCactpot : ModuleBase
         Description = Lang.Get("AutoMiniCactpotDescription"),
         Category    = ModuleCategory.GoldSaucer
     };
+
+    public override string ModuleName => nameof(AutoMiniCactpot);
 
     private readonly MiniCactpotSolver solver = new();
 

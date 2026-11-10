@@ -21,7 +21,7 @@ using OrientedBounds = FFXIVClientStructs.FFXIV.Common.Math.OrientedBounds;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoDisplayExitRangeDestination : ModuleBase
+internal unsafe class AutoDisplayExitRangeDestination : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -33,6 +33,8 @@ public unsafe class AutoDisplayExitRangeDestination : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayExitRangeDestination/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(AutoDisplayExitRangeDestination);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

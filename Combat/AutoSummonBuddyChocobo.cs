@@ -13,7 +13,7 @@ using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryInte
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoSummonBuddyChocobo : ModuleBase
+internal unsafe class AutoSummonBuddyChocobo : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -22,6 +22,8 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Veever"]
     };
+
+    public override string ModuleName => nameof(AutoSummonBuddyChocobo);
 
     private Config config = null!;
 
@@ -91,7 +93,7 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
         if (!IsZoneValid()) return;
 
         LocalPlayerState.Instance().PlayerMoveStateChanged += OnPlayerMoving;
-        ICondition.Instance().ConditionChange      += OnConditionChanged;
+        ICondition.Instance().ConditionChange              += OnConditionChanged;
         LogMessageManager.Instance().RegPost(OnLogMessage);
     }
 
@@ -148,7 +150,7 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
             TaskHelper.Abort();
             return;
         }
-        
+
         // 并没有解锁搭档作战
         if (!QuestManager.IsQuestComplete(BUDDY_UNLOCK_QUEST_ID))
             return;
@@ -163,6 +165,7 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
             return;
 
         var companionInfo = UIState.Instance()->Buddy.CompanionInfo;
+
         if (companionInfo.TimeLeft > 300)
         {
             if (config.AutoSwitchStance && companionInfo.ActiveCommand != (int)config.Stance)
@@ -191,7 +194,7 @@ public unsafe class AutoSummonBuddyChocobo : ModuleBase
     private void Cleanup()
     {
         LocalPlayerState.Instance().PlayerMoveStateChanged -= OnPlayerMoving;
-        ICondition.Instance().ConditionChange      -= OnConditionChanged;
+        ICondition.Instance().ConditionChange              -= OnConditionChanged;
         LogMessageManager.Instance().Unreg(OnLogMessage);
 
         TaskHelper?.Abort();

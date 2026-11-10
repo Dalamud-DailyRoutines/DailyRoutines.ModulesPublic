@@ -12,7 +12,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class ExpandItemMenuSearch : ModuleBase
+internal class ExpandItemMenuSearch : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -21,6 +21,8 @@ public class ExpandItemMenuSearch : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["HSS"]
     };
+
+    public override string ModuleName => nameof(ExpandItemMenuSearch);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -154,7 +156,7 @@ public class ExpandItemMenuSearch : ModuleBase
         public override string Identifier => nameof(ExpandItemMenuSearch);
 
         public override int? Priority => 1000;
-        
+
         public override ContextMenuItem Create
         (
             ContextMenuOpenedArgs args
@@ -196,7 +198,7 @@ public class ExpandItemMenuSearch : ModuleBase
         protected readonly ExpandItemMenuSearch module = module;
 
         public override string Identifier => nameof(ExpandItemMenuSearch);
-        
+
         public abstract string PlatformName   { get; }
         public abstract string ConfigKey      { get; }
         public virtual  bool   DefaultEnabled => false;

@@ -10,7 +10,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class BetterPartyFinderFilter : ModuleBase
+internal partial class BetterPartyFinderFilter : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -25,6 +25,8 @@ public partial class BetterPartyFinderFilter : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/BetterPartyFinderFilter/preview-3.webp"
         ]
     };
+
+    public override string ModuleName => nameof(BetterPartyFinderFilter);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

@@ -10,7 +10,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class OccultCrescentHelper : ModuleBase
+internal partial class OccultCrescentHelper : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public partial class OccultCrescentHelper : ModuleBase
         Author          = ["Fragile"],
         ModulesConflict = ["AutoFaceCameraDirection"]
     };
+
+    public override string ModuleName => nameof(OccultCrescentHelper);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -45,28 +47,30 @@ public partial class OccultCrescentHelper : ModuleBase
         if (!string.IsNullOrWhiteSpace(config.AutoEnableDisablePlugins))
         {
             var plugins = config.AutoEnableDisablePlugins
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Take(MAX_DUTY_COMMAND_LINES)
-                .ToArray();
+                                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                .Take(MAX_DUTY_COMMAND_LINES)
+                                .ToArray();
 
-            config.JoinDutyCommands  = string.Join("\n", plugins.Select(plugin => $"/xlenableplugin {plugin}"));
-            config.LeaveDutyCommands = string.Join("\n", plugins.Select(plugin => $"/xldisableplugin {plugin}"));
+            config.JoinDutyCommands         = string.Join("\n", plugins.Select(plugin => $"/xlenableplugin {plugin}"));
+            config.LeaveDutyCommands        = string.Join("\n", plugins.Select(plugin => $"/xldisableplugin {plugin}"));
             config.AutoEnableDisablePlugins = string.Empty;
-            isConfigChanged = true;
+            isConfigChanged                 = true;
         }
 
         var joinDutyCommands = LimitDutyCommandLines(config.JoinDutyCommands);
+
         if (joinDutyCommands != config.JoinDutyCommands)
         {
             config.JoinDutyCommands = joinDutyCommands;
-            isConfigChanged = true;
+            isConfigChanged         = true;
         }
 
         var leaveDutyCommands = LimitDutyCommandLines(config.LeaveDutyCommands);
+
         if (leaveDutyCommands != config.LeaveDutyCommands)
         {
             config.LeaveDutyCommands = leaveDutyCommands;
-            isConfigChanged = true;
+            isConfigChanged          = true;
         }
 
         if (isConfigChanged)
@@ -74,7 +78,7 @@ public partial class OccultCrescentHelper : ModuleBase
 
         Overlay       ??= new(this);
         Overlay.Flags &=  ~ImGuiWindowFlags.AlwaysAutoResize;
-        
+
         aetheryteModule  = new(this);
         eventModule      = new(this);
         treasureModule   = new(this);
@@ -127,7 +131,7 @@ public partial class OccultCrescentHelper : ModuleBase
     protected override void ConfigUI()
     {
         using var fontPush = FontManager.Instance().UIFont.Push();
-        
+
         using var tab = ImRaii.TabBar("###Config", ImGuiTabBarFlags.Reorderable);
         if (!tab) return;
 

@@ -11,7 +11,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoChangeBattleEffectLevel : ModuleBase
+internal class AutoChangeBattleEffectLevel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,7 +20,9 @@ public class AutoChangeBattleEffectLevel : ModuleBase
         Category    = ModuleCategory.Combat,
         Author      = ["Siren"]
     };
-    
+
+    public override string ModuleName => nameof(AutoChangeBattleEffectLevel);
+
     private Config         config = null!;
     private EffectSetting? lastAppliedSettings;
 
@@ -73,7 +75,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
                 if (ImGui.CollapsingHeader
                     (
                         $"{ISeStringEvaluator.Instance().EvaluateFromAddon(12871, [config.AroundCountThresholdLow])}" +
-                        $" ≤ X ≤ "                                                                                            +
+                        $" ≤ X ≤ "                                                                                    +
                         $"{ISeStringEvaluator.Instance().EvaluateFromAddon(12871, [config.AroundCountThresholdHigh])}",
                         ImGuiTreeNodeFlags.DefaultOpen
                     ))
@@ -114,7 +116,7 @@ public class AutoChangeBattleEffectLevel : ModuleBase
                     var isPush = false;
                     using (ImRaii.PushColor(ImGuiCol.Text, KnownColor.LawnGreen.ToUInt(), setting.IsEnabled))
                         isPush = ImGuiOm.TreeNodeImageWithText(image.Handle, new(ImGui.GetTextLineHeightWithSpacing()), $"{name}");
-                    
+
                     if (isPush)
                     {
                         DrawBattleEffectSetting($"Duty_{contentType.RowId}", setting);

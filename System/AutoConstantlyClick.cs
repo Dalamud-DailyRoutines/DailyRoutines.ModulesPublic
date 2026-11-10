@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoConstantlyClick : ModuleBase
+internal unsafe class AutoConstantlyClick : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,22 +18,28 @@ public unsafe class AutoConstantlyClick : ModuleBase
         Author      = ["AtmoOmen", "KirisameVanilla"]
     };
 
+    public override string ModuleName => nameof(AutoConstantlyClick);
+
     private static readonly CompSig CheckHotbarClickedSig =
         new("E8 ?? ?? ?? ?? 48 8B 4F ?? 48 8B 01 FF 50 ?? 48 8B C8 E8 ?? ?? ?? ?? 84 C0 74");
+
     private delegate void CheckHotbarClickedDelegate
     (
         nint a1,
         byte a2
     );
+
     private Hook<CheckHotbarClickedDelegate>? CheckHotbarClickedHook;
 
     private static readonly CompSig CheckCrossHotbarClickedSig =
         new("89 54 24 ?? 48 89 4C 24 ?? 56 41 55");
+
     private delegate void CheckCrossHotbarClickedDelegate
     (
         nint a1,
         int  a2
     );
+
     private Hook<CheckCrossHotbarClickedDelegate>? CheckCrossHotbarClickedHook;
 
     private Config config = null!;

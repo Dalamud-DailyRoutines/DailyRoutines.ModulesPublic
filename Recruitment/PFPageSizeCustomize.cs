@@ -8,7 +8,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class PFPageSizeCustomize : ModuleBase
+internal class PFPageSizeCustomize : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public class PFPageSizeCustomize : ModuleBase
         Category    = ModuleCategory.Recruitment,
         Author      = ["逆光"]
     };
+
+    public override string ModuleName => nameof(PFPageSizeCustomize);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

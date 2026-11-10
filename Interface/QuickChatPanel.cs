@@ -28,7 +28,7 @@ using Action = System.Action;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class QuickChatPanel : ModuleBase
+internal unsafe class QuickChatPanel : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -36,6 +36,8 @@ public unsafe class QuickChatPanel : ModuleBase
         Description = Lang.Get("QuickChatPanelDescription"),
         Category    = ModuleCategory.Interface
     };
+
+    public override string ModuleName => nameof(QuickChatPanel);
 
     private Config config = null!;
 

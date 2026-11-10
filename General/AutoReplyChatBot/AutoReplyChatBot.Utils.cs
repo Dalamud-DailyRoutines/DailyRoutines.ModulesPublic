@@ -1,10 +1,10 @@
-﻿using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using FFXIVClientStructs.FFXIV.Client.UI.Info;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoReplyChatBot
+internal partial class AutoReplyChatBot
 {
     private void AppendHistory
     (

@@ -19,7 +19,7 @@ using Status = Lumina.Excel.Sheets.Status;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoHighlightStatusAction : ModuleBase
+internal unsafe class AutoHighlightStatusAction : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
         Category    = ModuleCategory.Action,
         Author      = ["HaKu"]
     };
+
+    public override string ModuleName => nameof(AutoHighlightStatusAction);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -265,8 +267,9 @@ public unsafe class AutoHighlightStatusAction : ModuleBase
 
             ImGui.TableNextColumn();
             var keepHighlight = statusConfig.KeepHighlight;
-            
+
             ImGuiOm.CenterAlignFor(ImGui.GetFrameHeight());
+
             if (ImGui.Checkbox($"##KeepHighlight_{status}", ref keepHighlight))
             {
                 statusConfig.KeepHighlight = keepHighlight;

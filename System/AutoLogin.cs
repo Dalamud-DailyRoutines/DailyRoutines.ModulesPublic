@@ -19,7 +19,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoLogin : ModuleBase
+internal unsafe class AutoLogin : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -28,6 +28,8 @@ public unsafe class AutoLogin : ModuleBase
         Category            = ModuleCategory.System,
         ModulesPrerequisite = ["InstantLogout"]
     };
+
+    public override string ModuleName => nameof(AutoLogin);
 
     private static string CurrentProcessInfo
     {

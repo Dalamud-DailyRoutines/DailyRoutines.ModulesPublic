@@ -9,7 +9,7 @@ using OmenTools.Interop.Game.Models;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedBorderlessWindow : ModuleBase
+internal unsafe class OptimizedBorderlessWindow : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -17,6 +17,8 @@ public unsafe class OptimizedBorderlessWindow : ModuleBase
         Description = Lang.Get("OptimizedBorderlessWindowDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(OptimizedBorderlessWindow);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {

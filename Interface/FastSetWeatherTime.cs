@@ -21,7 +21,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class FastSetWeatherTime : ModuleBase
+internal unsafe class FastSetWeatherTime : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -30,6 +30,8 @@ public unsafe class FastSetWeatherTime : ModuleBase
         Category    = ModuleCategory.Interface
     };
 
+    public override string ModuleName => nameof(FastSetWeatherTime);
+
     public override ModuleBehaviour Behaviour { get; } = new()
     {
         AllDefaultEnabled = true
@@ -37,6 +39,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
 
     private static readonly CompSig PlayWeatherSoundSig =
         new("48 89 5C 24 ?? 48 89 6C 24 ?? 56 57 41 56 48 83 EC ?? 45 33 F6 0F 29 74 24");
+
     private delegate void* PlayWeatherSoundDelegate
     (
         void* manager,
@@ -44,10 +47,12 @@ public unsafe class FastSetWeatherTime : ModuleBase
         void* a3,
         void* a4
     );
+
     private Hook<PlayWeatherSoundDelegate> PlayWeatherSoundHook;
 
     private static readonly CompSig UpdateBgmSituationSig =
         new("48 89 5C 24 ?? 57 48 83 EC 20 B8 ?? ?? ?? ?? 49 8B F9 41 8B D8");
+
     private delegate void* UpdateBgmSituationDelegate
     (
         void*  manager,
@@ -56,6 +61,7 @@ public unsafe class FastSetWeatherTime : ModuleBase
         void*  a4,
         void*  a5
     );
+
     private Hook<UpdateBgmSituationDelegate> UpdateBgmSituationHook;
 
 

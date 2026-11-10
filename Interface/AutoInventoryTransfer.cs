@@ -9,7 +9,7 @@ using OmenTools.Interop.Game.Lumina;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoInventoryTransfer : ModuleBase
+internal unsafe class AutoInventoryTransfer : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -18,6 +18,8 @@ public unsafe class AutoInventoryTransfer : ModuleBase
         Category    = ModuleCategory.Interface,
         Author      = ["Yangdoubao"]
     };
+
+    public override string ModuleName => nameof(AutoInventoryTransfer);
 
     protected override void Init()
     {

@@ -18,7 +18,7 @@ using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class AutoUseEventItem : ModuleBase
+internal unsafe class AutoUseEventItem : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,6 +26,8 @@ public unsafe class AutoUseEventItem : ModuleBase
         Description = Lang.Get("AutoUseEventItemDescription"),
         Category    = ModuleCategory.System
     };
+
+    public override string ModuleName => nameof(AutoUseEventItem);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -69,10 +71,10 @@ public unsafe class AutoUseEventItem : ModuleBase
 
     private static void OnAddonInventoryEvent()
     {
-        if (!UIModule.Instance()->IsInventoryOpen()               ||
+        if (!UIModule.Instance()->IsInventoryOpen()       ||
             ICondition.Instance().IsCasting               ||
             ICondition.Instance()[ConditionFlag.InCombat] ||
-            Request != null                                       ||
+            Request != null                               ||
             !IsAnyQuestNearby(out var questRowID))
             return;
 

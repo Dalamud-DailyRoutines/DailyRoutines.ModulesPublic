@@ -20,14 +20,12 @@ using Lumina.Excel.Sheets;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using CurrencyManager = FFXIVClientStructs.FFXIV.Client.Game.CurrencyManager;
-using ModuleBase = DailyRoutines.Common.Module.Abstractions.ModuleBase;
 using ShopData = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentCollectablesShop.CollectablesShopData;
 
 namespace DailyRoutines.ModulesPublic;
 
-public unsafe class OptimizedCollectablesShop : ModuleBase
+internal unsafe class OptimizedCollectablesShop : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -39,6 +37,8 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
             "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedCollectablesShop/preview-1.webp"
         ]
     };
+
+    public override string ModuleName => nameof(OptimizedCollectablesShop);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -60,7 +60,7 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
     protected override void Init()
     {
         config = Config.Load(this) ?? new();
-        
+
         controls  = new(this);
         selection = new(this);
 
@@ -114,15 +114,15 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
     {
         selection.Save();
         exchange?.Stop();
-        
+
         var agent = AgentCollectablesShop.Instance();
         if (agent->Data != null)
             agent->Data->RefreshFlags |= AgentCollectablesShop.RefreshFlags.List;
-        
+
         IAddonLifecycle.Instance().UnregisterListener(OnAddon);
         IGameInventory.Instance().InventoryChanged -= OnInventoryChanged;
         LogMessageManager.Instance().Unreg(OnLogMessage);
-        
+
         var addon = (AddonCollectablesShop*)CollectablesShopAddon;
         controls.Dispose(addon);
     }
@@ -228,7 +228,7 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
 
         imageNode->LoadIconTexture(itemRow.Icon, 0);
     }
-    
+
     private bool HandleEventDetour
     (
         AgentCollectablesShop* agent,
@@ -499,10 +499,10 @@ public unsafe class OptimizedCollectablesShop : ModuleBase
     private sealed class Submission
     {
         private readonly List<Reward> rewards = [];
-        
+
         private InventoryType container;
         private ushort        slotIndex;
-        
+
         private int             itemCount;
         private long            started;
         private SubmissionState state;

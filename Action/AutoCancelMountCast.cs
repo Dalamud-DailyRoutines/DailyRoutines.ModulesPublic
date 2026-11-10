@@ -10,7 +10,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public class AutoCancelMountCast : ModuleBase
+internal class AutoCancelMountCast : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -20,6 +20,8 @@ public class AutoCancelMountCast : ModuleBase
         Author      = ["Bill"],
         ModulesPair = ["BetterMountRoulette"]
     };
+
+    public override string ModuleName => nameof(AutoCancelMountCast);
 
     private Config config = null!;
 

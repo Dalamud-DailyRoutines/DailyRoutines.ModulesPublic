@@ -17,7 +17,7 @@ using OmenTools.Threading;
 
 namespace DailyRoutines.ModulesPublic;
 
-public partial class AutoRecordSubTimeLeft : ModuleBase
+internal partial class AutoRecordSubTimeLeft : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
     {
@@ -26,6 +26,8 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         Category    = ModuleCategory.General,
         Author      = ["Due"]
     };
+
+    public override string ModuleName => nameof(AutoRecordSubTimeLeft);
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
@@ -48,7 +50,7 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
     private DatePicker? endDatePicker;
     private DateTime    queryStartDate;
     private DateTime    queryEndDate;
-    
+
     protected override unsafe void Init()
     {
         config     =   Config.Load(this) ?? new();
@@ -74,7 +76,7 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         IClientState.Instance().Logout += OnLogout;
 
         FrameworkManager.Instance().Reg(OnUpdate, 5_000);
-        
+
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "CharaSelect",        OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostDraw,            "CharaSelect",        OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "_CharaSelectRemain", OnAddon);
@@ -163,7 +165,7 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         UpdateSubscriptionFromAgent(agent);
         return ret;
     }
-    
+
     private static void OnDTREntryClick
     (
         DtrInteractionEvent eventData
@@ -247,10 +249,10 @@ public partial class AutoRecordSubTimeLeft : ModuleBase
         if (contentID == 0)
             contentID = LocalPlayerState.ContentID;
 
-        if (contentID == 0                                        ||
-            ICondition.Instance()[ConditionFlag.InCombat] ||
-            !config.Infos.TryGetValue(contentID, out var info)    ||
-            info.Record == DateTime.MinValue                      ||
+        if (contentID == 0                                     ||
+            ICondition.Instance()[ConditionFlag.InCombat]      ||
+            !config.Infos.TryGetValue(contentID, out var info) ||
+            info.Record == DateTime.MinValue                   ||
             (info.LeftMonth == TimeSpan.MinValue && info.LeftTime == TimeSpan.MinValue))
         {
             entry.Shown = false;
