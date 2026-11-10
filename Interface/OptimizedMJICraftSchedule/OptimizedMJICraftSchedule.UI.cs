@@ -229,26 +229,24 @@ internal partial class OptimizedMJICraftSchedule
             applyButton.IsVisible = module.calculator.Result != null;
             applyButton.IsEnabled = !busy && module.calculator.Result is { Complete: true };
 
-            if (!busy &&
-                module.calculator.Result != null)
+            status.String = (busy, module.calculator.Result) switch
             {
-                status.String = Lang.Get
+                (true, _) => Lang.Get
+                (
+                    module.calculator.IsApplying ?
+                        "OptimizedMJICraftSchedule-Applying" :
+                        "OptimizedMJICraftSchedule-Busy"
+                ),
+                (false, { } result) => Lang.Get
                 (
                     "OptimizedMJICraftSchedule-Summary",
                     new Dictionary<string, object>
                     {
-                        ["value"] = module.calculator.Result.Value
+                        ["value"] = result.Value
                     }
-                );
-                return;
-            }
-
-            status.String = Lang.Get
-            (
-                busy ?
-                    "OptimizedMJICraftSchedule-Busy" :
-                    "OptimizedMJICraftSchedule-Hint"
-            );
+                ),
+                _ => Lang.Get("OptimizedMJICraftSchedule-Hint")
+            };
         }
 
         protected override unsafe void OnFinalize(AtkUnitBase* addon)
