@@ -833,9 +833,9 @@ internal partial class AutoMarksFinder
         private const int   MOVEMENT_TIMEOUT_MS         = 15_000;
         private const int   MOUNT_TIMEOUT_MS            = 20_000;
         private const int   MOUNT_RETRY_MS              = 1000;
-        private const int   OBSERVATION_DELAY_MS        = 1500;
+        private const int   OBSERVATION_DELAY_MS        = 250;
         public const  int   COVERAGE_SIZE               = 1024;
-        private const int   COVERAGE_UPDATE_INTERVAL_MS = 1000;
+        private const int   COVERAGE_UPDATE_INTERVAL_MS = 250;
 
         private static readonly uint          COVERAGE_OUTLINE_COLOR = (uint)Color.FromKnownColor(KnownColor.GreenYellow).ToArgb();
         private static readonly uint          COVERAGE_FILL_COLOR    = (COVERAGE_OUTLINE_COLOR & 0x00FFFFFF) | 0x1F000000;
