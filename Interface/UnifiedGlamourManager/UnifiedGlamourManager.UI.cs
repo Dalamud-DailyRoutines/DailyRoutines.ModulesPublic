@@ -1006,7 +1006,10 @@ internal unsafe partial class UnifiedGlamourManager
                ))
         {
             if (ImGui.Button(Lang.Get("Apply"), new Vector2(-1f, 0f)))
+            {
+                presetEditor.IsPreviewPending = false;
                 TaskHelper.Enqueue(StartApplyPreset);
+            }
         }
 
         ImGui.TableNextRow();
@@ -1273,6 +1276,14 @@ internal unsafe partial class UnifiedGlamourManager
             }
         }
 
+        var enableLivePreview = presetEditor.EnableLivePreview;
+        if (ImGui.Checkbox(Lang.Get("UnifiedGlamourManager-Editor-LivePreview"), ref enableLivePreview))
+        {
+            presetEditor.EnableLivePreview = enableLivePreview;
+            presetEditor.QueuePreview();
+        }
+
+        ImGui.SameLine();
         using (ImRaii.Disabled(string.IsNullOrWhiteSpace(draft.Title)))
         {
             if (ImGui.Button(Lang.Get("Save")))
@@ -1292,7 +1303,10 @@ internal unsafe partial class UnifiedGlamourManager
         {
             FillEmptyPresetSlots(draft);
             NormalizePresetEquipment(draft);
+            presetEditor.QueuePreview();
         }
+
+        presetEditor.UpdateLivePreview();
     }
 
     private static void DrawPresetItemIcon
