@@ -31,7 +31,6 @@ internal partial class AutoMarksFinder
         private NotoriousMonsterFound? targetMonster;
         private HuntNavigationMode     navigationMode;
         private float                  nearbyDistance;
-        private Queue<Vector3>?        candidates;
         private Vector3                destination;
         private bool                   fly;
         private long                   mountRequestedAt;
@@ -223,7 +222,6 @@ internal partial class AutoMarksFinder
 
             stage            = MovementStage.Idle;
             targetMonster    = null;
-            candidates       = null;
             mountRequestedAt = 0;
             pathStartedAt    = 0;
         }
@@ -277,68 +275,55 @@ internal partial class AutoMarksFinder
                 return false;
             }
 
-            if (candidates == null)
+            if (pathStartedAt == 0)
             {
-                candidates = [];
-                var position = LocalPlayerState.Object.Position;
+                var candidate = targetMonster.Position;
+                var position  = LocalPlayerState.Object.Position;
 
-                if (navigationMode == HuntNavigationMode.Exact)
-                    candidates.Enqueue(targetMonster.Position);
-                else
+                if (navigationMode == HuntNavigationMode.Nearby)
                 {
-                    var height = targetMonster.Position.Y;
+                    var distance = MathF.Sqrt(HorizontalDistanceSquared(position, candidate));
+                    if (distance > 0)
+                        candidate = Vector3.Lerp(candidate, position, MathF.Min(Math.Max(0, nearbyDistance - (ARRIVAL_RADIUS * 2)) / distance, 1));
 
-                    height = Math.Max(height + FLIGHT_HEIGHT, position.Y);
-                    var angle = MathF.Atan2(position.Z - targetMonster.Position.Z, position.X - targetMonster.Position.X);
-
-                    for (var ring = 2; ring >= 1; ring--)
-                    for (var direction = 0; direction < CANDIDATE_DIRECTIONS; direction++)
-                    {
-                        var rotation = angle + (MathF.Tau * direction / CANDIDATE_DIRECTIONS);
-                        var offset   = new Vector3(MathF.Cos(rotation), 0, MathF.Sin(rotation)) * (Math.Max(0, nearbyDistance - (ARRIVAL_RADIUS * 2)) * ring / 2);
-                        candidates.Enqueue((targetMonster.Position + offset) with { Y = height });
-                    }
-
-                    candidates.Enqueue(targetMonster.Position with { Y = height });
+                    candidate.Y = Math.Max(targetMonster.Position.Y + FLIGHT_HEIGHT, position.Y);
                 }
-            }
 
-            if (pathStartedAt != 0)
-            {
-                if (IsPathPending &&
-                    Environment.TickCount64 - pathStartedAt < PATH_TIMEOUT_MS)
+                var nearestPoint = fly ?
+                                       vnavmeshIPC.QueryNearestPointInVoxel(candidate, nearbyDistance) :
+                                       vnavmeshIPC.QueryNearestPointOnMesh(candidate, nearbyDistance, 10000);
+
+                if (nearestPoint is not { } point ||
+                    (navigationMode                                         == HuntNavigationMode.Nearby &&
+                     HorizontalDistanceSquared(point, targetMonster.Position) > nearbyDistance * nearbyDistance))
+                {
+                    StopWithWarning();
                     return false;
-
-                var path = TakePath();
-                StopNavigation();
-                pathStartedAt = 0;
-
-                if (path is { Count: > 0 }                                                            &&
-                    Vector3.DistanceSquared(path[^1], destination) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS &&
-                    !RaycastHelper.IsInsideCollision(path[^1])                                        &&
-                    (navigationMode                                              == HuntNavigationMode.Exact ||
-                     HorizontalDistanceSquared(path[^1], targetMonster.Position) <= nearbyDistance * nearbyDistance))
-                {
-                    destination     = path[^1];
-                    closestDistance = Vector3.DistanceSquared(LocalPlayerState.Object.Position, destination);
-                    lastProgressAt  = Environment.TickCount64;
-                    FollowPath(path, fly);
-                    return true;
                 }
-            }
 
-            while (candidates.TryDequeue(out var candidate))
-            {
-                if (RaycastHelper.IsInsideCollision(candidate))
-                    continue;
-
-                destination = candidate;
-                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, config.NearbyDistance, 10000) is { } queryResult)
-                    destination = queryResult + new Vector3(0, FLIGHT_HEIGHT, 0);
-
+                destination   = point;
                 pathStartedAt = Environment.TickCount64;
                 BeginPath(destination, fly);
                 return false;
+            }
+
+            if (IsPathPending &&
+                Environment.TickCount64 - pathStartedAt < PATH_TIMEOUT_MS)
+                return false;
+
+            var path = TakePath();
+            StopNavigation();
+
+            if (path is { Count: > 0 }                                                            &&
+                Vector3.DistanceSquared(path[^1], destination) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS &&
+                (navigationMode                                              == HuntNavigationMode.Exact ||
+                 HorizontalDistanceSquared(path[^1], targetMonster.Position) <= nearbyDistance * nearbyDistance))
+            {
+                destination     = path[^1];
+                closestDistance = Vector3.DistanceSquared(LocalPlayerState.Object.Position, destination);
+                lastProgressAt  = Environment.TickCount64;
+                FollowPath(path, fly);
+                return true;
             }
 
             StopWithWarning();
@@ -363,7 +348,6 @@ internal partial class AutoMarksFinder
                 StopNavigation();
                 FrameworkManager.Instance().Unreg(UpdateTarget);
                 targetMonster = null;
-                candidates    = null;
                 return true;
             }
 
@@ -451,7 +435,6 @@ internal partial class AutoMarksFinder
         private const float FLIGHT_HEIGHT             = 15;
         private const float ARRIVAL_RADIUS            = 2;
         private const float PROGRESS_DISTANCE         = 2;
-        private const int   CANDIDATE_DIRECTIONS      = 8;
         private const int   MOUNT_RETRY_MS            = 1000;
         private const int   PATH_TIMEOUT_MS           = 15_000;
         private const int   MOVEMENT_TIMEOUT_MS       = 15_000;
