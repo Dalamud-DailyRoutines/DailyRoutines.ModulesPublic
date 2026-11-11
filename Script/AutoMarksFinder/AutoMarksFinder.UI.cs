@@ -3,6 +3,7 @@ using DailyRoutines.Common.Extensions;
 using DailyRoutines.Extensions;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Textures.TextureWraps;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using Newtonsoft.Json;
@@ -41,7 +42,17 @@ internal partial class AutoMarksFinder
     protected override void ConfigUI()
     {
         using (ImRaii.Heading1(Lang.Get("PreCondition")))
-            ImGui.TextWrapped(Lang.Get("IPC-InstalledAndEnabledPlugin", "vnavmesh"));
+            ImGui.TextWrapped
+            (
+                Lang.Get
+                (
+                    "IPC-InstalledAndEnabledPlugin",
+                    new Dictionary<string, object>
+                    {
+                        ["pluginName"] = "vnavmesh CN"
+                    }
+                )
+            );
 
         ImGui.NewLine();
 
@@ -553,6 +564,10 @@ internal partial class AutoMarksFinder
                 if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-UpdateSpawnPoints")))
                     spawnPointUpdateTask = UpdateSpawnPoints(spawnPointUpdateCancellation.Token);
             }
+            
+            ImGui.SameLine();
+            if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-ContributeSpawnPoints")))
+                Util.OpenLink(SPAWN_POINTES_CONTRIBUTE_URL);
         }
     }
 
@@ -941,6 +956,12 @@ internal partial class AutoMarksFinder
     #region 常量
 
     private const string MONSTER_DRAG_PAYLOAD = "AutoMarksFinderMonster";
+    
+    private const string SPAWN_POINTS_URL =
+        "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
+
+    private const string SPAWN_POINTES_CONTRIBUTE_URL = 
+        "https://github.com/Dalamud-DailyRoutines/DailyRoutines/tree/main/Resources/Modules/AutoMarksFinder";
 
     #endregion
 }

@@ -140,8 +140,6 @@ internal partial class AutoMarksFinder : ModuleBase
     #region 常量
 
     private const string COMMAND = "mf";
-    private const string SPAWN_POINTS_URL =
-        "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
 
     private static readonly string[] SUPPORTED_RELAY_COMMANDS =
     [
