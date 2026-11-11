@@ -25,7 +25,6 @@ internal partial class AutoMarksFinder
     {
         private readonly Dictionary<uint, List<Vector3>>     zones            = [];
         private readonly HashSet<(uint Zone, uint Instance)> completedAreas   = [];
-        private readonly List<Vector3>                       candidates       = [];
         private readonly List<Vector3>                       failedCandidates = [];
         private readonly HashSet<Vector3>                    targetPoints     = [];
         private readonly Queue<Vector3>                      retryTargets     = [];
@@ -309,27 +308,31 @@ internal partial class AutoMarksFinder
             var              bestScore    = float.MaxValue;
             AetheryteRecord? teleport     = null;
 
-            BuildCandidates(nearestPoint);
+            var candidates = GetCandidates(nearestPoint);
 
             foreach (var candidate in candidates)
             {
-                if (failedCandidates.Any(failed => DistanceSquared(failed, candidate) < 1))
+                var flightPoint = candidate with { Y = position.Y };
+                if (vnavmeshIPC.QueryNearestPointInVoxel(flightPoint, RETRY_DISTANCE) is not { } destination)
                     continue;
 
-                if (DistanceSquared(nearestPoint, candidate) > PLANNING_RADIUS * PLANNING_RADIUS)
+                if (failedCandidates.Any(failed => Vector3.DistanceSquared(failed, destination) < 1))
                     continue;
 
-                var coverage    = PendingPoints.Count(point => DistanceSquared(point, position, candidate) <= DETECTION_RADIUS * DETECTION_RADIUS);
-                var cost        = (MathF.Sqrt(DistanceSquared(position, candidate)) / MOUNT_SPEED) + OBSERVATION_DURATION;
+                if (DistanceSquared(nearestPoint, destination) > PLANNING_RADIUS * PLANNING_RADIUS)
+                    continue;
+
+                var coverage    = PendingPoints.Count(point => DistanceSquared(point, position, destination) <= DETECTION_RADIUS * DETECTION_RADIUS);
+                var cost        = (MathF.Sqrt(DistanceSquared(position, destination)) / MOUNT_SPEED) + OBSERVATION_DURATION;
                 var score       = cost / coverage;
-                var aetheryte   = aetherytes.MinBy(record => DistanceSquared(record.Position, candidate));
+                var aetheryte   = aetherytes.MinBy(record => DistanceSquared(record.Position, destination));
                 var useTeleport = false;
 
                 if (aetheryte != null)
                 {
                     var teleportCoverage = PendingPoints.Count
-                        (point => DistanceSquared(point, aetheryte.Position, candidate) <= DETECTION_RADIUS * DETECTION_RADIUS);
-                    var teleportCost = TELEPORT_DURATION + (MathF.Sqrt(DistanceSquared(aetheryte.Position, candidate)) / MOUNT_SPEED) + (OBSERVATION_DURATION * 2);
+                        (point => DistanceSquared(point, aetheryte.Position, destination) <= DETECTION_RADIUS * DETECTION_RADIUS);
+                    var teleportCost = TELEPORT_DURATION + (MathF.Sqrt(DistanceSquared(aetheryte.Position, destination)) / MOUNT_SPEED) + (OBSERVATION_DURATION * 2);
                     var teleportScore = teleportCost / teleportCoverage;
                     var teleportComparison = teleportScore.CompareTo(score);
 
@@ -348,14 +351,6 @@ internal partial class AutoMarksFinder
                 if (comparison > 0 ||
                     (comparison == 0 &&
                      coverage   <= bestCoverage))
-                    continue;
-
-                var destination = candidate;
-                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, RETRY_DISTANCE, 10000) is not { } ground)
-                    continue;
-
-                destination.Y = ground.Y + FLIGHT_HEIGHT;
-                if (RaycastHelper.IsInsideCollision(destination))
                     continue;
 
                 bestCoverage = coverage;
@@ -385,6 +380,7 @@ internal partial class AutoMarksFinder
 
             retryTargets.Clear();
             retryTargets.Enqueue(target);
+            retryTargets.Enqueue(target with { Y = VOXEL_SEARCH_HEIGHT / 2 });
 
             for (var ring = 1; ring <= RETRY_RINGS; ring++)
             for (var direction = 0; direction < RETRY_DIRECTIONS; direction++)
@@ -395,6 +391,7 @@ internal partial class AutoMarksFinder
                     retryTargets.Enqueue(nearby);
             }
 
+            retryTargets.Enqueue(target with { Y = -VOXEL_SEARCH_HEIGHT / 2 });
             ChangeState(ScanState.Mounting);
         }
 
@@ -432,15 +429,17 @@ internal partial class AutoMarksFinder
 
             while (retryTargets.TryDequeue(out var candidate))
             {
-                if (vnavmeshIPC.QueryNearestPointOnMesh(candidate, RETRY_DISTANCE, 10000) is not { } ground)
+                if (vnavmeshIPC.QueryNearestPointInVoxel(candidate, RETRY_DISTANCE) is not { } destination)
                     continue;
 
-                candidate.Y = ground.Y + FLIGHT_HEIGHT;
-                if (RaycastHelper.IsInsideCollision(candidate))
+                if (failedCandidates.Any(failed => Vector3.DistanceSquared(failed, destination) < 1))
                     continue;
 
-                navigationTarget = candidate;
-                module.movement.BeginPath(candidate, true);
+                if (DistanceSquared(destination, anchor) > PLANNING_RADIUS * PLANNING_RADIUS)
+                    continue;
+
+                navigationTarget = destination;
+                module.movement.BeginPath(destination, true);
                 ChangeState(ScanState.Pathfinding);
                 return;
             }
@@ -454,7 +453,10 @@ internal partial class AutoMarksFinder
             if (module.movement.IsPathPending)
             {
                 if (Environment.TickCount64 - stateStartedAt >= PATHFIND_TIMEOUT_MS)
+                {
+                    failedCandidates.Add(navigationTarget);
                     StartPathfinding();
+                }
 
                 return;
             }
@@ -463,23 +465,24 @@ internal partial class AutoMarksFinder
 
             if (path == null)
             {
+                failedCandidates.Add(navigationTarget);
                 StartPathfinding();
                 return;
             }
 
-            if (path.Count                        == 0                                ||
-                DistanceSquared(path[^1], anchor) > PLANNING_RADIUS * PLANNING_RADIUS ||
-                RaycastHelper.IsInsideCollision(path[^1]))
+            var endIndex = path.FindIndex(point => DistanceSquared(point, anchor) <= PLANNING_RADIUS * PLANNING_RADIUS);
+
+            if (endIndex < 0)
             {
+                failedCandidates.Add(navigationTarget);
                 StartPathfinding();
                 return;
             }
 
             CancelPath();
-            var endIndex = path.FindIndex(point => DistanceSquared(point, navigationTarget) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS);
-            if (endIndex >= 0)
-                path.RemoveRange(endIndex + 1, path.Count - endIndex - 1);
+            path.RemoveRange(endIndex + 1, path.Count - endIndex - 1);
 
+            navigationTarget = path[^1];
             ActivePath.Add(LocalPlayerState.Object.Position);
             ActivePath.AddRange(path);
             module.movement.FollowPath(path, true);
@@ -525,7 +528,10 @@ internal partial class AutoMarksFinder
                     ChangeState(ScanState.Observing);
                 }
                 else
+                {
+                    failedCandidates.Add(navigationTarget);
                     StartPathfinding();
+                }
             }
         }
 
@@ -707,11 +713,27 @@ internal partial class AutoMarksFinder
             ChangeState(ScanState.SwitchingZone);
         }
 
-        private void BuildCandidates(Vector3 nearestPoint)
+        private List<Vector3> GetCandidates(Vector3 nearestPoint)
         {
-            candidates.Clear();
-            var nearbyPoints = PendingPoints.Where(point => DistanceSquared(point, nearestPoint) <= 4 * PLANNING_RADIUS * PLANNING_RADIUS).ToArray();
+            List<Vector3> candidates = [];
+
+            var nearbyPoints = PendingPoints.Where
+                                            (point => DistanceSquared(point, nearestPoint) <=
+                                                      4 * PLANNING_RADIUS * PLANNING_RADIUS
+                                            )
+                                            .ToArray();
             candidates.AddRange(nearbyPoints);
+
+            var position = LocalPlayerState.Object.Position;
+
+            foreach (var point in nearbyPoints)
+            {
+                var distance = DistanceSquared(position, point);
+                if (distance <= 0)
+                    continue;
+
+                candidates.Add(Vector3.Lerp(point, position, MathF.Min((PLANNING_RADIUS - ARRIVAL_RADIUS) / MathF.Sqrt(distance), 1)));
+            }
 
             for (var first = 0; first < nearbyPoints.Length; first++)
             for (var second = first + 1; second < nearbyPoints.Length; second++)
@@ -728,6 +750,8 @@ internal partial class AutoMarksFinder
                 candidates.Add(middle + offset);
                 candidates.Add(middle - offset);
             }
+
+            return candidates;
         }
 
         private IEnumerable<AetheryteRecord> GetScanAetherytes() =>
@@ -798,8 +822,8 @@ internal partial class AutoMarksFinder
         private const float MOUNT_SPEED                 = 12;
         private const float TELEPORT_DURATION           = 10;
         private const float OBSERVATION_DURATION        = OBSERVATION_DELAY_MS / 1000f;
-        private const float FLIGHT_HEIGHT               = 15;
         private const float RETRY_DISTANCE              = 80;
+        private const float VOXEL_SEARCH_HEIGHT         = 2048;
         private const float PROGRESS_DISTANCE           = 2;
         private const int   RETRY_RINGS                 = 2;
         private const int   RETRY_DIRECTIONS            = 8;

@@ -91,7 +91,7 @@ internal partial class AutoMarksFinder
     {
         using var heading = ImRaii.Heading1(Lang.Get("AutoMarksFinder-AutoBroadcast"));
 
-        using (ImRaii.Disabled(autoBroadcast.IsRunning))
+        if (!autoBroadcast.IsRunning)
         {
             ImGui.AlignTextToFramePadding();
             ImGui.TextUnformatted(Lang.Get("AutoMarksFinder-AutoBroadcastStartTime"));
