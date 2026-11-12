@@ -286,7 +286,7 @@ internal partial class AutoMarksFinder
                     if (distance > 0)
                         candidate = Vector3.Lerp(candidate, position, MathF.Min(Math.Max(0, nearbyDistance - (ARRIVAL_RADIUS * 2)) / distance, 1));
 
-                    candidate.Y = Math.Max(targetMonster.Position.Y + FLIGHT_HEIGHT, position.Y);
+                    candidate.Y = targetMonster.Position.Y + FLIGHT_HEIGHT;
                 }
 
                 var nearestPoint = fly ?
