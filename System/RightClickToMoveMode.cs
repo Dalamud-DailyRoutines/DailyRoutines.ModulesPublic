@@ -294,7 +294,8 @@ internal partial class RightClickToMoveMode : ModuleBase
     }
 
     private static bool IsNavmeshAvailable() =>
-        IDalamudPluginInterface.Instance().IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) && vnavmeshIPC.IsNavReady;
+        vnavmeshIPC.IsPluginEnabled() &&
+        vnavmeshIPC.IsNavReady;
 
     #endregion
 

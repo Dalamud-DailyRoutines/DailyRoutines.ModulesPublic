@@ -1441,7 +1441,7 @@ internal partial class OptimizedRecipeNote : ModuleBase
 
         calculateRecipeButton.OnClick = () =>
         {
-            if (!IDalamudPluginInterface.Instance().IsPluginEnabled(RaphaelIPC.INTERNAL_NAME))
+            if (!RaphaelIPC.IsPluginEnabled())
             {
                 PrintInstallRaphaelPluginMessage();
                 return;

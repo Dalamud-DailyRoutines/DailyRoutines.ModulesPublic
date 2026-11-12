@@ -204,7 +204,7 @@ internal partial class OccultCrescentHelper
                 }
 
                 // 启用了绿玩移动
-                if (IDalamudPluginInterface.Instance().IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) &&
+                if (vnavmeshIPC.IsPluginEnabled() && 
                     distanceSQ <= USE_AETHERYTE_DISTANCE_SQ)
                 {
                     taskHelper.Enqueue

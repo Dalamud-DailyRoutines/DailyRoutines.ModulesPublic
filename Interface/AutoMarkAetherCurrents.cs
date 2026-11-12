@@ -596,7 +596,7 @@ internal unsafe class AutoMarkAetherCurrents : ModuleBase
 
             ImGui.Separator();
 
-            using (ImRaii.Disabled(!IDalamudPluginInterface.Instance().IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME)))
+            using (ImRaii.Disabled(!vnavmeshIPC.IsPluginEnabled()))
             {
                 if (ImGui.MenuItem($"    {Lang.Get("AutoMarkAetherCurrents-MoveTo")} (vnavmesh)"))
                     MoveTo(module.TaskHelper);
