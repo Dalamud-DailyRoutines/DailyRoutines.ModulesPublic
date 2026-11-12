@@ -41,7 +41,7 @@ internal partial class AutoMarksFinder
         public bool IsBusy        => tasks.IsBusy;
         public bool HasArrived    => stage == MovementStage.Arrived;
         public bool IsPathPending => pathTask is { IsCompleted: false };
-        public bool IsPathRunning => ownsNavigation && vnavmeshIPC.IsPluginEnabled() && vnavmeshIPC.GetIsPathfindRunning();
+        public bool IsPathRunning => ownsNavigation && vnavmeshIPC.IsPluginEnabled() && vnavmeshIPC.IsPathfindRunning;
 
         public void NavigateToMonster(NotoriousMonsterFound monster, bool afterBroadcast = false)
         {
@@ -174,8 +174,8 @@ internal partial class AutoMarksFinder
 
         public void FollowPath(List<Vector3> path, bool fly)
         {
-            ownsNavigation = true;
-            vnavmeshIPC.SetPathfindTolerance(2f);
+            ownsNavigation                = true;
+            vnavmeshIPC.PathfindTolerance = 2f;
             vnavmeshIPC.PathfindWithPath(path, fly);
         }
 
@@ -241,7 +241,7 @@ internal partial class AutoMarksFinder
             }
 
             if (!vnavmeshIPC.IsPluginEnabled() ||
-                !vnavmeshIPC.GetIsNavReady())
+                !vnavmeshIPC.IsNavReady)
                 return false;
 
             if (ICondition.Instance()[ConditionFlag.Mounted])
@@ -294,7 +294,7 @@ internal partial class AutoMarksFinder
                                        vnavmeshIPC.QueryNearestPointOnMesh(candidate, nearbyDistance, 10000);
 
                 if (nearestPoint is not { } point ||
-                    (navigationMode                                         == HuntNavigationMode.Nearby &&
+                    (navigationMode                                           == HuntNavigationMode.Nearby &&
                      HorizontalDistanceSquared(point, targetMonster.Position) > nearbyDistance * nearbyDistance))
                 {
                     StopWithWarning();

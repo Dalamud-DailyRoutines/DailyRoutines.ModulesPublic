@@ -294,7 +294,7 @@ internal partial class RightClickToMoveMode : ModuleBase
     }
 
     private static bool IsNavmeshAvailable() =>
-        IDalamudPluginInterface.Instance().IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) && vnavmeshIPC.GetIsNavReady();
+        IDalamudPluginInterface.Instance().IsPluginEnabled(vnavmeshIPC.INTERNAL_NAME) && vnavmeshIPC.IsNavReady;
 
     #endregion
 
@@ -385,7 +385,7 @@ internal partial class RightClickToMoveMode : ModuleBase
                 return;
             }
 
-            var isBusy = vnavmeshIPC.GetIsPathfindRunning() || vnavmeshIPC.GetIsPathfindInProgress() || vnavmeshIPC.GetIsNavPathfindInProgress();
+            var isBusy = vnavmeshIPC.IsPathfindRunning || vnavmeshIPC.IsPathfindInProgress || vnavmeshIPC.IsNavPathfindInProgress;
             if (!isBusy && session.ElapsedSeconds >= 0.15f)
                 Stop(module);
         }

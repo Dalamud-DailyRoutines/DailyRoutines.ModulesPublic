@@ -205,7 +205,7 @@ internal partial class AutoMarksFinder
                 }
 
                 if (!vnavmeshIPC.IsPluginEnabled() ||
-                    !vnavmeshIPC.GetIsNavReady()   ||
+                    !vnavmeshIPC.IsNavReady        ||
                     MovementManager.Instance().IsManagerBusy)
                     return;
 

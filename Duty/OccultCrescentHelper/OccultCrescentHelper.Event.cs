@@ -994,7 +994,7 @@ internal partial class OccultCrescentHelper
 
                 if (!session.IsMovementInterrupted)
                 {
-                    vnavmeshIPC.SetPathfindTolerance(0.1f);
+                    vnavmeshIPC.PathfindTolerance = 0.1f;
                     vnavmeshIPC.PathfindWithPath([.. session.Path], false);
                 }
             }
@@ -1023,8 +1023,8 @@ internal partial class OccultCrescentHelper
                 ICondition.Instance().IsOccupiedInEvent)
                 return;
 
-            if (!vnavmeshIPC.GetIsPathfindRunning() ||
-                vnavmeshIPC.GetPathfindWayPoints().GetTotalDistanceSquared() <= MOUNT_MINIMUM_DISTANCE * MOUNT_MINIMUM_DISTANCE)
+            if (!vnavmeshIPC.IsPathfindRunning ||
+                vnavmeshIPC.PathfindWayPoints.GetTotalDistanceSquared() <= MOUNT_MINIMUM_DISTANCE * MOUNT_MINIMUM_DISTANCE)
                 return;
 
             if (Throttler.Shared.Throttle("OccultCrescentHelper-CEManager-Mount", 1_000))
