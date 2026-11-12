@@ -105,7 +105,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
         favorites =
         [
             .. AetheryteRecordManager.Instance().AllRecords
-                                     .Where(x => config.Favorites.Contains(x.ToString()))
+                                     .Where(x => config.Favorites.Contains(x.UniqueID))
                                      .OrderBy(x => x.RowID)
         ];
     }
@@ -116,8 +116,8 @@ internal unsafe partial class BetterTeleport : ModuleBase
         string?         searchText = null
     )
     {
-        if (GameState.ContentFinderCondition != 0                                ||
-            aetheryte is { Cost: uint.MaxValue, Group: not (252 or 253 or 254) } ||
+        if (GameState.ContentFinderCondition != 0              ||
+            aetheryte is { Cost: uint.MaxValue, RowID: not 0 } ||
             !aetheryte.IsUnlocked())
             return;
 
@@ -130,7 +130,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
         var localPlayer = Control.GetLocalPlayer();
         if (localPlayer == null) return;
 
-        var hasRedirect = config.Positions.TryGetValue(aetheryte.ToString(), out var redirected);
+        var hasRedirect = config.Positions.TryGetValue(aetheryte.UniqueID, out var redirected);
         var aetherytePos = hasRedirect ?
                                redirected :
                                aetheryte.Position;
@@ -139,13 +139,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
         var distance2D = !isSameZone ?
                              999 :
                              Vector2.DistanceSquared(localPlayer->Position.ToVector2(), aetherytePos.ToVector2());
-        if (isSameZone             &&
-            aetheryte.Group == 252 &&
-            !hasRedirect)
-            return;
-
-        if (distance2D <= 900 &&
-            (aetheryte.Group != 252 || hasRedirect))
+        if (distance2D <= 900)
             return;
 
         if (aetherytePos.Y == 0)
@@ -168,17 +162,10 @@ internal unsafe partial class BetterTeleport : ModuleBase
                 "BetterTeleport-Notification",
                 new Dictionary<string, object>
                 {
-                    ["destination"] = aetheryte.Name,
+                    ["destination"] = aetheryte.Name
                 }
             )
         );
-
-        if (aetheryte.Group == 252 &&
-            hasRedirect)
-        {
-            TaskHelper.Enqueue(() => MovementManager.Instance().TPSmart_BetweenZone(aetheryte.ZoneID, aetherytePos));
-            return;
-        }
 
         TaskHelper.Enqueue(aetheryte.TeleportTo);
 
@@ -203,7 +190,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
         AetheryteRecord aetheryte
     )
     {
-        var key = aetheryte.ToString();
+        var key = aetheryte.UniqueID;
         config.RecentTeleports.RemoveAll(x => x.Key == key);
         config.RecentTeleports.Insert(0, new RecentRecord { Key = key });
         if (config.RecentTeleports.Count > 20)
@@ -251,7 +238,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
                 config.SearchSelections[term] = recordsForTerm;
             }
 
-            var existing = recordsForTerm.FirstOrDefault(x => x.Key == aetheryte.ToString());
+            var existing = recordsForTerm.FirstOrDefault(x => x.Key == aetheryte.UniqueID);
 
             if (existing == null)
             {
@@ -259,7 +246,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
                 (
                     new SearchSelectionRecord
                     {
-                        Key                 = aetheryte.ToString(),
+                        Key                 = aetheryte.UniqueID,
                         Count               = 1,
                         LastUsedUnixSeconds = now
                     }
@@ -328,7 +315,7 @@ internal unsafe partial class BetterTeleport : ModuleBase
             var relationWeight = GetSearchTermRelationWeight(normalizedSearchText, term);
             if (relationWeight <= 0) continue;
 
-            var selection = selections.FirstOrDefault(x => x.Key == record.ToString());
+            var selection = selections.FirstOrDefault(x => x.Key == record.UniqueID);
             if (selection == null) continue;
 
             var countScore   = Math.Min(selection.Count, 20) * 100;
@@ -395,11 +382,23 @@ internal unsafe partial class BetterTeleport : ModuleBase
         var jsonObj  = JObject.Parse(File.ReadAllText(ConfigFilePath));
         var migrated = false;
 
-        // 迁移 Remarks (v1: 纯数字 RowID / v2: RowID_SubIndex → v3: AetheryteRecord.ToString())
+        var legacyKeys = allRecords.SelectMany
+                                   (record => new[]
+                                        {
+                                            record.RowID.ToString(),
+                                            $"{record.RowID}_{record.SubIndex}",
+                                            record.ToString()
+                                        }
+                                        .Select(key => new { Key = key, RecordKey = record.UniqueID })
+                                   )
+                                   .GroupBy(x => x.Key, StringComparer.Ordinal)
+                                   .Where(group => group.Select(x => x.RecordKey).Distinct(StringComparer.Ordinal).Count() == 1)
+                                   .ToDictionary(group => group.Key, group => group.First().RecordKey, StringComparer.Ordinal);
+
         if (jsonObj["Remarks"] is JObject remarks)
         {
             var oldKeys = remarks.Properties()
-                                 .Where(p => !p.Name.StartsWith("AetheryteRecord.", StringComparison.Ordinal))
+                                 .Where(p => legacyKeys.ContainsKey(p.Name))
                                  .Select(p => p.Name)
                                  .ToList();
 
@@ -407,21 +406,20 @@ internal unsafe partial class BetterTeleport : ModuleBase
             {
                 foreach (var oldKey in oldKeys)
                 {
-                    var value = remarks[oldKey]!;
+                    var value  = remarks[oldKey];
+                    var newKey = legacyKeys[oldKey];
+                    remarks[newKey] ??= value;
                     remarks.Remove(oldKey);
-                    var newKey                          = MigrateOldKeyToToString(oldKey, allRecords);
-                    if (newKey != null) remarks[newKey] = value;
                 }
 
                 migrated = true;
             }
         }
 
-        // 迁移 Positions (同上)
         if (jsonObj["Positions"] is JObject positions)
         {
             var oldKeys = positions.Properties()
-                                   .Where(p => !p.Name.StartsWith("AetheryteRecord.", StringComparison.Ordinal))
+                                   .Where(p => legacyKeys.ContainsKey(p.Name))
                                    .Select(p => p.Name)
                                    .ToList();
 
@@ -429,134 +427,58 @@ internal unsafe partial class BetterTeleport : ModuleBase
             {
                 foreach (var oldKey in oldKeys)
                 {
-                    var value = positions[oldKey]!;
+                    var value  = positions[oldKey];
+                    var newKey = legacyKeys[oldKey];
+                    positions[newKey] ??= value;
                     positions.Remove(oldKey);
-                    var newKey                            = MigrateOldKeyToToString(oldKey, allRecords);
-                    if (newKey != null) positions[newKey] = value;
                 }
 
                 migrated = true;
             }
         }
 
-        // 迁移 Favorites (v1/v2: HashSet<uint> → v3: HashSet<string>)
         if (jsonObj["Favorites"] is JArray favorites)
         {
-            var hasOld = favorites.Any
-            (x => x.Type == JTokenType.Integer ||
-                  (x.Type == JTokenType.String &&
-                   !x.Value<string>()!.StartsWith("AetheryteRecord.", StringComparison.Ordinal))
+            for (var index = 0; index < favorites.Count; index++)
+            {
+                if (!legacyKeys.TryGetValue(favorites[index].ToString(), out var newKey))
+                    continue;
+
+                favorites[index] = newKey;
+                migrated         = true;
+            }
+        }
+
+        var historyRecords = new List<JObject>();
+        if (jsonObj["RecentTeleports"] is JArray recentTeleports)
+            historyRecords.AddRange(recentTeleports.OfType<JObject>());
+
+        if (jsonObj["SearchSelections"] is JObject searchSelections)
+            historyRecords.AddRange
+            (
+                searchSelections.Properties()
+                                .Select(x => x.Value)
+                                .OfType<JArray>()
+                                .SelectMany(x => x.OfType<JObject>())
             );
 
-            if (hasOld)
-            {
-                var newFavorites = new JArray();
-
-                foreach (var item in favorites)
-                {
-                    uint? rowID = item.Type == JTokenType.Integer                                                         ? item.Value<uint>()
-                                  : item.Type == JTokenType.String && uint.TryParse(item.Value<string>(), out var parsed) ? parsed
-                                                                                                                            : null;
-
-                    if (rowID.HasValue)
-                    {
-                        var record = allRecords.FirstOrDefault(x => x.RowID == rowID.Value);
-                        if (record != null) newFavorites.Add(record.ToString());
-                    }
-                    else if (item.Type == JTokenType.String)
-                        newFavorites.Add(item.Value<string>()!);
-                }
-
-                jsonObj["Favorites"] = newFavorites;
-                migrated             = true;
-            }
-        }
-
-        // 迁移 RecentTeleports (v1/v2: AetheryteID+SubIndex → v3: Key)
-        if (jsonObj["RecentTeleports"] is JArray recentTeleports &&
-            recentTeleports.Any(x => x["AetheryteID"] != null))
+        foreach (var item in historyRecords)
         {
-            var newList = new JArray();
+            var oldKey = item["Key"]?.Value<string>();
+            if (oldKey == null && item["AetheryteID"] is { } aetheryteID)
+                oldKey = $"{aetheryteID.Value<uint>()}_{item["SubIndex"]?.Value<byte>() ?? 0}";
+            if (oldKey == null || !legacyKeys.TryGetValue(oldKey, out var newKey))
+                continue;
 
-            foreach (var item in recentTeleports)
-            {
-                var aetheryteID = item["AetheryteID"]?.Value<uint>();
-                var subIndex    = item["SubIndex"]?.Value<byte>() ?? 0;
-                if (!aetheryteID.HasValue) continue;
-
-                var record = allRecords.FirstOrDefault(x => x.RowID == aetheryteID.Value && x.SubIndex == subIndex);
-                if (record != null)
-                    newList.Add(new JObject { ["Key"] = record.ToString() });
-            }
-
-            jsonObj["RecentTeleports"] = newList;
-            migrated                   = true;
-        }
-
-        // 迁移 SearchSelections (v1/v2: AetheryteID+SubIndex → v3: Key)
-        if (jsonObj["SearchSelections"] is JObject searchSelections &&
-            searchSelections.Properties().Any(p => p.Value is JArray arr && arr.Any(x => x["AetheryteID"] != null)))
-        {
-            foreach (var prop in searchSelections.Properties().ToList())
-            {
-                if (prop.Value is not JArray arr) continue;
-                var newArr = new JArray();
-
-                foreach (var item in arr)
-                {
-                    var aetheryteID = item["AetheryteID"]?.Value<uint>();
-                    var subIndex    = item["SubIndex"]?.Value<byte>() ?? 0;
-                    if (!aetheryteID.HasValue) continue;
-
-                    var record = allRecords.FirstOrDefault(x => x.RowID == aetheryteID.Value && x.SubIndex == subIndex);
-                    if (record == null) continue;
-
-                    newArr.Add
-                    (
-                        new JObject
-                        {
-                            ["Key"]                 = record.ToString(),
-                            ["Count"]               = item["Count"]?.Value<int>()                ?? 1,
-                            ["LastUsedUnixSeconds"] = item["LastUsedUnixSeconds"]?.Value<long>() ?? 0
-                        }
-                    );
-                }
-
-                prop.Value = newArr;
-            }
-
+            item["Key"] = newKey;
+            item.Remove("AetheryteID");
+            item.Remove("SubIndex");
             migrated = true;
         }
 
         if (!migrated) return;
 
         File.WriteAllText(ConfigFilePath, jsonObj.ToString(Formatting.Indented));
-    }
-
-    private static string? MigrateOldKeyToToString
-    (
-        string                oldKey,
-        List<AetheryteRecord> allRecords
-    )
-    {
-        uint rowID;
-        byte subIndex;
-
-        if (oldKey.Contains('_'))
-        {
-            var parts = oldKey.Split('_');
-            if (parts.Length != 2                   ||
-                !uint.TryParse(parts[0], out rowID) ||
-                !byte.TryParse(parts[1], out subIndex))
-                return null;
-        }
-        else
-        {
-            if (!uint.TryParse(oldKey, out rowID)) return null;
-            subIndex = 0;
-        }
-
-        return allRecords.FirstOrDefault(x => x.RowID == rowID && x.SubIndex == subIndex)?.ToString();
     }
 
     public class RecentRecord

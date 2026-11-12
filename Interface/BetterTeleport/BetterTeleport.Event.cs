@@ -63,7 +63,7 @@ internal unsafe partial class BetterTeleport
                     .. AetheryteRecordManager.Instance().AllRecords
                                              .Where
                                              (x => x.Name.Contains(args, StringComparison.OrdinalIgnoreCase) ||
-                                                   (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                                                   (config.Remarks.TryGetValue(x.UniqueID, out var remark) &&
                                                     remark.Contains(args, StringComparison.OrdinalIgnoreCase))
                                              )
                                              .OrderByDescending(x => x.IsAetheryte)

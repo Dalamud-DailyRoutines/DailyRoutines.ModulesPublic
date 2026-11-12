@@ -106,7 +106,7 @@ internal unsafe partial class BetterTeleport
                         .. AetheryteRecordManager.Instance().AllRecords
                                                  .Where
                                                  (x => x.Name.Contains(searchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                       (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                                                       (config.Remarks.TryGetValue(x.UniqueID, out var remark) &&
                                                         remark.Contains(searchWord, StringComparison.OrdinalIgnoreCase))
                                                  )
                     ]
@@ -311,7 +311,7 @@ internal unsafe partial class BetterTeleport
         foreach (var rec in config.RecentTeleports)
         {
             if (string.IsNullOrEmpty(rec.Key) || !seen.Add(rec.Key)) continue;
-            var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.ToString() == rec.Key);
+            var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.UniqueID == rec.Key);
             if (found != null) result.Add(found);
         }
 
@@ -321,8 +321,9 @@ internal unsafe partial class BetterTeleport
         {
             foreach (var rec in module->History)
             {
-                var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault(x => x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
-                if (found != null && seen.Add(found.ToString()))
+                var found = AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+                    (x => x.RowID != 0 && x.RowID == rec.AetheryteId && x.SubIndex == rec.SubIndex);
+                if (found != null && seen.Add(found.UniqueID))
                     result.Add(found);
             }
         }
@@ -335,12 +336,12 @@ internal unsafe partial class BetterTeleport
         List<AetheryteRecord> combinedHistory
     )
     {
-        var specialSeen  = new HashSet<(uint, byte, uint)>();
+        var specialSeen  = new HashSet<string>();
         var specialItems = new List<AetheryteRecord>();
 
         foreach (var fav in favorites)
         {
-            if (specialSeen.Add((fav.RowID, fav.SubIndex, fav.Group)))
+            if (specialSeen.Add(fav.UniqueID))
                 specialItems.Add(fav);
         }
 
@@ -348,7 +349,7 @@ internal unsafe partial class BetterTeleport
 
         if (home != null)
         {
-            if (specialSeen.Add((home.RowID, home.SubIndex, home.Group)))
+            if (specialSeen.Add(home.UniqueID))
                 specialItems.Add(home);
         }
 
@@ -361,7 +362,7 @@ internal unsafe partial class BetterTeleport
         {
             if (freeCountAdded >= 2) break;
 
-            if (specialSeen.Add((free.RowID, free.SubIndex, free.Group)))
+            if (specialSeen.Add(free.UniqueID))
             {
                 specialItems.Add(free);
                 freeCountAdded++;
@@ -375,7 +376,7 @@ internal unsafe partial class BetterTeleport
         {
             if (favCountAdded >= 3) break;
 
-            if (specialSeen.Add((fav.RowID, fav.SubIndex, fav.Group)))
+            if (specialSeen.Add(fav.UniqueID))
             {
                 specialItems.Add(fav);
                 favCountAdded++;
@@ -384,9 +385,9 @@ internal unsafe partial class BetterTeleport
 
         var historyIndices = combinedHistory
                              .Select((record, index) => new { record, index })
-                             .ToDictionary(x => (x.record.RowID, x.record.SubIndex, x.record.Group), x => x.index);
+                             .ToDictionary(x => x.record.UniqueID, x => x.index);
 
-        return [.. specialItems.OrderBy(x => historyIndices.GetValueOrDefault((x.RowID, x.SubIndex, x.Group), int.MaxValue))];
+        return [.. specialItems.OrderBy(x => historyIndices.GetValueOrDefault(x.UniqueID, int.MaxValue))];
     }
 
     public void RefreshDefaultOverlayItems()
@@ -398,21 +399,21 @@ internal unsafe partial class BetterTeleport
 
         var recentList  = new List<AetheryteRecord>();
         var specialList = new List<AetheryteRecord>();
-        var usedSeen    = new HashSet<(uint, byte)>();
+        var usedSeen    = new HashSet<string>();
 
         const int RECENT_LIMIT = 2;
 
         foreach (var r in combinedHistory)
         {
             if (recentList.Count >= RECENT_LIMIT) break;
-            if (usedSeen.Add((r.RowID, r.SubIndex))) recentList.Add(r);
+            if (usedSeen.Add(r.UniqueID)) recentList.Add(r);
         }
 
 
         foreach (var r in sortedSpecialRecords)
         {
             if (specialList.Count >= SPECIAL_LIMIT) break;
-            if (usedSeen.Add((r.RowID, r.SubIndex))) specialList.Add(r);
+            if (usedSeen.Add(r.UniqueID)) specialList.Add(r);
         }
 
         if (recentList.Count + specialList.Count < 8)
@@ -420,7 +421,7 @@ internal unsafe partial class BetterTeleport
             foreach (var r in combinedHistory)
             {
                 if (recentList.Count + specialList.Count >= 8) break;
-                if (usedSeen.Add((r.RowID, r.SubIndex))) recentList.Add(r);
+                if (usedSeen.Add(r.UniqueID)) recentList.Add(r);
             }
         }
 

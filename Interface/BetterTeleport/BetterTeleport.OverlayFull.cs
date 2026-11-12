@@ -12,7 +12,7 @@ internal unsafe partial class BetterTeleport
 {
     private BetterTeleportFullWindow? fullWindow;
 
-    private readonly Dictionary<(uint RowID, byte SubIndex, byte Group), float> hoverProgress = [];
+    private readonly Dictionary<string, float> hoverProgress = [];
 
     private bool isNeedToLoseFocusSearchBar;
 
@@ -204,7 +204,7 @@ internal unsafe partial class BetterTeleport
                                                      .AllRecords
                                                      .Where
                                                      (x => x.Name.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase) ||
-                                                           (config.Remarks.TryGetValue(x.ToString(), out var remark) &&
+                                                           (config.Remarks.TryGetValue(x.UniqueID, out var remark) &&
                                                             remark.Contains(fullSearchWord, StringComparison.OrdinalIgnoreCase))
                                                      )
                         ]
@@ -380,26 +380,10 @@ internal unsafe partial class BetterTeleport
                         {
                             if (!aetheryte.IsUnlocked()) continue;
 
-                            var isNewGroup = false;
-
-                            if (aetheryte.Group is 0 or 252)
-                            {
-                                if (lastGroupID != aetheryte.Group ||
-                                    lastName    != aetheryte.RegionName)
-                                {
-                                    isNewGroup  = true;
-                                    lastName    = aetheryte.RegionName;
-                                    lastGroupID = aetheryte.Group;
-                                }
-                            }
-                            else
-                            {
-                                if (lastGroupID != aetheryte.Group)
-                                {
-                                    isNewGroup  = true;
-                                    lastGroupID = aetheryte.Group;
-                                }
-                            }
+                            var isNewGroup = lastGroupID != aetheryte.Group ||
+                                             lastName    != aetheryte.RegionName;
+                            lastName    = aetheryte.RegionName;
+                            lastGroupID = aetheryte.Group;
 
                             if (isNewGroup)
                             {
