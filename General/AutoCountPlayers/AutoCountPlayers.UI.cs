@@ -112,6 +112,9 @@ internal unsafe partial class AutoCountPlayers
     {
         using var item = ImRaii.TabItem(Lang.Get("AutoCountPlayers-PlayersAround"));
         if (!item) return;
+        
+        if (ImGui.Checkbox(Lang.Get("AutoCountPlayers-DrawLinesOnPlayers"), ref config.DrawAllPlayersLine))
+            config.Save(this);
 
         ImGui.SetNextItemWidth(-1f);
         ImGui.InputText("###Search", ref searchInput, 128);
@@ -129,15 +132,17 @@ internal unsafe partial class AutoCountPlayers
         {
             using var id = ImRaii.PushId($"{player.GameObjectID}");
 
-            if (!DrawPlayerRow(player.ClassJob.Value.GetIcon(), player.Name, player.HomeWorld.Value.Name.ToString(), clickable: true))
-                continue;
+            if (DrawPlayerRow(player.ClassJob.Value.GetIcon(), player.Name, player.HomeWorld.Value.Name.ToString(), clickable: true))
+            {
+                ImGui.SetTooltip(Lang.Get("Locate"));
 
-            ImGui.SetTooltip(Lang.Get("Locate"));
+                if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    NotifyPlayerPosition(player);
 
-            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                NotifyPlayerPosition(player);
-
-            DrawPlayerLine(player);
+                DrawPlayerLine(player);
+            }
+            else if (config.DrawAllPlayersLine)
+                DrawPlayerLine(player);
         }
     }
 

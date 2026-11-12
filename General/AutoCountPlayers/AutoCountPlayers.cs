@@ -18,7 +18,6 @@ using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Text.ReadOnly;
 using OmenTools.Info.Lumina;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using OmenTools.Threading;
 using TerritoryIntendedUse = FFXIVClientStructs.FFXIV.Client.Enums.TerritoryIntendedUse;
 
@@ -475,6 +474,8 @@ internal unsafe partial class AutoCountPlayers : ModuleBase
 
         public bool  FilterFriend;
         public float ScaleFactor = 1;
+
+        public bool DrawAllPlayersLine;
 
         public List<TargetingRecord> TargetingHistories = [];
     }
