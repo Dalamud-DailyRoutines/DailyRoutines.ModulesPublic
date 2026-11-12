@@ -4,6 +4,7 @@ using DailyRoutines.Internal;
 using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
@@ -77,7 +78,7 @@ internal unsafe partial class BetterTeleport
 
     protected override void ConfigUI()
     {
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("Command")}:");
+        ImGui.TextColored(ImGui.GetStyle().Colors[(int)ImGuiCol.CheckMark], $"{Lang.Get("Command")}:");
 
         ImGui.SameLine();
         ImGui.TextWrapped($"{COMMAND} {Lang.Get("BetterTeleport-CommandHelp")}");
@@ -170,7 +171,7 @@ internal unsafe partial class BetterTeleport
                              60453U :
                              60430U,
                 Name        = record.Name,
-                Color       = 0xCCFFFFFF,
+                Color       = ImGui.GetColorU32(ImGuiColors.DalamudWhite with { W = 0.8f }),
                 Size        = ScaledVector2(28f),
                 ShowLabel   = false,
                 TooltipText = record.Name,
@@ -205,13 +206,13 @@ internal unsafe partial class BetterTeleport
                          60453U :
                          60430U,
             Name        = aetheryte.Name,
-            Color       = 0xFFFFFFFF,
+            Color       = ImGui.GetColorU32(ImGuiColors.DalamudWhite),
             Size        = ScaledVector2(32f),
             PulseEffect = true,
             PulseColor  = ImGui.GetColorU32(ImGuiCol.CheckMark),
             Label       = displayName,
             ShowLabel   = true,
-            LabelColor  = KnownColor.LightSkyBlue.ToVector4().ToUInt(),
+            LabelColor  = ImGui.GetColorU32(ImGuiColors.DalamudWhite),
             OnClick = _ =>
             {
                 if (isPinned)
@@ -452,8 +453,6 @@ internal unsafe partial class BetterTeleport
 
         if (pinnedAetheryte != null)
         {
-            ImGui.SetNextWindowBgAlpha(0.85f);
-
             if (ImGui.Begin
                 (
                     "###PinnedAetheryteMap",
@@ -492,7 +491,6 @@ internal unsafe partial class BetterTeleport
             return;
 
         using (ImRaii.PushStyle(ImGuiStyleVar.WindowPadding, Vector2.Zero))
-        using (ImRaii.PushColor(ImGuiCol.PopupBg, ImGui.GetColorU32(ImGuiCol.WindowBg)))
         using (ImRaii.Tooltip())
         {
             var imageSize = ScaledVector2(384f);
@@ -768,7 +766,7 @@ internal unsafe partial class BetterTeleport
         {
             var posIcon     = FontAwesomeIcon.MapPin.ToIconString();
             var posIconSize = ImGui.CalcTextSize(posIcon);
-            drawList.AddText(new Vector2(curX, titleY), ImGui.GetColorU32(KnownColor.Orange.ToVector4().ToUInt()), posIcon);
+            drawList.AddText(new Vector2(curX, titleY), ImGui.GetColorU32(ImGuiColors.DalamudOrange), posIcon);
             curX += posIconSize.X + (6f * GlobalUIScale);
         }
 
@@ -947,34 +945,24 @@ internal unsafe partial class BetterTeleport
         var animOffset      = currentProgress * 8.0f;
         var indicatorHeight = itemHeight      * 0.7f * currentProgress;
 
-        var drawList    = ImGui.GetWindowDrawList();
-        var baseColor   = ImGui.GetColorU32(ImGuiCol.FrameBgHovered);
-        var activeColor = ImGui.GetColorU32(ImGuiCol.FrameBgActive);
-
-        uint bgCol = 0;
+        var drawList = ImGui.GetWindowDrawList();
+        var style    = ImGui.GetStyle();
+        var bgColor  = ImGuiCol.HeaderHovered;
+        var bgAlpha  = currentProgress;
 
         if (isActive)
-            bgCol = activeColor;
-        else if (isSelected)
-            bgCol = ImGui.GetColorU32(ImGuiCol.HeaderActive);
-        else if (currentProgress > 0.01f)
         {
-            var alpha = (uint)(currentProgress * ((baseColor >> 24) & 0xFF));
-            bgCol = (baseColor & 0x00FFFFFF) | (alpha << 24);
+            bgColor = ImGuiCol.HeaderActive;
+            bgAlpha = 1f;
+        }
+        else if (isSelected)
+        {
+            bgColor = ImGuiCol.Header;
+            bgAlpha = 1f;
         }
 
-        if (bgCol != 0)
-        {
-            drawList.AddRectFilledMultiColor
-            (
-                startPos,
-                startPos + new Vector2(width, itemHeight),
-                bgCol,
-                (bgCol & 0x00FFFFFF) | (((uint)((bgCol >> 24) * 0.5f) & 0xFF) << 24),
-                (bgCol & 0x00FFFFFF) | (((uint)((bgCol >> 24) * 0.5f) & 0xFF) << 24),
-                bgCol
-            );
-        }
+        if (bgAlpha > 0.01f)
+            drawList.AddRectFilled(startPos, startPos + new Vector2(width, itemHeight), ImGui.GetColorU32(bgColor, bgAlpha), style.FrameRounding);
 
         if (currentProgress > 0.01f)
         {
@@ -983,10 +971,10 @@ internal unsafe partial class BetterTeleport
             switch (aetheryte.State)
             {
                 case AetheryteRecordState.Home:
-                    indicatorColor = 0xFF00A5FF;
+                    indicatorColor = ImGui.GetColorU32(ImGuiColors.DalamudOrange);
                     break;
                 case AetheryteRecordState.Favorite:
-                    indicatorColor = 0xFF00D7FF;
+                    indicatorColor = ImGui.GetColorU32(ImGuiColors.DalamudYellow);
                     break;
             }
 

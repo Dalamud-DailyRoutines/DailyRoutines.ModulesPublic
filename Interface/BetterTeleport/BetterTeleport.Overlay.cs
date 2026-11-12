@@ -250,6 +250,7 @@ internal unsafe partial class BetterTeleport
         }
 
         var isHovered = ImGui.IsItemHovered() && !hasUsedArrowKeys;
+        var isActive  = ImGui.IsItemActive();
         ImGui.PopID();
 
         if (isHovered && !isSearchingInputting)
@@ -257,15 +258,17 @@ internal unsafe partial class BetterTeleport
 
         var drawList = ImGui.GetWindowDrawList();
 
-        if (isSelected || isHovered)
+        if (isActive   ||
+            isSelected ||
+            isHovered)
         {
-            var bgCol = ImGui.GetColorU32
-            (
-                isSelected ?
-                    ImGuiCol.HeaderActive :
-                    ImGuiCol.HeaderHovered
-            );
-            drawList.AddRectFilled(startPos, startPos + new Vector2(width, itemHeight), bgCol, 4f);
+            var bgColor = ImGuiCol.HeaderHovered;
+            if (isActive)
+                bgColor = ImGuiCol.HeaderActive;
+            else if (isSelected)
+                bgColor = ImGuiCol.Header;
+
+            drawList.AddRectFilled(startPos, startPos + new Vector2(width, itemHeight), ImGui.GetColorU32(bgColor), ImGui.GetStyle().FrameRounding);
         }
 
         var contentStartX = startPos.X + padding + 6f;

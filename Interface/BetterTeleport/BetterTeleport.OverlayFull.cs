@@ -395,11 +395,11 @@ internal unsafe partial class BetterTeleport
                                 var width         = ImGui.GetContentRegionAvail().X;
                                 var height        = ImGui.GetTextLineHeightWithSpacing();
 
-                                ImGui.GetWindowDrawList().AddRectFilled(cursor, cursor + new Vector2(width, height), headerBgColor, 4f);
+                                ImGui.GetWindowDrawList().AddRectFilled(cursor, cursor + new Vector2(width, height), headerBgColor, ImGui.GetStyle().FrameRounding);
 
                                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + (ImGui.GetStyle().ItemSpacing.X * 2));
                                 ImGui.AlignTextToFramePadding();
-                                ImGui.TextColored(ImGui.GetColorU32(ImGuiCol.Text).ToVector4(), headerName);
+                                ImGui.TextUnformatted(headerName);
 
                                 ImGui.Spacing();
                             }
