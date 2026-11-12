@@ -39,6 +39,7 @@ internal partial class AutoMarksFinder : ModuleBase
     private MonsterScanner?   scanner;
 
     private readonly HuntSelection selection           = new();
+    private readonly HuntSelection configSelection     = new();
     private readonly HuntSelection scanResultSelection = new();
 
     private MonsterAliveMonitor? aliveMonitor;
@@ -50,7 +51,8 @@ internal partial class AutoMarksFinder : ModuleBase
         movement                     = new(config);
         relay                        = new(config, movement);
         autoBroadcast                = new(this);
-        selection.Select(config.Trains.FirstOrDefault());
+        selection.Select(config.Trains.ElementAtOrDefault(config.OverlayTrainIndex));
+        configSelection.Select(config.Trains.ElementAtOrDefault(config.ConfigTrainIndex));
 
         Overlay = new(this, Lang.Get("AutoMarksFinder-SmallCardTitle"))
         {
@@ -126,6 +128,7 @@ internal partial class AutoMarksFinder : ModuleBase
         movement.Dispose();
 
         selection.Select(null);
+        configSelection.Select(null);
         scanResultSelection.Select(null);
         startAetheryteCombo = null;
     }

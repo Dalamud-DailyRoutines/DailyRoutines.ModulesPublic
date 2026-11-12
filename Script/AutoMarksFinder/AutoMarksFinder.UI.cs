@@ -71,7 +71,7 @@ internal partial class AutoMarksFinder
         using var tabTrain = ImRaii.TabItem(Lang.Get("AutoMarksFinder-Routes"));
         if (!tabTrain) return;
 
-        DrawTrainsSelectCombo(300f * GlobalUIScale, selection);
+        DrawTrainsSelectCombo(300f * GlobalUIScale, configSelection);
 
         if (movement.IsBusy &&
             scanner?.IsRunning != true)
@@ -83,9 +83,10 @@ internal partial class AutoMarksFinder
 
         ImGui.Spacing();
 
-        if (SelectedTrain == null) return;
+        var selected = configSelection.Train;
+        if (selected == null) return;
 
-        var       source = SelectedTrain.MonstersFound;
+        var       source = selected.MonstersFound;
         using var table  = ImRaii.Table("##TrainTable", 4, ImGuiTableFlags.Resizable | ImGuiTableFlags.Reorderable | ImGuiTableFlags.Hideable);
         if (!table) return;
 
@@ -100,7 +101,7 @@ internal partial class AutoMarksFinder
 
         if (ImGuiOm.ButtonSelectable($"{Lang.Get("AutoMarksFinder-IntendedStartingPoint")}"))
         {
-            var zones = SelectedTrain.MonstersFound.Select(monster => monster.AetheryteZoneID).ToHashSet();
+            var zones = selected.MonstersFound.Select(monster => monster.AetheryteZoneID).ToHashSet();
             startAetheryteCombo = new
             (
                 "AutoMarksFinder.StartAetheryte",
@@ -114,20 +115,20 @@ internal partial class AutoMarksFinder
         {
             if (popup)
             {
-                startAetheryteCombo.SelectedID = SelectedTrain.StartAetheryteID;
+                startAetheryteCombo.SelectedID = selected.StartAetheryteID;
                 ImGui.SetNextItemWidth(260f * GlobalUIScale);
 
                 if (startAetheryteCombo.DrawRadio())
                 {
-                    SelectedTrain.StartAetheryteID = startAetheryteCombo.SelectedID;
+                    selected.StartAetheryteID = startAetheryteCombo.SelectedID;
                     config.Save(this);
                 }
 
-                using (ImRaii.Disabled(SelectedTrain.StartAetheryteID == 0))
+                using (ImRaii.Disabled(selected.StartAetheryteID == 0))
                 {
                     if (ImGui.Button(Lang.Get("AutoMarksFinder-SortAccordingToStartingPoint")))
                     {
-                        SelectedTrain.Reorder();
+                        selected.Reorder();
                         config.Save(this);
                     }
                 }
@@ -162,7 +163,7 @@ internal partial class AutoMarksFinder
 
                     if (ImGui.Button(Lang.Get("Confirm")))
                     {
-                        SelectedTrain.RemoveAt(i);
+                        selected.RemoveAt(i);
                         config.Save(this);
                         ImGui.CloseCurrentPopup();
                         return;
@@ -200,9 +201,9 @@ internal partial class AutoMarksFinder
 
                         if (sourceIndex != i &&
                             sourceIndex >= 0 &&
-                            sourceIndex < SelectedTrain.MonstersFound.Count)
+                            sourceIndex < selected.MonstersFound.Count)
                         {
-                            SelectedTrain.Move(sourceIndex, i);
+                            selected.Move(sourceIndex, i);
                             config.Save(this);
                             return;
                         }
@@ -211,7 +212,7 @@ internal partial class AutoMarksFinder
             }
 
             ImGui.TableNextColumn();
-            DrawMonsterStatusToggle(SelectedTrain, info);
+            DrawMonsterStatusToggle(selected, info);
 
             ImGui.SameLine();
             using (ImRaii.PushColor
@@ -224,10 +225,10 @@ internal partial class AutoMarksFinder
                 ImGui.TextUnformatted($"{info.GetBNPCName()}");
 
             ImGui.TableNextColumn();
-            DrawPositionColumn(info, true);
+            DrawPositionColumn(selected, info, true);
 
             ImGui.TableNextColumn();
-            DrawAetheryteColumn(info);
+            DrawAetheryteColumn(selected, info);
         }
     }
 
@@ -441,6 +442,7 @@ internal partial class AutoMarksFinder
 
     private unsafe void DrawPositionColumn
     (
+        NotoriousMonsterList   train,
         NotoriousMonsterFound? info,
         bool                   includeZone = false
     )
@@ -456,7 +458,7 @@ internal partial class AutoMarksFinder
                     FontAwesomeIcon.Microphone,
                     Lang.Get("AutoMarksFinder-RelayPosition")
                 ))
-                relay.Send(RelayType.Position, SelectedTrain, info);
+                relay.Send(RelayType.Position, train, info);
         }
 
         ImGui.SameLine();
@@ -506,6 +508,7 @@ internal partial class AutoMarksFinder
 
     private void DrawAetheryteColumn
     (
+        NotoriousMonsterList   train,
         NotoriousMonsterFound? info
     )
     {
@@ -520,7 +523,7 @@ internal partial class AutoMarksFinder
                     FontAwesomeIcon.Microphone,
                     Lang.Get("AutoMarksFinder-RelayAetheryte")
                 ))
-                relay.Send(RelayType.WaitAetheryte, SelectedTrain, info);
+                relay.Send(RelayType.WaitAetheryte, train, info);
         }
 
         ImGui.SameLine();
@@ -564,7 +567,7 @@ internal partial class AutoMarksFinder
                 if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-UpdateSpawnPoints")))
                     spawnPointUpdateTask = UpdateSpawnPoints(spawnPointUpdateCancellation.Token);
             }
-            
+
             ImGui.SameLine();
             if (ImGui.SmallButton(Lang.Get("AutoMarksFinder-ContributeSpawnPoints")))
                 Util.OpenLink(SPAWN_POINTES_CONTRIBUTE_URL);
@@ -590,13 +593,17 @@ internal partial class AutoMarksFinder
                     config.SelectedZones.IntersectWith(parsed.Where(pair => pair.Value.Count > 0).Select(pair => pair.Key));
                     scanZoneCombo = null;
                     config.Save(this);
-                    
+
                     NotifyHelper.Instance().NotificationInfo
                     (
-                        Lang.Get("AutoMarksFinder-UpdateSpawnPointsRet", new Dictionary<string, object>
-                        {
-                            ["count"] = parsed.Sum(pair => pair.Value.Count)
-                        }),
+                        Lang.Get
+                        (
+                            "AutoMarksFinder-UpdateSpawnPointsRet",
+                            new Dictionary<string, object>
+                            {
+                                ["count"] = parsed.Sum(pair => pair.Value.Count)
+                            }
+                        ),
                         Lang.Get("AutoMarksFinderTitle")
                     );
                 }
@@ -827,7 +834,7 @@ internal partial class AutoMarksFinder
             selected         = train;
             newListNameInput = string.Empty;
             trainSearchInput = string.Empty;
-            config.Save(this);
+            SaveTrainSelections();
         }
 
         ImGui.Separator();
@@ -871,6 +878,7 @@ internal partial class AutoMarksFinder
                 {
                     targetSelection.Select(train);
                     selected = train;
+                    SaveTrainSelections();
 
                     ImGui.CloseCurrentPopup();
                 }
@@ -940,10 +948,13 @@ internal partial class AutoMarksFinder
                     if (ReferenceEquals(selection.Train, train))
                         selection.Select(null);
 
+                    if (ReferenceEquals(configSelection.Train, train))
+                        configSelection.Select(null);
+
                     if (ReferenceEquals(scanResultSelection.Train, train))
                         scanResultSelection.Select(null);
 
-                    config.Save(this);
+                    SaveTrainSelections();
                     aliveMonitor?.RefreshTracking();
                     ImGui.CloseCurrentPopup();
                     return;
@@ -953,14 +964,21 @@ internal partial class AutoMarksFinder
 
     }
 
+    private void SaveTrainSelections()
+    {
+        config.ConfigTrainIndex  = config.Trains.IndexOf(configSelection.Train);
+        config.OverlayTrainIndex = config.Trains.IndexOf(selection.Train);
+        config.Save(this);
+    }
+
     #region 常量
 
     private const string MONSTER_DRAG_PAYLOAD = "AutoMarksFinderMonster";
-    
+
     private const string SPAWN_POINTS_URL =
         "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
 
-    private const string SPAWN_POINTES_CONTRIBUTE_URL = 
+    private const string SPAWN_POINTES_CONTRIBUTE_URL =
         "https://github.com/Dalamud-DailyRoutines/DailyRoutines/tree/main/Resources/Modules/AutoMarksFinder";
 
     #endregion

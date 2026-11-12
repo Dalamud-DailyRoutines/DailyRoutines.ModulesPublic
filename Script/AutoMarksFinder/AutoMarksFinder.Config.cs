@@ -23,5 +23,8 @@ internal partial class AutoMarksFinder
         public Dictionary<uint, List<NotoriousMonsterScanPoint>> ScanPoints    = [];
         public HashSet<uint>                                     SelectedZones = [];
         public List<NotoriousMonsterList>                        Trains        = [];
+
+        public int ConfigTrainIndex;
+        public int OverlayTrainIndex;
     }
 }

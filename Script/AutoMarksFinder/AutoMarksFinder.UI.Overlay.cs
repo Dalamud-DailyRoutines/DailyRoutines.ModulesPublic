@@ -175,8 +175,8 @@ internal partial class AutoMarksFinder
         if (!showPosition)
             return;
 
-        DrawPositionColumn(info);
-        DrawAetheryteColumn(info);
+        DrawPositionColumn(train, info);
+        DrawAetheryteColumn(train, info);
     }
 
     private void DrawOverlayRelayButton(RelayType type, float cardHeight)
