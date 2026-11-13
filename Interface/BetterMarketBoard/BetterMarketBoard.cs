@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
@@ -13,7 +12,6 @@ using Lumina.Excel.Sheets;
 using OmenTools.Dalamud.Abstractions;
 using OmenTools.Dalamud.Attributes;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -202,17 +200,6 @@ internal unsafe partial class BetterMarketBoard : ModuleBase
                 )
             }
         );
-
-        if (IsAbleToSearchMarket()                                              &&
-            InfoProxy               != null                                     &&
-            InfoProxy->SearchItemId != 0                                        &&
-            LuminaGetter.TryGetRow<Item>(InfoProxy->SearchItemId, out var data) &&
-            data.ItemSearchCategory.RowId > 0)
-        {
-            var itemID = InfoProxy->SearchItemId;
-            InfoProxy->SearchItemId = 0;
-            provider.SelectItem(itemID);
-        }
 
         FrameworkManager.Instance().Reg(OnMonitorUpdate, 60_000);
         FrameworkManager.Instance().Reg(OnWorldWatch,    1_000);
