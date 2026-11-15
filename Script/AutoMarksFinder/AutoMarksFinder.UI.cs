@@ -41,21 +41,6 @@ internal partial class AutoMarksFinder
 
     protected override void ConfigUI()
     {
-        using (ImRaii.Heading1(Lang.Get("PreCondition")))
-            ImGui.TextWrapped
-            (
-                Lang.Get
-                (
-                    "IPC-InstalledAndEnabledPlugin",
-                    new Dictionary<string, object>
-                    {
-                        ["pluginName"] = "vnavmesh CN"
-                    }
-                )
-            );
-
-        ImGui.NewLine();
-
         using var tabBar = ImRaii.TabBar("###TabBar");
         if (!tabBar) return;
 

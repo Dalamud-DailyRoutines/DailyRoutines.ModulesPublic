@@ -1,3 +1,4 @@
+using DailyRoutines.Common.Info.Models;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
@@ -19,6 +20,7 @@ internal partial class AutoMarksFinder : ModuleBase
             "InstantTeleport"
         ],
         ModulesPrerequisite = ["FastInstanceZoneChange"],
+        PluginsPrerequisite = [PluginPrerequisiteInfo.vnavmesh],
         Author              = ["AtmoOmen", "KirisameVanilla"]
     };
 
