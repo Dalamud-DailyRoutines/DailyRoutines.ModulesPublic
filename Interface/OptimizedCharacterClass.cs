@@ -1,18 +1,17 @@
-using System.Collections.Frozen;
-using DailyRoutines.Common.Module.Abstractions;
+using System.Globalization;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
 namespace DailyRoutines.ModulesPublic;
@@ -34,48 +33,54 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private readonly List<AtkEventWrapper> events = [];
+    private readonly Dictionary<uint, AtkEventWrapper[]> events    = [];
+    private readonly Dictionary<uint, AtkEventWrapper[]> eventsPVP = [];
 
     protected override void Init()
     {
-        TaskHelper ??= new();
-
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "CharacterClass", OnAddon);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "CharacterClass", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "CharacterClass", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "CharacterClass", OnAddon);
         if (CharacterClass->IsAddonAndNodesReady())
-            OnAddon(AddonEvent.PostSetup, null);
+            OnAddon(AddonEvent.PostRequestedUpdate, null);
 
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "PvPCharacter", OnAddonPVP);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "PvPCharacter", OnAddonPVP);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "PvPCharacter", OnAddonPVP);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "PvPCharacter", OnAddonPVP);
         if (PvPCharacter->IsAddonAndNodesReady())
-            OnAddonPVP(AddonEvent.PostSetup, null);
+            OnAddonPVP(AddonEvent.PostRequestedUpdate, null);
     }
 
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon, OnAddonPVP);
 
-        ClearEvents();
+        ClearEvents(events);
+        ClearEvents(eventsPVP);
     }
 
-    private void AddCollisionEvent
+    private static void AddCollisionEvent
     (
-        AtkUnitBase*      addon,
-        AtkComponentNode* componentNode,
-        uint              classJobID
+        AtkUnitBase*                        addon,
+        AtkComponentBase*                   component,
+        uint                                classJobID,
+        Dictionary<uint, AtkEventWrapper[]> registeredEvents
     )
     {
-        if (!LuminaGetter.TryGetRow(classJobID, out ClassJob classJob)) return;
+        if (registeredEvents.ContainsKey(classJobID))
+            return;
+        if (component == null)
+            return;
+        if (!LuminaGetter.TryGetRow(classJobID, out ClassJob classJob))
+            return;
 
-        var colNode = componentNode->Component->UldManager.SearchSimpleNodeByType<AtkCollisionNode>(NodeType.Collision);
+        var colNode = component->UldManager.SearchSimpleNodeByType<AtkCollisionNode>(NodeType.Collision);
         if (colNode == null) return;
-
-        var iconNodes = componentNode->Component->UldManager.SearchSimpleNodesByType(NodeType.Image);
-        if (iconNodes is { Count: 0 }) return;
 
         colNode->AtkEventManager.ClearEvents();
 
-        var iconNode = (AtkImageNode*)iconNodes.Last();
+        using var rented = new RentedSeStringBuilder();
+        var tooltip = rented.AppendIcon((uint)classJob.ToBitmapFontIcon())
+                            .Append(CultureInfo.InvariantCulture, $" {classJob.Name}")
+                            .ToReadOnlySeString();
 
         var clickEvent = new AtkEventWrapper
         ((_, _, _, _) =>
@@ -88,22 +93,15 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         clickEvent.Add(addon, (AtkResNode*)colNode, AtkEventType.MouseClick);
 
         var cursorOverEvent = new AtkEventWrapper
-        ((_, ownerAddon, _, _) =>
+        ((_, ownerAddon, atkEvent, _) =>
             {
                 IAddonEventManager.Instance().SetCursor(AddonCursorType.Clickable);
                 UIGlobals.PlaySoundEffect(0);
                 AtkStage.Instance()->TooltipManager.ShowTooltip
                 (
                     ownerAddon->Id,
-                    (AtkResNode*)iconNode,
-                    new ReadOnlySeString
-                    (
-                        new SeStringBuilder()
-                            .AddIcon(classJob.ToBitmapFontIcon())
-                            .AddText($" {classJob.Name}")
-                            .Build()
-                            .Encode()
-                    )
+                    atkEvent->Node,
+                    tooltip
                 );
             }
         );
@@ -118,7 +116,7 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         );
         cursorOutEvent.Add(addon, (AtkResNode*)colNode, AtkEventType.MouseOut);
 
-        events.Add(clickEvent, cursorOverEvent, cursorOutEvent);
+        registeredEvents.Add(classJobID, [clickEvent, cursorOverEvent, cursorOutEvent]);
     }
 
     private void OnAddon
@@ -129,30 +127,34 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
     {
         switch (type)
         {
-            case AddonEvent.PostSetup:
-                if (CharacterClass == null) return;
-                if (events is not { Count: 0 }) return;
+            case AddonEvent.PostRequestedUpdate:
+                var addon = (AddonCharacterClass*)CharacterClass;
+                if (!addon->AtkUnitBase.IsAddonAndNodesReady())
+                    return;
+                if (events.Count == addon->ClassComponents.Length)
+                    return;
 
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!CharacterClass->IsAddonAndNodesReady()) return false;
+                var numberArray = AtkStage.Instance()->GetNumberArrayData(NumberArrayType.Character);
+                if (numberArray == null) return;
 
-                        foreach (var (nodeID, classJobID) in ClassJobComponentMap)
-                        {
-                            var componentNode = CharacterClass->GetComponentNodeById(nodeID);
-                            if (componentNode == null) continue;
+                for (var index = 0; index < addon->ClassComponents.Length; index++)
+                {
+                    var iconID = numberArray->IntArray[CLASS_JOB_ICON_ARRAY_OFFSET + index];
+                    if (iconID < CLASS_JOB_ICON_ID_OFFSET)
+                        continue;
 
-                            AddCollisionEvent(CharacterClass, componentNode, classJobID);
-                        }
-
-                        return true;
-                    }
-                );
+                    AddCollisionEvent
+                    (
+                        (AtkUnitBase*)addon,
+                        addon->ClassComponents[index].Value,
+                        (uint)(iconID - CLASS_JOB_ICON_ID_OFFSET),
+                        events
+                    );
+                }
 
                 break;
             case AddonEvent.PreFinalize:
-                ClearEvents();
+                ClearEvents(events);
                 break;
         }
     }
@@ -165,116 +167,62 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
     {
         switch (type)
         {
-            case AddonEvent.PostSetup:
-                if (PvPCharacter == null) return;
-                if (events is not { Count: 0 }) return;
+            case AddonEvent.PostRequestedUpdate:
+                var addon = (AddonPvPCharacter*)PvPCharacter;
+                if (!addon->AtkUnitBase.IsAddonAndNodesReady())
+                    return;
+                if (eventsPVP.Count == addon->ClassEntries.Length)
+                    return;
 
-                TaskHelper.Enqueue
-                (() =>
-                    {
-                        if (!PvPCharacter->IsAddonAndNodesReady()) return false;
+                foreach (ref var entry in addon->ClassEntries)
+                {
+                    var iconNode = entry.Icon;
+                    if (iconNode == null)
+                        continue;
 
-                        foreach (var (nodeID, classJobID) in PVPClassJobComponentMap)
-                        {
-                            var componentNode = PvPCharacter->GetComponentNodeById(nodeID);
-                            if (componentNode == null) continue;
+                    var partsList = iconNode->PartsList;
+                    if (partsList        == null ||
+                        iconNode->PartId >= partsList->PartCount)
+                        continue;
 
-                            AddCollisionEvent(PvPCharacter, componentNode, classJobID);
-                        }
+                    var asset = partsList->Parts[iconNode->PartId].UldAsset;
+                    if (asset == null)
+                        continue;
 
-                        return true;
-                    }
-                );
+                    var texture = &asset->AtkTexture;
+                    if (texture->TextureType != TextureType.Resource ||
+                        texture->Resource    == null)
+                        continue;
+
+                    var iconID = texture->Resource->IconId;
+                    if (iconID < CLASS_JOB_ICON_ID_OFFSET)
+                        continue;
+
+                    AddCollisionEvent((AtkUnitBase*)addon, entry.Base, iconID - CLASS_JOB_ICON_ID_OFFSET, eventsPVP);
+                }
 
                 break;
             case AddonEvent.PreFinalize:
-                ClearEvents();
+                ClearEvents(eventsPVP);
                 break;
         }
     }
 
-    private void ClearEvents()
+    private static void ClearEvents(Dictionary<uint, AtkEventWrapper[]> registeredEvents)
     {
-        foreach (var atkEvent in events.ToList())
-            atkEvent.Dispose();
+        foreach (var classEvents in registeredEvents.Values)
+        {
+            foreach (var atkEvent in classEvents)
+                atkEvent.Dispose();
+        }
 
-        events.Clear();
+        registeredEvents.Clear();
     }
 
     #region 常量
 
-    private static readonly FrozenDictionary<uint, uint> ClassJobComponentMap = new Dictionary<uint, uint>
-    {
-        [8]  = 19, // 骑士
-        [10] = 21, // 战士
-        [12] = 32, // 暗黑骑士
-        [14] = 37, // 绝枪战士
-
-        [20] = 24, // 白魔法师
-        [22] = 28, // 学者
-        [24] = 33, // 占星术士
-        [26] = 40, // 贤者
-
-        [32] = 20, // 武僧
-        [34] = 22, // 龙骑士
-        [36] = 30, // 忍者
-        [38] = 34, // 武士
-        [40] = 39, // 钐镰客
-        [42] = 41, // 蝰蛇剑士
-        [44] = 43, // 驯兽师
-
-        [50] = 23, // 吟游诗人
-        [52] = 31, // 机工士
-        [54] = 38, // 舞者
-
-        [60] = 25, // 黑魔法师
-        [62] = 27, // 召唤师
-        [64] = 35, // 赤魔法师
-        [66] = 42, // 绘灵法师
-        [68] = 36, // 青魔法师
-
-        [73] = 8,  // 刻木匠
-        [74] = 9,  // 锻铁匠
-        [75] = 10, // 铸甲匠
-        [76] = 11, // 雕金匠
-        [77] = 12, // 制革匠
-        [78] = 13, // 裁衣匠
-        [79] = 14, // 炼金术士
-        [80] = 15, // 烹调师
-
-        [86] = 16, // 采矿工
-        [88] = 17, // 园艺工
-        [90] = 18  // 捕鱼人
-    }.ToFrozenDictionary();
-
-    private static readonly FrozenDictionary<uint, uint> PVPClassJobComponentMap = new Dictionary<uint, uint>
-    {
-        [14] = 19, // 骑士
-        [16] = 21, // 战士
-        [18] = 32, // 暗黑骑士
-        [20] = 37, // 绝枪战士
-
-        [26] = 20, // 武僧
-        [28] = 22, // 龙骑士
-        [30] = 30, // 忍者
-        [32] = 34, // 武士
-        [34] = 39, // 钐镰客
-        [36] = 41, // 蝰蛇剑士
-
-        [42] = 24, // 白魔法师
-        [44] = 28, // 学者
-        [46] = 33, // 占星术士
-        [48] = 40, // 贤者
-
-        [54] = 23, // 吟游诗人
-        [56] = 31, // 机工士
-        [58] = 38, // 舞者
-
-        [64] = 25, // 黑魔法师
-        [66] = 27, // 召唤师
-        [68] = 35, // 赤魔法师
-        [70] = 42  // 绘灵法师
-    }.ToFrozenDictionary();
+    private const int CLASS_JOB_ICON_ARRAY_OFFSET = 25;
+    private const int CLASS_JOB_ICON_ID_OFFSET    = 62100;
 
     #endregion
 }
