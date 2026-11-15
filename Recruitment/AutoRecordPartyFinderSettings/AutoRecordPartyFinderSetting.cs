@@ -54,8 +54,11 @@ internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         };
 
         IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.LookingForGroup, OnAgent);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   OnAddon);
-        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   "LookingForGroupCondition", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, "LookingForGroupCondition", OnAddon);
+        
+        if (LookingForGroupCondition->IsAddonAndNodesReady())
+            OnAddon(AddonEvent.PostSetup, null);
     }
 
     protected override void Uninit()
@@ -65,7 +68,7 @@ internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
 
         addon?.Dispose();
         addon = null;
-        
+
         addPresetButton?.Dispose();
         addPresetButton = null;
     }
@@ -429,6 +432,8 @@ internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         // 界面显示用
         public string? DisplayName;
 
+        public string Note = string.Empty;
+
         // 兼容用
         public string? Name
         {
@@ -458,6 +463,7 @@ internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
             new()
             {
                 DisplayName          = DisplayName,
+                Note                 = Note,
                 Category             = Category,
                 Duty                 = Duty,
                 AvgIL                = AvgIL,

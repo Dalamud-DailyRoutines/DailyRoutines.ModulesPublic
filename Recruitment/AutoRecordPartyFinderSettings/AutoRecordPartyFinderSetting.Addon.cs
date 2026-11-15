@@ -8,6 +8,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using Lumina.Text.ReadOnly;
 using OmenTools.KamiToolKit.Addons;
+using OmenTools.KamiToolKit.Addons.InputString;
 using OmenTools.KamiToolKit.Nodes;
 
 namespace DailyRoutines.ModulesPublic;
@@ -15,57 +16,55 @@ namespace DailyRoutines.ModulesPublic;
 internal unsafe partial class AutoRecordPartyFinderSetting
 {
     private TextButtonNode? addPresetButton;
-    
+
     private void OnAddon(AddonEvent type, AddonArgs args)
     {
         switch (type)
         {
             case AddonEvent.PreFinalize:
+                addPresetButton?.Dispose();
                 addPresetButton = null;
                 break;
-            
+
             case AddonEvent.PostSetup:
-                
                 if (LookingForGroupCondition == null)
                     return;
 
-                if (addPresetButton == null)
+                addPresetButton?.Dispose();
+                addPresetButton = new TextButtonNode
                 {
-                    addPresetButton = new TextButtonNode
+                    Position    = new(184, 603),
+                    Size        = new(160, 32),
+                    String      = Lang.Get("AutoRecordPartyFinderSetting-Button-Save"),
+                    TextureType = ButtonTextureType.ButtonB,
+                    OnClick = () =>
                     {
-                        Position    = new(184, 603),
-                        Size        = new(160, 32),
-                        String      = Lang.Get("AutoRecordPartyFinderSetting-Button-Save"),
-                        TextureType = ButtonTextureType.ButtonB,
-                        OnClick = () =>
-                        {
-                            if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
-                            var setting = config.Last.Copy();
-                            setting.DisplayName =
-                                LookingForGroupCondition->GetComponentByNodeId(11)->UldManager.SearchNodeById(2)->GetAsAtkComponentNode()->Component->GetTextNodeById
-                                    (3)->GetAsAtkTextNode()->NodeText.AsReadOnlySeString().ToString();
+                        if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
+                        var setting = config.Last.Copy();
+                        setting.DisplayName =
+                            LookingForGroupCondition->GetComponentByNodeId(11)->UldManager.SearchNodeById(2)->GetAsAtkComponentNode()->Component->GetTextNodeById
+                                (3)->GetAsAtkTextNode()->NodeText.AsReadOnlySeString().ToString();
 
-                            config.Slot.Add(setting);
-                            config.Save(this);
+                        config.Slot.Add(setting);
+                        config.Save(this);
 
-                            addon.RefreshPresetList();
-                        }
-                    };
-                    addPresetButton.AttachNode(LookingForGroupCondition);
-                }
+                        addon.RefreshPresetList();
+                    }
+                };
+                addPresetButton.AttachNode(LookingForGroupCondition);
 
                 break;
         }
     }
-    
+
     private sealed class AutoRecordPartyFinderSettingAddon
     (
         AutoRecordPartyFinderSetting module
     ) : AttachedAddon("LookingForGroupCondition", AddonEvent.PostSetup)
     {
-        private VerticalListNode?   mainLayout;
-        private VerticalListNode?   presetListContainer;
-        private PaginationNode?     paginationBar;
+        private VerticalListNode? mainLayout;
+        private VerticalListNode? presetListContainer;
+        private PaginationNode?   paginationBar;
 
         private readonly List<PresetRowNode> presetRows = [];
 
@@ -84,7 +83,7 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                 Size        = ContentSize,
                 FitContents = true
             };
-            
+
             presetListContainer = new VerticalListNode
             {
                 ItemSpacing = 4f,
@@ -123,10 +122,10 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                 FontSize  = 16,
                 TextFlags = TextFlags.WordWrap | TextFlags.MultiLine,
                 Size      = ContentSize with { Y = 32 },
-                String    = Lang.Get("AutoRecordPartyFinderSetting-Preset"),
+                String    = Lang.Get("AutoRecordPartyFinderSetting-Preset")
             };
             AtkColors.Label.ApplyTo(headerTextNode);
-            
+
             mainLayout.AddNode(headerTextNode);
             mainLayout.AddNode(presetListContainer);
 
@@ -213,7 +212,28 @@ internal unsafe partial class AutoRecordPartyFinderSetting
             [
                 new()
                 {
-                    Name = Lang.GetSe("AutoRecordPartyFinderSetting-ContextMenu-Update"),
+                    Name = Lang.Get("AutoRecordPartyFinderSetting-ContextMenu-EditRemark"),
+                    OnClicked = _ => InputStringAddon.Open
+                    (
+                        new()
+                        {
+                            Prompt      = Lang.GetSe("AutoRecordPartyFinderSetting-Message-EditRemark"),
+                            DefaultText = setting.Note,
+                            Callback = (_, result) =>
+                            {
+                                if (result.Result != InputStringAddonResult.Confirmed)
+                                    return;
+
+                                setting.Note = result.Value.ToString();
+                                module.config.Save(module);
+                                RefreshPresetList();
+                            }
+                        }
+                    )
+                },
+                new()
+                {
+                    Name = Lang.Get("AutoRecordPartyFinderSetting-ContextMenu-Update"),
                     OnClicked = _ =>
                     {
                         if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
@@ -221,6 +241,7 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                         var currentDisplayName = setting.DisplayName;
                         var updated            = module.config.Last.Copy();
                         updated.DisplayName = currentDisplayName;
+                        updated.Note        = setting.Note;
 
                         var index = module.config.Slot.IndexOf(setting);
 
@@ -233,7 +254,7 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                 },
                 new()
                 {
-                    Name = Lang.GetSe("AutoRecordPartyFinderSetting-ContextMenu-Delete"),
+                    Name = Lang.Get("AutoRecordPartyFinderSetting-ContextMenu-Delete"),
                     OnClicked = _ =>
                     {
                         module.config.Slot.Remove(setting);
@@ -311,7 +332,9 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                             Lang.Get("None") :
                             setting.DisplayName;
 
-            titleButton.String = description;
+            titleButton.String = string.IsNullOrEmpty(setting.Note) ?
+                                     description :
+                                     new ReadOnlySeString(setting.Note);
 
             var tooltipText = Lang.GetSe
             (
@@ -319,7 +342,7 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                 new Dictionary<string, object>
                 {
                     ["contentName"] = title,
-                    ["description"] = description,
+                    ["description"] = description
                 }
             );
             titleButton.TextTooltip = tooltipText;
