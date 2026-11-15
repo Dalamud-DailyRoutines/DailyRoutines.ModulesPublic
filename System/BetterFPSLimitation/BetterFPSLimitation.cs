@@ -40,7 +40,7 @@ internal partial class BetterFPSLimitation : ModuleBase
                      Thresholds = [15, 30, 45, 60, 90, 120]
                  };
 
-        pacer = new FramePacer(this);
+        pacer = new(this);
 
         entry ??= IDtrBar.Instance().Get("DailyRoutines-BetterFPSLimitation");
         entry.OnClick = param =>
@@ -86,7 +86,7 @@ internal partial class BetterFPSLimitation : ModuleBase
         addon = null;
 
         pacer?.Dispose();
-        pacer = null!;
+        pacer = null;
 
         ResetHistory();
     }

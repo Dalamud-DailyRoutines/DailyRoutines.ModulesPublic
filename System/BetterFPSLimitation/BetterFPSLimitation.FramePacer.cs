@@ -50,6 +50,7 @@ internal partial class BetterFPSLimitation
         {
             if (SwapChainPresentHook != null)
             {
+                SwapChainPresentHook.Disable();
                 SwapChainPresentHook.Dispose();
                 SwapChainPresentHook = null;
             }
