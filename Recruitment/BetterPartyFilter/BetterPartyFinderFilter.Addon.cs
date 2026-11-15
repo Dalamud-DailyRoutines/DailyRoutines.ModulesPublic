@@ -66,7 +66,11 @@ internal partial class BetterPartyFinderFilter
         BetterPartyFinderFilter module
     ) : AttachedAddon("LookingForGroup", AddonEvent.PostRefresh, AddonEvent.PostReceiveEvent)
     {
-        protected override bool AutoOpenAddon => false;
+        protected override bool AutoOpenAddon =>
+            false;
+
+        protected override AttachedAddonPosition AttachPosition =>
+            AttachedAddonPosition.RightTop;
 
         private readonly List<RegexRow> regexRows = [];
 
