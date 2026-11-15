@@ -21,7 +21,7 @@ internal unsafe class AutoNotifyMentorRouletteProgress : ModuleBase
         Category    = ModuleCategory.Duty,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoNotifyMentorRouletteProgress/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoNotifyMentorRouletteProgress/preview-1.webp"
         ]
     };
 

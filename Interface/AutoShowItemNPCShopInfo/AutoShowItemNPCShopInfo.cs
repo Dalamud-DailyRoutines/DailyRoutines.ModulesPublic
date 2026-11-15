@@ -23,8 +23,8 @@ internal unsafe partial class AutoShowItemNPCShopInfo : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-1.webp",
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-2.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-1.webp",
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoShowItemNPCShopInfo/preview-2.webp"
         ]
     };
 

@@ -32,7 +32,7 @@ internal unsafe class OptimizedEnemyList : ModuleBase
         Category    = ModuleCategory.Combat,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedEnemyList/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedEnemyList/preview-1.webp"
         ],
         ModulesPair = ["AutoDisplayHiddenCast"]
     };

@@ -47,7 +47,7 @@ internal unsafe class AutoSubmarineCollect : ModuleBase
         ModulesPair         = ["OptimizedInteraction"],
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoSubmarineCollect/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoSubmarineCollect/preview-1.webp"
         ]
     };
 

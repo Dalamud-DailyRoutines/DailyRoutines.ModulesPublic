@@ -961,7 +961,7 @@ internal partial class AutoMarksFinder
     private const string MONSTER_DRAG_PAYLOAD = "AutoMarksFinderMonster";
 
     private const string SPAWN_POINTS_URL =
-        "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
+        "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoMarksFinder/SpawnPoints.json";
 
     private const string SPAWN_POINTES_CONTRIBUTE_URL =
         "https://github.com/Dalamud-DailyRoutines/DailyRoutines/tree/main/Resources/Modules/AutoMarksFinder";

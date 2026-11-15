@@ -27,7 +27,7 @@ internal unsafe partial class CustomizeMapMarker : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CustomizeMapMarker/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/CustomizeMapMarker/preview-1.webp"
         ]
     };
 

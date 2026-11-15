@@ -202,7 +202,7 @@ internal partial class AutoShowDutyGuide : ModuleBase
     #region 常量
 
     private const string FF14_ORG_LINK_BASE =
-        "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/src/content/docs/duty/{0}.mdx";
+        "https://raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/src/content/docs/duty/{0}.mdx";
 
     #endregion
 }

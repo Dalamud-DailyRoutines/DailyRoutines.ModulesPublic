@@ -21,7 +21,7 @@ internal unsafe class OptimizedKTGHudGauge : ModuleBase
         Category    = ModuleCategory.GoldSaucer,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedKTGHudGauge/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedKTGHudGauge/preview-1.webp"
         ]
     };
 

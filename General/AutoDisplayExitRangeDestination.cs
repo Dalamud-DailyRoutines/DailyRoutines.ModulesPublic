@@ -30,7 +30,7 @@ internal unsafe class AutoDisplayExitRangeDestination : ModuleBase
         Category    = ModuleCategory.General,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayExitRangeDestination/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayExitRangeDestination/preview-1.webp"
         ]
     };
 

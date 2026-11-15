@@ -36,7 +36,7 @@ internal unsafe class OptimizedFreeCompanyChest : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedFreeCompanyChest/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedFreeCompanyChest/preview-1.webp"
         ]
     };
 

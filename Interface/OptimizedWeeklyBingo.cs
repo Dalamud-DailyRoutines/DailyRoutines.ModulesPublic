@@ -27,7 +27,7 @@ internal unsafe class OptimizedWeeklyBingo : ModuleBase
         Author      = ["Due"],
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedWeeklyBingo/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedWeeklyBingo/preview-1.webp"
         ]
     };
 

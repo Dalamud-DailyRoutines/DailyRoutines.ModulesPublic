@@ -61,7 +61,7 @@ internal partial class AutoShowDutyGuide
 
             var source = await HTTPClientHelper.Instance().Get().GetStringAsync
                          (
-                             "https://gh.atmoomen.top/raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/src/components/content/UnderConstruction.astro"
+                             "https://raw.githubusercontent.com/thewakingsands/novice-network/refs/heads/master/src/components/content/UnderConstruction.astro"
                          );
             var document = new HtmlParser().ParseDocument(source);
             constructionText = document.QuerySelector(".ucontainer .text")?.TextContent ?? string.Empty;

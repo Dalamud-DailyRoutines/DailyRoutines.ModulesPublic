@@ -35,7 +35,7 @@ internal unsafe partial class AutoRetainerWork
 
             var imageState = ImageHelper.Instance().TryGetImage
             (
-                "https://gh.atmoomen.top/StaticAssets/main/DailyRoutines/image/AutoRetainersDispatch-1.png",
+                "https://StaticAssets/main/DailyRoutines/image/AutoRetainersDispatch-1.png",
                 out var imageHandle
             );
             ImGui.SameLine();

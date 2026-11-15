@@ -24,7 +24,7 @@ internal unsafe class OptimizedDTRTime : ModuleBase
         Category    = ModuleCategory.Interface,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedDTRTime/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedDTRTime/preview-1.webp"
         ]
     };
 

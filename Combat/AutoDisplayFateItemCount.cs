@@ -24,7 +24,7 @@ internal unsafe class AutoDisplayFateItemCount : ModuleBase
         Category    = ModuleCategory.Combat,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayFateItemCount/preview-1.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoDisplayFateItemCount/preview-1.webp"
         ]
     };
 

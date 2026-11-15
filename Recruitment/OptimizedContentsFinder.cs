@@ -34,8 +34,8 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         Category    = ModuleCategory.Recruitment,
         PreviewImageURL =
         [
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-1.webp",
-            "https://gh.atmoomen.top/raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-2.webp"
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-1.webp",
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/OptimizedContentsFinder/preview-2.webp"
         ]
     };
 
