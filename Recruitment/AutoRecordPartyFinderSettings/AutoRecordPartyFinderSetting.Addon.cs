@@ -1,3 +1,4 @@
+using DailyRoutines.Common.Info;
 using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -8,19 +9,61 @@ using KamiToolKit.Nodes;
 using Lumina.Text.ReadOnly;
 using OmenTools.KamiToolKit.Addons;
 using OmenTools.KamiToolKit.Nodes;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
 internal unsafe partial class AutoRecordPartyFinderSetting
 {
+    private TextButtonNode? addPresetButton;
+    
+    private void OnAddon(AddonEvent type, AddonArgs args)
+    {
+        switch (type)
+        {
+            case AddonEvent.PreFinalize:
+                addPresetButton = null;
+                break;
+            
+            case AddonEvent.PostSetup:
+                
+                if (LookingForGroupCondition == null)
+                    return;
+
+                if (addPresetButton == null)
+                {
+                    addPresetButton = new TextButtonNode
+                    {
+                        Position    = new(184, 603),
+                        Size        = new(160, 32),
+                        String      = Lang.Get("AutoRecordPartyFinderSetting-Button-Save"),
+                        TextureType = ButtonTextureType.ButtonB,
+                        OnClick = () =>
+                        {
+                            if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
+                            var setting = config.Last.Copy();
+                            setting.DisplayName =
+                                LookingForGroupCondition->GetComponentByNodeId(11)->UldManager.SearchNodeById(2)->GetAsAtkComponentNode()->Component->GetTextNodeById
+                                    (3)->GetAsAtkTextNode()->NodeText.AsReadOnlySeString().ToString();
+
+                            config.Slot.Add(setting);
+                            config.Save(this);
+
+                            addon.RefreshPresetList();
+                        }
+                    };
+                    addPresetButton.AttachNode(LookingForGroupCondition);
+                }
+
+                break;
+        }
+    }
+    
     private sealed class AutoRecordPartyFinderSettingAddon
     (
         AutoRecordPartyFinderSetting module
     ) : AttachedAddon("LookingForGroupCondition", AddonEvent.PostSetup)
     {
         private VerticalListNode?   mainLayout;
-        private HorizontalListNode? actionHeader;
         private VerticalListNode?   presetListContainer;
         private PaginationNode?     paginationBar;
 
@@ -37,38 +80,11 @@ internal unsafe partial class AutoRecordPartyFinderSetting
             mainLayout = new VerticalListNode
             {
                 Position    = ContentStartPosition,
-                ItemSpacing = 6f,
+                ItemSpacing = 2f,
                 Size        = ContentSize,
                 FitContents = true
             };
-
-            actionHeader = new HorizontalListNode
-            {
-                Size        = ContentSize with { Y = 32f },
-                ItemSpacing = 8f
-            };
-
-            var addButton = new TextButtonNode
-            {
-                Size        = ContentSize with { Y = 32f },
-                String      = Lang.Get("AutoRecordPartyFinderSetting-Button-Save"),
-                TextureType = ButtonTextureType.ButtonB,
-                OnClick = () =>
-                {
-                    if (!LookingForGroupCondition->IsAddonAndNodesReady()) return;
-                    var setting = module.config.Last.Copy();
-                    setting.DisplayName =
-                        LookingForGroupCondition->GetComponentByNodeId(11)->UldManager.SearchNodeById(2)->GetAsAtkComponentNode()->Component->GetTextNodeById
-                            (3)->GetAsAtkTextNode()->NodeText.AsReadOnlySeString().ToString();
-
-                    module.config.Slot.Add(setting);
-                    module.config.Save(module);
-                    RefreshPresetList();
-                }
-            };
-
-            actionHeader.AddNode(addButton);
-
+            
             presetListContainer = new VerticalListNode
             {
                 ItemSpacing = 4f,
@@ -102,20 +118,20 @@ internal unsafe partial class AutoRecordPartyFinderSetting
                 }
             };
 
-            mainLayout.AddNode(actionHeader);
-            mainLayout.AddNode
-            (
-                new HorizontalLineNode
-                {
-                    Size     = ContentSize with { Y = 4 },
-                    Position = new(0, -4)
-                }
-            );
+            var headerTextNode = new TextNode
+            {
+                FontSize  = 16,
+                TextFlags = TextFlags.WordWrap | TextFlags.MultiLine,
+                Size      = ContentSize with { Y = 32 },
+                String    = Lang.Get("AutoRecordPartyFinderSetting-Preset"),
+            };
+            AtkColors.Label.ApplyTo(headerTextNode);
+            
+            mainLayout.AddNode(headerTextNode);
             mainLayout.AddNode(presetListContainer);
 
-            mainLayout.AddDummy();
+            mainLayout.AddDummy(4f);
             mainLayout.AddNode(paginationBar);
-            mainLayout.AddDummy();
 
             mainLayout.AttachNode(this);
 

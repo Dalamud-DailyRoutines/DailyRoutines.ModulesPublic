@@ -3,6 +3,7 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
+using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Agent;
 using Dalamud.Game.Agent.AgentArgTypes;
 using Dalamud.Utility;
@@ -11,7 +12,6 @@ using Lumina.Text.ReadOnly;
 
 namespace DailyRoutines.ModulesPublic;
 
-// TODO: 可以加个备注, 以后的 KPI
 internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
 {
     public override ModuleInfo Info { get; } = new()
@@ -19,7 +19,11 @@ internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         Title       = Lang.Get("AutoRecordPartyFinderSettingTitle"),
         Description = Lang.Get("AutoRecordPartyFinderSettingDescription"),
         Category    = ModuleCategory.Recruitment,
-        Author      = ["status102"]
+        Author      = ["status102"],
+        PreviewImageURL =
+        [
+            "https://raw.githubusercontent.com/Dalamud-DailyRoutines/DailyRoutines/main/Resources/Modules/AutoRecordPartyFinderSetting/preview-1.webp"
+        ]
     };
 
     public override string ModuleName => nameof(AutoRecordPartyFinderSetting);
@@ -50,14 +54,20 @@ internal unsafe partial class AutoRecordPartyFinderSetting : ModuleBase
         };
 
         IAgentLifecycle.Instance().RegisterListener(AgentEvent.PreReceiveEvent, AgentId.LookingForGroup, OnAgent);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup,   OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize, OnAddon);
     }
 
     protected override void Uninit()
     {
         IAgentLifecycle.Instance().UnregisterListener(OnAgent);
+        IAddonLifecycle.Instance().UnregisterListener(OnAddon);
 
         addon?.Dispose();
         addon = null;
+        
+        addPresetButton?.Dispose();
+        addPresetButton = null;
     }
 
     private void OnAgent
