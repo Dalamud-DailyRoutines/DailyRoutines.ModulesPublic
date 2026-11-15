@@ -4,15 +4,11 @@ using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
-using Lumina.Text.ReadOnly;
-using OmenTools.Dalamud;
 using OmenTools.Interop.Game.Lumina;
-using AtkEventWrapper = OmenTools.Interop.Game.Models.AtkEventWrapper;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -33,8 +29,8 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private readonly Dictionary<uint, AtkEventWrapper[]> events    = [];
-    private readonly Dictionary<uint, AtkEventWrapper[]> eventsPVP = [];
+    private readonly Dictionary<uint, IAddonEventHandle[]> events    = [];
+    private readonly Dictionary<uint, IAddonEventHandle[]> eventsPVP = [];
 
     protected override void Init()
     {
@@ -59,10 +55,10 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
 
     private static void AddCollisionEvent
     (
-        AtkUnitBase*                        addon,
-        AtkComponentBase*                   component,
-        uint                                classJobID,
-        Dictionary<uint, AtkEventWrapper[]> registeredEvents
+        AtkUnitBase*                          addon,
+        AtkComponentBase*                     component,
+        uint                                  classJobID,
+        Dictionary<uint, IAddonEventHandle[]> registeredEvents
     )
     {
         if (registeredEvents.ContainsKey(classJobID))
@@ -82,40 +78,48 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
                             .Append(CultureInfo.InvariantCulture, $" {classJob.Name}")
                             .ToReadOnlySeString();
 
-        var clickEvent = new AtkEventWrapper
-        ((_, _, _, _) =>
+        var eventManager = IAddonEventManager.Instance();
+        var clickEvent = eventManager.AddEvent
+        (
+            (nint)addon,
+            (nint)colNode,
+            AddonEventType.MouseClick,
+            (_, _) =>
             {
-                DLog.Debug($"[{nameof(OptimizedCharacterClass)}] 切换至职业 {classJob.Name} ({classJobID})");
                 LocalPlayerState.SwitchGearset(classJobID);
                 UIGlobals.PlaySoundEffect(1);
             }
         );
-        clickEvent.Add(addon, (AtkResNode*)colNode, AtkEventType.MouseClick);
-
-        var cursorOverEvent = new AtkEventWrapper
-        ((_, ownerAddon, atkEvent, _) =>
+        var cursorOverEvent = eventManager.AddEvent
+        (
+            (nint)addon,
+            (nint)colNode,
+            AddonEventType.MouseOver,
+            (_, data) =>
             {
-                IAddonEventManager.Instance().SetCursor(AddonCursorType.Clickable);
+                var ownerAddon = (AtkUnitBase*)data.AddonPointer;
+                eventManager.SetCursor(AddonCursorType.Clickable);
                 UIGlobals.PlaySoundEffect(0);
                 AtkStage.Instance()->TooltipManager.ShowTooltip
                 (
                     ownerAddon->Id,
-                    atkEvent->Node,
+                    (AtkResNode*)data.NodeTargetPointer,
                     tooltip
                 );
             }
         );
-        cursorOverEvent.Add(addon, (AtkResNode*)colNode, AtkEventType.MouseOver);
-
-        var cursorOutEvent = new AtkEventWrapper
-        ((_, ownerAddon, _, _) =>
+        var cursorOutEvent = eventManager.AddEvent
+        (
+            (nint)addon,
+            (nint)colNode,
+            AddonEventType.MouseOut,
+            (_, data) =>
             {
-                IAddonEventManager.Instance().ResetCursor();
+                var ownerAddon = (AtkUnitBase*)data.AddonPointer;
+                eventManager.ResetCursor();
                 AtkStage.Instance()->TooltipManager.HideTooltip(ownerAddon->Id);
             }
         );
-        cursorOutEvent.Add(addon, (AtkResNode*)colNode, AtkEventType.MouseOut);
-
         registeredEvents.Add(classJobID, [clickEvent, cursorOverEvent, cursorOutEvent]);
     }
 
@@ -208,12 +212,14 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         }
     }
 
-    private static void ClearEvents(Dictionary<uint, AtkEventWrapper[]> registeredEvents)
+    private static void ClearEvents(Dictionary<uint, IAddonEventHandle[]> registeredEvents)
     {
+        var eventManager = IAddonEventManager.Instance();
+
         foreach (var classEvents in registeredEvents.Values)
         {
             foreach (var atkEvent in classEvents)
-                atkEvent.Dispose();
+                eventManager.RemoveEvent(atkEvent);
         }
 
         registeredEvents.Clear();
