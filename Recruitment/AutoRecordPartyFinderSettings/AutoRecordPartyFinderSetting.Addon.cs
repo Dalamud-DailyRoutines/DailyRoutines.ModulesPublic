@@ -271,7 +271,10 @@ internal unsafe partial class AutoRecordPartyFinderSetting
 
             ContextMenuManager.Instance().Open
             (
-                new ContextMenuOpenedArgs(),
+                new ContextMenuOpenedArgs
+                {
+                    Addon = InternalAddon
+                },
                 [
                     new ContextMenuEntryInfo
                     (

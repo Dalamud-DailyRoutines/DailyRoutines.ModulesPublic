@@ -435,17 +435,22 @@ internal class MoreMessageFilterPresets : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (module.config.Presets.Count == 0) return null;
-            if (args.AddonName              != "ChatLog") return null;
+            if (module.config.Presets.Count == 0)
+                return null;
+            if (args.Addon->NameString != "ChatLog")
+                return null;
 
             var agent = args.DefaultAgentContext;
-            if (agent == null) return null;
+            if (agent == null)
+                return null;
 
             var contextMenu = agent->CurrentContextMenu;
-            if (contextMenu == null) return null;
+            if (contextMenu == null)
+                return null;
 
             var contextMenuCounts = contextMenu->EventParams[0].Int;
-            if (contextMenuCounts == 0) return null;
+            if (contextMenuCounts == 0)
+                return null;
 
             var str = contextMenu->EventParams[8].GetValueAsString();
             if (!str.Equals(LuminaWrapper.GetAddonText(370), StringComparison.OrdinalIgnoreCase))

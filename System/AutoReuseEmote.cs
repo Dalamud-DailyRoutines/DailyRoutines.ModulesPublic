@@ -261,7 +261,7 @@ internal class AutoReuseEmote : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName != "Emote")
+            if (args.Addon->NameString != "Emote")
                 return null;
 
             var addon = args.Addon;

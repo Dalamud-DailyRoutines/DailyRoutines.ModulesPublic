@@ -133,7 +133,7 @@ internal unsafe partial class AutoShowItemNPCShopInfo
             slot.ItemIcon.OnClick = (_, _, _, _, data) =>
             {
                 if (!data->IsRightClick) return;
-                ContextMenuManager.Instance().OpenItem(slot.ItemIcon.ItemID, AddonId);
+                ContextMenuManager.Instance().OpenItem(slot.ItemIcon.ItemID, InternalAddon);
             };
             slot.ItemHeader.AddNode(slot.ItemIcon);
 
@@ -170,7 +170,7 @@ internal unsafe partial class AutoShowItemNPCShopInfo
                 slot.CostIcons[i].OnClick = (_, _, _, _, data) =>
                 {
                     if (!data->IsRightClick) return;
-                    ContextMenuManager.Instance().OpenItem(slot.CostIcons[indexCopy].ItemID, AddonId);
+                    ContextMenuManager.Instance().OpenItem(slot.CostIcons[indexCopy].ItemID, InternalAddon);
                 };
                 slot.CostRow.AddNode(slot.CostIcons[i]);
 

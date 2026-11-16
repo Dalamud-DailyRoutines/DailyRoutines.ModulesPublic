@@ -1,6 +1,5 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
@@ -9,7 +8,6 @@ using Dalamud.Game.Agent.AgentArgTypes;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using AgentId = Dalamud.Game.Agent.AgentId;
 
 namespace DailyRoutines.ModulesPublic;
@@ -46,7 +44,10 @@ internal unsafe class FastCustomDeliveriesInfo : ModuleBase
 
         ContextMenuManager.Instance().Open
         (
-            new(),
+            new()
+            {
+                Addon = SatisfactionList,
+            },
             [new CustomDeliveryContextMenu(selectedInfo)]
         );
     }

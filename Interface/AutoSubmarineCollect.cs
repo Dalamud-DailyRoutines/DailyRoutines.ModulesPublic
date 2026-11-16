@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using DailyRoutines.Common.Info;
@@ -733,7 +734,7 @@ internal unsafe class AutoSubmarineCollect : ModuleBase
                     "AutoSubmarineCollect-Notification-AllReturned",
                     new Dictionary<string, object>
                     {
-                        ["exactTimeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss"),
+                        ["exactTimeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.CurrentCulture),
                         ["timeAgoText"]   = returnTime.TimeAgo()
                     }
                 )
@@ -750,7 +751,7 @@ internal unsafe class AutoSubmarineCollect : ModuleBase
                 new Dictionary<string, object>
                 {
                     ["count"]    = maxCount - finishedCount,
-                    ["timeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss")
+                    ["timeText"] = returnTime.ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.CurrentCulture)
                 }
             );
 
@@ -810,7 +811,7 @@ internal unsafe class AutoSubmarineCollect : ModuleBase
                     if (!data->IsRightClick)
                         return;
 
-                    ContextMenuManager.Instance().OpenItem(IconNode.ItemID);
+                    ContextMenuManager.Instance().OpenItem(IconNode.ItemID, ParentAddon);
                 }
             };
 

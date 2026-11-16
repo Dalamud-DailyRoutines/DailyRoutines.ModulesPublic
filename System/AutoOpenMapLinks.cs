@@ -151,63 +151,60 @@ internal class AutoOpenMapLinks : ModuleBase
         public override string Identifier =>
             nameof(AutoOpenMapLinks);
 
-        public override ContextMenuItem? Create
+        public override unsafe ContextMenuItem? Create
         (
             ContextMenuOpenedArgs args
         )
         {
-            if (args.AddonName == null ||
-                ValidAddonNames.Contains(args.AddonName))
+            if (!ValidAddonNames.Contains(args.Addon->NameString))
+                return null;
+            if (string.IsNullOrEmpty(args.TargetName) ||
+                !Sheets.Worlds.ContainsKey((uint)args.TargetHomeWorldID))
+                return null;
+
+            var player   = $"{args.TargetName}@{LuminaWrapper.GetWorldName((uint)args.TargetHomeWorldID)}";
+            var isOnList = module.config.WhitelistPlayer.Contains(player);
+            return new()
             {
-                if (string.IsNullOrEmpty(args.TargetName) ||
-                    !Sheets.Worlds.ContainsKey((uint)args.TargetHomeWorldID))
-                    return null;
-
-                var player   = $"{args.TargetName}@{LuminaWrapper.GetWorldName((uint)args.TargetHomeWorldID)}";
-                var isOnList = module.config.WhitelistPlayer.Contains(player);
-                return new()
+                Name = Lang.Get
+                (
+                    !isOnList ?
+                        "AutoOpenMapLinks-ContextMenu-Subscribe" :
+                        "AutoOpenMapLinks-ContextMenu-Unsubscribe"
+                ),
+                OnClicked = _ =>
                 {
-                    Name = Lang.Get
-                    (
-                        !isOnList ?
-                            "AutoOpenMapLinks-ContextMenu-Subscribe" :
-                            "AutoOpenMapLinks-ContextMenu-Unsubscribe"
-                    ),
-                    OnClicked = _ =>
+                    var playerPayload = new PlayerPayload(args.TargetName, (uint)args.TargetHomeWorldID);
+
+                    if (module.config.WhitelistPlayer.Add(player))
                     {
-                        var playerPayload = new PlayerPayload(args.TargetName, (uint)args.TargetHomeWorldID);
+                        var message = Lang.GetSe
+                        (
+                            "AutoOpenMapLinks-Notification-PlayerAdded",
+                            playerPayload
+                        );
 
-                        if (module.config.WhitelistPlayer.Add(player))
-                        {
-                            var message = Lang.GetSe
-                            (
-                                "AutoOpenMapLinks-Notification-PlayerAdded",
-                                playerPayload
-                            );
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Toast(message);
 
-                            NotifyHelper.Instance().Chat(message);
-                            NotifyHelper.Toast(message);
-
-                            module.config.Save(module);
-                        }
-                        else if (module.config.WhitelistPlayer.Remove(player))
-                        {
-                            var message = Lang.GetSe
-                            (
-                                "AutoOpenMapLinks-Notification-PlayerRemoved",
-                                playerPayload
-                            );
-
-                            NotifyHelper.Instance().Chat(message);
-                            NotifyHelper.Toast(message);
-
-                            module.config.Save(module);
-                        }
+                        module.config.Save(module);
                     }
-                };
-            }
+                    else if (module.config.WhitelistPlayer.Remove(player))
+                    {
+                        var message = Lang.GetSe
+                        (
+                            "AutoOpenMapLinks-Notification-PlayerRemoved",
+                            playerPayload
+                        );
 
-            return null;
+                        NotifyHelper.Instance().Chat(message);
+                        NotifyHelper.Toast(message);
+
+                        module.config.Save(module);
+                    }
+                }
+            };
+
         }
     }
 

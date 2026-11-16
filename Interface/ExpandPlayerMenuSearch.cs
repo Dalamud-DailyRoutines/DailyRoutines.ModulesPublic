@@ -126,7 +126,7 @@ internal class ExpandPlayerMenuSearch : ModuleBase
                                        IObjectTable.Instance().SearchByID(args.TargetObjectID) is ICharacter &&
                                        hasTargetNameAndWorld;
 
-        switch (args.AddonName)
+        switch (args.Addon->NameString)
         {
             default:
                 return false;
@@ -404,9 +404,8 @@ internal class ExpandPlayerMenuSearch : ModuleBase
             (async targetChara =>
                 {
                     var page    = 1;
-                    var isFound = false;
 
-                    while (!isFound)
+                    outer: while (true)
                     {
                         var url      = string.Format(SearchAPI, targetChara.Name, page);
                         var response = await HTTPClientHelper.Instance().Get().GetStringAsync(url);
@@ -424,12 +423,9 @@ internal class ExpandPlayerMenuSearch : ModuleBase
                                 continue;
 
                             Util.OpenLink(string.Format(PlayerInfoURL, player.UUID));
-                            isFound = true;
-                            break;
+                            break outer;
                         }
-
-                        if (isFound) break;
-
+                        
                         await Task.Delay(1000, module.cancelSource.Token);
                         page++;
                     }

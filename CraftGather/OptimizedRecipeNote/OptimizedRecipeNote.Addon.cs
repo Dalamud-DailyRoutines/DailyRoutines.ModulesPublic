@@ -458,7 +458,7 @@ internal partial class OptimizedRecipeNote
                 OnClick = (_, _, _, _, atkEventData) =>
                 {
                     if (!atkEventData->IsRightClick) return;
-                    ContextMenuManager.Instance().OpenItem(resultItem.RowId);
+                    ContextMenuManager.Instance().OpenItem(resultItem.RowId, InternalAddon);
                 }
             };
             ItemInfoContainer.AddNode(ItemIcon);
@@ -771,7 +771,7 @@ internal partial class OptimizedRecipeNote
             CraftRoundInfo.IsVisible = true;
         }
 
-        private void OpenCopyMacroContextMenu()
+        private unsafe void OpenCopyMacroContextMenu()
         {
             var macroCount = (int)Math.Ceiling(Result.Actions.Count / (float)MACRO_ACTION_COUNT);
 
@@ -800,7 +800,10 @@ internal partial class OptimizedRecipeNote
 
             ContextMenuManager.Instance().Open
             (
-                new(),
+                new()
+                {
+                    Addon = InternalAddon
+                },
                 [
                     new ContextMenuEntryInfo
                     (

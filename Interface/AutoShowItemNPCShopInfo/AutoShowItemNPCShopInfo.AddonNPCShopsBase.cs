@@ -104,7 +104,7 @@ internal unsafe partial class AutoShowItemNPCShopInfo
                 OnClick = (_, _, _, _, data) =>
                 {
                     if (!data->IsRightClick) return;
-                    ContextMenuManager.Instance().OpenItem(HeaderItemID, AddonId);
+                    ContextMenuManager.Instance().OpenItem(HeaderItemID, InternalAddon);
                 }
             };
             itemInfoRow.AddNode(itemIconNode);
@@ -445,7 +445,7 @@ internal unsafe partial class AutoShowItemNPCShopInfo
                 (
                     new()
                     {
-                        OwnerAddonID = ParentAddon->Id
+                        Addon = ParentAddon
                     },
                     [
                         new ContextMenuEntryInfo

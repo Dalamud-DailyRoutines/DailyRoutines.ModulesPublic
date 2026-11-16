@@ -1107,7 +1107,10 @@ internal partial class BetterPartyFinderFilter
 
             ContextMenuManager.Instance().Open
             (
-                new ContextMenuOpenedArgs(),
+                new ContextMenuOpenedArgs
+                {
+                    Addon = InternalAddon
+                },
                 [
                     new ContextMenuEntryInfo
                     (

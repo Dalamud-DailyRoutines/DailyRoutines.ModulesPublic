@@ -1390,7 +1390,7 @@ internal unsafe partial class AutoRetainerWork
                 ContextMenuOpenedArgs args
             )
             {
-                if (args.AddonName != "RetainerSellList")
+                if (args.Addon->NameString != "RetainerSellList")
                     return null;
 
                 var agent = AgentRetainer.Instance();

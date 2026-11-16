@@ -317,8 +317,7 @@ internal unsafe class OptimizedFreeCompanyChest : ModuleBase
                     (
                         new()
                         {
-                            Addon     = FreeCompanyChest,
-                            AddonName = "FreeCompanyChest"
+                            Addon = FreeCompanyChest
                         },
                         [
                             new ContextMenuEntryInfo
@@ -359,7 +358,7 @@ internal unsafe class OptimizedFreeCompanyChest : ModuleBase
         if (agent == null) return;
 
         // 取出
-        if (args.AddonName               == "FreeCompanyChest" &&
+        if (args.Addon->NameString       == "FreeCompanyChest" &&
             agent->ContextItem.Container != InventoryType.Invalid)
         {
             var contextItem = agent->GetContextInventoryItem();
@@ -381,7 +380,7 @@ internal unsafe class OptimizedFreeCompanyChest : ModuleBase
         }
 
         // 存入
-        if (args.AddonName.StartsWith("Inventory") &&
+        if (args.Addon->NameString.StartsWith("Inventory") &&
             args.TargetInventoryItem is { } inventoryItem)
         {
             if (!TryGetSelectedItemSource(out var sourceInventory, out var sourceSlot))

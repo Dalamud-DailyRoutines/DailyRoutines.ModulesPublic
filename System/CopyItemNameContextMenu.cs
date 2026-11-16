@@ -61,7 +61,8 @@ internal class CopyItemNameContextMenu : ModuleBase
         {
             if (args.InventoryAgentContext == null)
             {
-                if (string.IsNullOrWhiteSpace(args.AddonName) || args.AddonName == "FreeCompanyExchange")
+                if (string.IsNullOrEmpty(args.Addon->NameString) ||
+                    args.Addon->NameString == "FreeCompanyExchange")
                     return null;
 
                 var agent = args.DefaultAgentContext;

@@ -180,11 +180,13 @@ internal unsafe class FastRetainerStore : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.TargetInventoryItem is not { } item || args.AddonName is not { } addonName)
+            if (args.TargetInventoryItem is not { } item ||
+                args.Addon->NameString is not { } addonName)
                 return null;
 
             var itemID = item.GetBaseItemId();
-            if (!LuminaGetter.TryGetRow<Item>(itemID, out _)) return null;
+            if (!LuminaGetter.TryGetRow<Item>(itemID, out _)) 
+                return null;
 
             var playerOpen   = IsPlayerInventoryOpen();
             var retainerOpen = IsRetainerInventoryOpen();
@@ -194,20 +196,14 @@ internal unsafe class FastRetainerStore : ModuleBase
             var isCollectable = item.Flags.HasFlag(InventoryItem.ItemFlags.Collectable);
 
             if (PlayerAddonNames.Contains(addonName))
-            {
-                if (!TryFindTargetSlot(Inventories.Retainer, itemID, isHQ, isCollectable, out _))
-                    return null;
-
-                return CreateItem(true);
-            }
+                return !TryFindTargetSlot(Inventories.Retainer, itemID, isHQ, isCollectable, out _) ?
+                           null :
+                           CreateItem(true);
 
             if (RetainerAddonNames.Contains(addonName))
-            {
-                if (!TryFindTargetSlot(Inventories.Player, itemID, isHQ, isCollectable, out _))
-                    return null;
-
-                return CreateItem(false);
-            }
+                return !TryFindTargetSlot(Inventories.Player, itemID, isHQ, isCollectable, out _) ?
+                           null :
+                           CreateItem(false);
 
             return null;
 

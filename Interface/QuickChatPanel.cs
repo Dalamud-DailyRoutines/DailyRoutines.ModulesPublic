@@ -946,7 +946,7 @@ internal unsafe class QuickChatPanel : ModuleBase
                     if (item.RowId == 0)
                         return;
 
-                    ContextMenuManager.Instance().OpenItem(item.RowId, AddonId);
+                    ContextMenuManager.Instance().OpenItem(item.RowId, InternalAddon);
                 }
             };
 
@@ -1231,8 +1231,7 @@ internal unsafe class QuickChatPanel : ModuleBase
                 (
                     new ContextMenuOpenedArgs
                     {
-                        Addon     = InternalAddon,
-                        AddonName = InternalAddon->NameString
+                        Addon = InternalAddon
                     },
                     [
                         new ContextMenuEntryInfo
@@ -1312,8 +1311,7 @@ internal unsafe class QuickChatPanel : ModuleBase
                 (
                     new ContextMenuOpenedArgs
                     {
-                        Addon     = InternalAddon,
-                        AddonName = InternalAddon->NameString
+                        Addon = InternalAddon
                     },
                     [
                         new ContextMenuEntryInfo
