@@ -244,8 +244,22 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
                                         OnClicked = _ =>
                                         {
                                             config.ClassJobGearsets.TryAdd(LocalPlayerState.ContentID, []);
-                                            config.ClassJobGearsets[LocalPlayerState.ContentID][LocalPlayerState.ClassJob] = gearset.Id;
+                                            config.ClassJobGearsets[LocalPlayerState.ContentID][classJobID] = gearset.Id;
                                             config.Save(this);
+
+                                            NotifyHelper.Instance().Chat
+                                            (
+                                                Lang.Get
+                                                (
+                                                    "OptimizedCharacterClass-SetSetForClassJob-Message",
+                                                    new Dictionary<string, object>
+                                                    {
+                                                        ["index"]       = gearset.Id + 1,
+                                                        ["jobName"]     = LuminaWrapper.GetJobName(classJobID),
+                                                        ["gearsetName"] = gearset.NameString
+                                                    }
+                                                )
+                                            );
                                         }
                                     }
                                 )
