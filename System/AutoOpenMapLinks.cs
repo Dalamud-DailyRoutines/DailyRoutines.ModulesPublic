@@ -156,7 +156,8 @@ internal class AutoOpenMapLinks : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (!ValidAddonNames.Contains(args.Addon->NameString))
+            if (args.Addon is null ||
+                !ValidAddonNames.Contains(args.Addon->NameString))
                 return null;
             if (string.IsNullOrEmpty(args.TargetName) ||
                 !Sheets.Worlds.ContainsKey((uint)args.TargetHomeWorldID))

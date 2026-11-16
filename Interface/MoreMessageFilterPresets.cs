@@ -437,7 +437,8 @@ internal class MoreMessageFilterPresets : ModuleBase
         {
             if (module.config.Presets.Count == 0)
                 return null;
-            if (args.Addon->NameString != "ChatLog")
+            if (args.Addon is null ||
+                args.Addon->NameString != "ChatLog")
                 return null;
 
             var agent = args.DefaultAgentContext;

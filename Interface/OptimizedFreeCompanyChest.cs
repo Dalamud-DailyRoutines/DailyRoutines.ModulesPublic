@@ -351,7 +351,9 @@ internal unsafe class OptimizedFreeCompanyChest : ModuleBase
         ContextMenuOpenedArgs args
     )
     {
-        if (FreeCompanyChest == null || !config.FastMoveItem)
+        if (args.Addon is null       ||
+            FreeCompanyChest == null ||
+            !config.FastMoveItem)
             return;
 
         var agent = AgentFreeCompanyChest.Instance();

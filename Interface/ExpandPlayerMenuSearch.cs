@@ -114,10 +114,12 @@ internal class ExpandPlayerMenuSearch : ModuleBase
     {
         resolvedTarget = null;
 
-        if (args.InventoryAgentContext != null) return false;
+        if (args.InventoryAgentContext != null)
+            return false;
 
         var agent = IGameGui.Instance().FindAgentInterface("ChatLog");
-        if (agent != nint.Zero && *(uint*)(agent + 0x948 + 0x8) == 3) return false;
+        if (agent != nint.Zero && *(uint*)(agent + 0x948 + 0x8) == 3)
+            return false;
 
         var hasTargetCharacter = args.TargetCharacter != null;
         var hasTargetNameAndWorld = !string.IsNullOrWhiteSpace(args.TargetName) &&
@@ -125,6 +127,18 @@ internal class ExpandPlayerMenuSearch : ModuleBase
         var hasTargetObjectCharacter = args.TargetObjectID != 0                                              &&
                                        IObjectTable.Instance().SearchByID(args.TargetObjectID) is ICharacter &&
                                        hasTargetNameAndWorld;
+
+        if (args.Addon == null)
+        {
+            return TryResolveGeneralTarget
+            (
+                args,
+                hasTargetCharacter,
+                hasTargetObjectCharacter,
+                hasTargetNameAndWorld,
+                out resolvedTarget
+            );
+        }
 
         switch (args.Addon->NameString)
         {
@@ -156,15 +170,22 @@ internal class ExpandPlayerMenuSearch : ModuleBase
 
                 resolvedTarget = new()
                 {
-                    Name    = args.TargetName                                                           ?? string.Empty,
-                    World   = LuminaGetter.GetRow<World>((uint)args.TargetHomeWorldID)?.Name.ToString() ?? string.Empty,
+                    Name    = args.TargetName ?? string.Empty,
+                    World   = LuminaWrapper.GetWorldName((uint)args.TargetHomeWorldID),
                     WorldID = (uint)args.TargetHomeWorldID
                 };
                 return true;
             case "LinkShell":
             case "CrossWorldLinkshell":
                 return args.TargetContentID != 0 &&
-                       TryResolveGeneralTarget(args, hasTargetCharacter, hasTargetObjectCharacter, hasTargetNameAndWorld, out resolvedTarget);
+                       TryResolveGeneralTarget
+                       (
+                           args,
+                           hasTargetCharacter,
+                           hasTargetObjectCharacter,
+                           hasTargetNameAndWorld,
+                           out resolvedTarget
+                       );
             case null:
             case "ChatLog":
             case "LookingForGroup":
@@ -175,7 +196,14 @@ internal class ExpandPlayerMenuSearch : ModuleBase
             case "_PartyList":
             case "BeginnerChatList":
             case "ContentMemberList":
-                return TryResolveGeneralTarget(args, hasTargetCharacter, hasTargetObjectCharacter, hasTargetNameAndWorld, out resolvedTarget);
+                return TryResolveGeneralTarget
+                (
+                    args,
+                    hasTargetCharacter,
+                    hasTargetObjectCharacter,
+                    hasTargetNameAndWorld,
+                    out resolvedTarget
+                );
         }
     }
 
@@ -403,7 +431,7 @@ internal class ExpandPlayerMenuSearch : ModuleBase
             RunOnTick
             (async targetChara =>
                 {
-                    var page    = 1;
+                    var page = 1;
 
                     outer: while (true)
                     {
@@ -425,7 +453,7 @@ internal class ExpandPlayerMenuSearch : ModuleBase
                             Util.OpenLink(string.Format(PlayerInfoURL, player.UUID));
                             break outer;
                         }
-                        
+
                         await Task.Delay(1000, module.cancelSource.Token);
                         page++;
                     }

@@ -388,7 +388,8 @@ internal unsafe class AutoSplitStacks : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.TargetInventoryItem is not { } item)
+            if (args.Addon is null ||
+                args.TargetInventoryItem is not { } item)
                 return null;
 
             var quantity = item.GetQuantity();

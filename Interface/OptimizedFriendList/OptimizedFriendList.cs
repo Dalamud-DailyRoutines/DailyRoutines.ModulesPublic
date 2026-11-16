@@ -260,7 +260,8 @@ internal unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.Addon->NameString != "FriendList")
+            if (args.Addon is null ||
+                args.Addon->NameString != "FriendList")
                 return null;
 
             var contentID = AgentFriendlist.Instance()->SelectedContentId;
@@ -311,7 +312,8 @@ internal unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.Addon->NameString != "FriendList")
+            if (args.Addon is null ||
+                args.Addon->NameString != "FriendList")
                 return null;
 
             var contentID = AgentFriendlist.Instance()->SelectedContentId;
@@ -360,7 +362,8 @@ internal unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.Addon->NameString != "FriendList")
+            if (args.Addon is null ||
+                args.Addon->NameString != "FriendList")
                 return null;
 
             var targetCharacter = args.TargetCharacter;
@@ -415,17 +418,18 @@ internal unsafe partial class OptimizedFriendList : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (!(ModuleManager.Instance().IsModuleEnabled("FastWorldTravel") ?? false)) 
+            if (!(ModuleManager.Instance().IsModuleEnabled("FastWorldTravel") ?? false))
                 return null;
-            if (args.Addon->NameString != "FriendList")
+            if (args.Addon is null ||
+                args.Addon->NameString != "FriendList")
                 return null;
 
             var targetCharacter = args.TargetCharacter;
-            if (targetCharacter == null) 
+            if (targetCharacter == null)
                 return null;
 
             var targetWorldID = (uint)targetCharacter->CurrentWorld;
-            if (targetWorldID == GameState.CurrentWorld) 
+            if (targetWorldID == GameState.CurrentWorld)
                 return null;
 
             return new()

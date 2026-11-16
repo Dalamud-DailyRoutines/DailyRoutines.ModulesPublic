@@ -198,7 +198,8 @@ internal unsafe class AutoTryOnPlayerOutfit : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.Addon->NameString != "CharacterInspect")
+            if (args.Addon is null ||
+                args.Addon->NameString != "CharacterInspect")
                 return null;
             if (args.TargetItemID == 0)
                 return null;

@@ -180,12 +180,13 @@ internal unsafe class FastRetainerStore : ModuleBase
             ContextMenuOpenedArgs args
         )
         {
-            if (args.TargetInventoryItem is not { } item ||
+            if (args.Addon is null                       ||
+                args.TargetInventoryItem is not { } item ||
                 args.Addon->NameString is not { } addonName)
                 return null;
 
             var itemID = item.GetBaseItemId();
-            if (!LuminaGetter.TryGetRow<Item>(itemID, out _)) 
+            if (!LuminaGetter.TryGetRow<Item>(itemID, out _))
                 return null;
 
             var playerOpen   = IsPlayerInventoryOpen();
