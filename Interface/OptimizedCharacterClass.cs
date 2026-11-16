@@ -1,12 +1,18 @@
 using System.Globalization;
+using System.Numerics;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Enums;
+using KamiToolKit.Nodes;
+using KamiToolKit.Timelines;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Lumina;
 
@@ -29,18 +35,25 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         AllDefaultEnabled = true
     };
 
-    private readonly Dictionary<uint, IAddonEventHandle[]> events    = [];
-    private readonly Dictionary<uint, IAddonEventHandle[]> eventsPVP = [];
+    private readonly Dictionary<uint, (IAddonEventHandle[] Events, TimelineNode<ResNode> Highlight)> events    = [];
+    private readonly Dictionary<uint, (IAddonEventHandle[] Events, TimelineNode<ResNode> Highlight)> eventsPVP = [];
+
+    private ushort hoveredAddonID;
+    private uint   hoveredNodeID;
+    private uint   hoveredClassJobID;
 
     protected override void Init()
     {
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "CharacterClass", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "CharacterClass", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreReceiveEvent,     "CharacterClass", OnAddon);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostReceiveEvent,    "CharacterClass", OnAddon);
         if (CharacterClass->IsAddonAndNodesReady())
             OnAddon(AddonEvent.PostRequestedUpdate, null);
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "PvPCharacter", OnAddonPVP);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "PvPCharacter", OnAddonPVP);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostReceiveEvent,    "PvPCharacter", OnAddonPVP);
         if (PvPCharacter->IsAddonAndNodesReady())
             OnAddonPVP(AddonEvent.PostRequestedUpdate, null);
     }
@@ -49,78 +62,8 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAddon, OnAddonPVP);
 
-        ClearEvents(events);
-        ClearEvents(eventsPVP);
-    }
-
-    private static void AddCollisionEvent
-    (
-        AtkUnitBase*                          addon,
-        AtkComponentBase*                     component,
-        uint                                  classJobID,
-        Dictionary<uint, IAddonEventHandle[]> registeredEvents
-    )
-    {
-        if (registeredEvents.ContainsKey(classJobID))
-            return;
-        if (component == null)
-            return;
-        if (!LuminaGetter.TryGetRow(classJobID, out ClassJob classJob))
-            return;
-
-        var colNode = component->UldManager.SearchSimpleNodeByType<AtkCollisionNode>(NodeType.Collision);
-        if (colNode == null) return;
-
-        colNode->AtkEventManager.ClearEvents();
-
-        using var rented = new RentedSeStringBuilder();
-        var tooltip = rented.AppendIcon((uint)classJob.ToBitmapFontIcon())
-                            .Append(CultureInfo.InvariantCulture, $" {classJob.Name}")
-                            .ToReadOnlySeString();
-
-        var eventManager = IAddonEventManager.Instance();
-        var clickEvent = eventManager.AddEvent
-        (
-            (nint)addon,
-            (nint)colNode,
-            AddonEventType.MouseClick,
-            (_, _) =>
-            {
-                LocalPlayerState.SwitchGearset(classJobID);
-                UIGlobals.PlaySoundEffect(1);
-            }
-        );
-        var cursorOverEvent = eventManager.AddEvent
-        (
-            (nint)addon,
-            (nint)colNode,
-            AddonEventType.MouseOver,
-            (_, data) =>
-            {
-                var ownerAddon = (AtkUnitBase*)data.AddonPointer;
-                eventManager.SetCursor(AddonCursorType.Clickable);
-                UIGlobals.PlaySoundEffect(0);
-                AtkStage.Instance()->TooltipManager.ShowTooltip
-                (
-                    ownerAddon->Id,
-                    (AtkResNode*)data.NodeTargetPointer,
-                    tooltip
-                );
-            }
-        );
-        var cursorOutEvent = eventManager.AddEvent
-        (
-            (nint)addon,
-            (nint)colNode,
-            AddonEventType.MouseOut,
-            (_, data) =>
-            {
-                var ownerAddon = (AtkUnitBase*)data.AddonPointer;
-                eventManager.ResetCursor();
-                AtkStage.Instance()->TooltipManager.HideTooltip(ownerAddon->Id);
-            }
-        );
-        registeredEvents.Add(classJobID, [clickEvent, cursorOverEvent, cursorOutEvent]);
+        ClearEvents(CharacterClass, events);
+        ClearEvents(PvPCharacter,   eventsPVP);
     }
 
     private void OnAddon
@@ -157,8 +100,24 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
                 }
 
                 break;
+
             case AddonEvent.PreFinalize:
-                ClearEvents(events);
+                ClearEvents(CharacterClass, events);
+                break;
+
+            case AddonEvent.PostReceiveEvent:
+                if (args is AddonReceiveEventArgs { AtkEventType: AddonEventType.MouseOver })
+                    ShowTooltip(CharacterClass);
+                break;
+
+            case AddonEvent.PreReceiveEvent:
+                if (args is AddonReceiveEventArgs { AtkEventType: AddonEventType.ButtonClick } receiveArgs)
+                {
+                    var target = (AtkResNode*)((AtkEvent*)receiveArgs.AtkEvent)->Target;
+                    if (target != null && events.ContainsKey(target->NodeId))
+                        receiveArgs.AtkEventType = AddonEventType.MouseClick;
+                }
+
                 break;
         }
     }
@@ -207,28 +166,296 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
 
                 break;
             case AddonEvent.PreFinalize:
-                ClearEvents(eventsPVP);
+                ClearEvents(PvPCharacter, eventsPVP);
+                break;
+            case AddonEvent.PostReceiveEvent:
+                if (args is AddonReceiveEventArgs { AtkEventType: AddonEventType.MouseOver })
+                    ShowTooltip(PvPCharacter);
                 break;
         }
     }
 
-    private static void ClearEvents(Dictionary<uint, IAddonEventHandle[]> registeredEvents)
+    private void AddCollisionEvent
+    (
+        AtkUnitBase*                                                                    addon,
+        AtkComponentBase*                                                               component,
+        uint                                                                            classJobID,
+        Dictionary<uint, (IAddonEventHandle[] Events, TimelineNode<ResNode> Highlight)> registeredEvents
+    )
+    {
+        if (component == null)
+            return;
+        var nodeID = component->OwnerNode->NodeId;
+        if (registeredEvents.ContainsKey(nodeID))
+            return;
+        if (!LuminaGetter.TryGetRow(classJobID, out ClassJob _))
+            return;
+
+        var colNode = component->UldManager.SearchSimpleNodeByType<AtkCollisionNode>(NodeType.Collision);
+        if (colNode == null)
+            return;
+
+        var highlight = AddHighlightTimeline((AtkResNode*)component->OwnerNode, classJobID is >= 8 and <= 15);
+        addon->UldManager.UpdateDrawNodeList();
+        addon->UpdateCollisionNodeList(false);
+
+        var eventManager = IAddonEventManager.Instance();
+        var clickEvent = eventManager.AddEvent
+        (
+            (nint)addon,
+            (nint)colNode,
+            AddonEventType.MouseClick,
+            (_, _) =>
+            {
+                LocalPlayerState.SwitchGearset(classJobID);
+                UIGlobals.PlaySoundEffect(1);
+            }
+        );
+        var cursorOverEvent = eventManager.AddEvent
+        (
+            (nint)addon,
+            (nint)colNode,
+            AddonEventType.MouseOver,
+            (_, data) =>
+            {
+                var ownerAddon = (AtkUnitBase*)data.AddonPointer;
+                hoveredAddonID    = ownerAddon->Id;
+                hoveredNodeID     = nodeID;
+                hoveredClassJobID = classJobID;
+                highlight.Timeline.PlayAnimation(HIGHLIGHT_ON_LABEL);
+                eventManager.SetCursor(AddonCursorType.Clickable);
+                UIGlobals.PlaySoundEffect(0);
+                ShowTooltip(ownerAddon);
+            }
+        );
+        var cursorOutEvent = eventManager.AddEvent
+        (
+            (nint)addon,
+            (nint)colNode,
+            AddonEventType.MouseOut,
+            (_, data) =>
+            {
+                var ownerAddon = (AtkUnitBase*)data.AddonPointer;
+                hoveredAddonID    = 0;
+                hoveredNodeID     = 0;
+                hoveredClassJobID = 0;
+                highlight.Timeline.PlayAnimation(HIGHLIGHT_OFF_LABEL);
+                eventManager.ResetCursor();
+                AtkStage.Instance()->TooltipManager.HideTooltip(ownerAddon->Id);
+            }
+        );
+        registeredEvents.Add(nodeID, ([clickEvent, cursorOverEvent, cursorOutEvent], highlight));
+    }
+
+    private void ShowTooltip(AtkUnitBase* addon)
+    {
+        if (addon->Id != hoveredAddonID)
+            return;
+        if (!LuminaGetter.TryGetRow(hoveredClassJobID, out ClassJob classJob))
+            return;
+
+        using var rented = new RentedSeStringBuilder();
+        
+        if (!LocalPlayerState.IsClassJobUnlocked(hoveredClassJobID))
+        {
+            rented.AppendIcon((uint)classJob.ToBitmapFontIcon())
+                  .Append(CultureInfo.InvariantCulture, $"{classJob.Name}");
+        }
+        else if (!TryFindClassJobGearset(hoveredClassJobID, out var gearset, out var isMultiple))
+        {
+            rented.AppendIcon(BitmapFontIcon.Warning)
+                  .Append
+                  (
+                      Lang.Get
+                      (
+                          "OptimizedCharacterClass-NoGearset",
+                          new Dictionary<string, object>
+                          {
+                              ["jobName"] = LuminaWrapper.GetJobName(hoveredClassJobID)
+                          }
+                      )
+                  );
+        }
+        else
+        {
+            rented.AppendIcon((uint)classJob.ToBitmapFontIcon())
+                  .Append(CultureInfo.InvariantCulture, $"{classJob.Name}");
+
+            if (isMultiple)
+                rented.AppendNewLine()
+                      .Append
+                      (
+                          Lang.Get
+                          (
+                              "OptimizedCharacterClass-Gearset",
+                              new Dictionary<string, object>
+                              {
+                                  ["index"] = gearset.Id + 1,
+                                  ["name"]  = gearset.NameString
+                              }
+                          )
+                      );
+        }
+
+        var component = addon->GetComponentNodeById(hoveredNodeID)->Component;
+        AtkStage.Instance()->TooltipManager.ShowTooltip
+        (
+            addon->Id,
+            (AtkResNode*)component->UldManager.SearchSimpleNodeByType<AtkCollisionNode>(NodeType.Collision),
+            rented.ToReadOnlySeString()
+        );
+    }
+
+    private void ClearEvents
+    (
+        AtkUnitBase*                                                                    addon,
+        Dictionary<uint, (IAddonEventHandle[] Events, TimelineNode<ResNode> Highlight)> registeredEvents
+    )
     {
         var eventManager = IAddonEventManager.Instance();
 
-        foreach (var classEvents in registeredEvents.Values)
+        foreach (var (nodeID, (classEvents, highlight)) in registeredEvents)
         {
             foreach (var atkEvent in classEvents)
                 eventManager.RemoveEvent(atkEvent);
+
+            if (addon->IsAddonAndNodesReady())
+                MoveNativeNode(addon->GetNodeById(nodeID), highlight.ResNode, false);
+
+            highlight.Dispose();
+        }
+
+        if (addon != null && addon->Id == hoveredAddonID)
+        {
+            eventManager.ResetCursor();
+            AtkStage.Instance()->TooltipManager.HideTooltip(addon->Id);
+            hoveredAddonID    = 0;
+            hoveredNodeID     = 0;
+            hoveredClassJobID = 0;
         }
 
         registeredEvents.Clear();
     }
 
+    private static TimelineNode<ResNode> AddHighlightTimeline(AtkResNode* node, bool isCrafter)
+    {
+        var addColor = isCrafter ?
+                           new(16f) :
+                           new Vector3(32f);
+        
+        var highlight = new TimelineNode<ResNode>
+        {
+            Size = new Vector2(node->Width, node->Height),
+            LabelsetTimeline = new TimelineBuilder()
+                               .BeginFrameSet(1, 53)
+                               .AddLabelPair(1,  10, HIGHLIGHT_IDLE_LABEL)
+                               .AddLabelPair(11, 17, HIGHLIGHT_ON_LABEL)
+                               .AddLabelPair(47, 53, HIGHLIGHT_OFF_LABEL)
+                               .EndFrameSet()
+                               .Build(),
+            ContentTimeline = new TimelineBuilder()
+                              .AddFrameSetWithFrame(1, 10, 1, addColor: Vector3.Zero, multiplyColor: new(100f))
+                              .BeginFrameSet(11, 17)
+                              .AddFrame(11, addColor: Vector3.Zero, multiplyColor: new(100f))
+                              .AddFrame(13, addColor: addColor,     multiplyColor: new(100f))
+                              .EndFrameSet()
+                              .BeginFrameSet(47, 53)
+                              .AddFrame(47, addColor: addColor,     multiplyColor: new(100f))
+                              .AddFrame(53, addColor: Vector3.Zero, multiplyColor: new(100f))
+                              .EndFrameSet()
+                              .Build()
+        };
+
+        highlight.AttachNode(node, NodePosition.BeforeTarget);
+        MoveNativeNode(node, highlight.ContentNode.ResNode, true);
+        highlight.Timeline.PlayAnimation(AtkTimelineJumpBehavior.Initialize, HIGHLIGHT_IDLE_LABEL);
+        return highlight;
+    }
+
+    private static void MoveNativeNode(AtkResNode* node, AtkResNode* target, bool asChild)
+    {
+        if (node->NextSiblingNode != null)
+            node->NextSiblingNode->PrevSiblingNode = node->PrevSiblingNode;
+        else
+            node->ParentNode->ChildNode = node->PrevSiblingNode;
+
+        if (node->PrevSiblingNode != null)
+            node->PrevSiblingNode->NextSiblingNode = node->NextSiblingNode;
+
+        node->ParentNode->ChildCount--;
+        node->PrevSiblingNode = null;
+        node->NextSiblingNode = null;
+
+        if (asChild)
+        {
+            node->ParentNode      = target;
+            node->PrevSiblingNode = target->ChildNode;
+            if (target->ChildNode != null)
+                target->ChildNode->NextSiblingNode = node;
+
+            target->ChildNode = node;
+        }
+        else
+        {
+            node->ParentNode      = target->ParentNode;
+            node->NextSiblingNode = target->NextSiblingNode;
+            node->PrevSiblingNode = target;
+            if (target->NextSiblingNode != null)
+                target->NextSiblingNode->PrevSiblingNode = node;
+            else
+                target->ParentNode->ChildNode = node;
+
+            target->NextSiblingNode = node;
+        }
+
+        node->ParentNode->ChildCount++;
+        node->IsDirty = true;
+    }
+    
+    public static unsafe bool TryFindClassJobGearset
+    (
+        uint                                  classJobID,
+        out RaptureGearsetModule.GearsetEntry gearsetData,
+        out bool                              isMultiple
+    )
+    {
+        gearsetData = default;
+        isMultiple  = false;
+
+        var gearsetModule = RaptureGearsetModule.Instance();
+
+        var found = false;
+        for (var i = 0; i < 100; i++)
+        {
+            var gearset = gearsetModule->GetGearset(i);
+            if (gearset == null                                                          ||
+                !gearset->Flags.HasFlag(RaptureGearsetModule.GearsetFlag.Exists)         ||
+                gearset->Flags.HasFlag(RaptureGearsetModule.GearsetFlag.MainHandMissing) ||
+                gearset->Id       != i                                                   ||
+                gearset->ClassJob != classJobID)
+                continue;
+            
+            if (found)
+            {
+                isMultiple = true;
+                return true;
+            }
+
+            gearsetData = *gearset;
+            found       = true;
+        }
+        
+        return found;
+    }
+    
     #region 常量
 
     private const int CLASS_JOB_ICON_ARRAY_OFFSET = 25;
     private const int CLASS_JOB_ICON_ID_OFFSET    = 62100;
+
+    private const ushort HIGHLIGHT_IDLE_LABEL = 1;
+    private const ushort HIGHLIGHT_ON_LABEL   = 2;
+    private const ushort HIGHLIGHT_OFF_LABEL  = 4;
 
     #endregion
 }
