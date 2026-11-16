@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Numerics;
+using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
+using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Events;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -35,6 +37,8 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
         AllDefaultEnabled = true
     };
 
+    private Config config = null!;
+
     private readonly Dictionary<uint, (IAddonEventHandle[] Events, TimelineNode<ResNode> Highlight)> events    = [];
     private readonly Dictionary<uint, (IAddonEventHandle[] Events, TimelineNode<ResNode> Highlight)> eventsPVP = [];
 
@@ -44,6 +48,8 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
 
     protected override void Init()
     {
+        config = LoadConfig<Config>() ?? new();
+        
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "CharacterClass", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "CharacterClass", OnAddon);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreReceiveEvent,     "CharacterClass", OnAddon);
@@ -205,9 +211,86 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
             (nint)addon,
             (nint)colNode,
             AddonEventType.MouseClick,
-            (_, _) =>
+            (_, addonEventData) =>
             {
-                LocalPlayerState.SwitchGearset(classJobID);
+                if (!TryFindClassJobGearset(hoveredClassJobID, out var gearsets))
+                    return;
+                
+                if (addonEventData.IsRightClick)
+                {
+                    if (gearsets.Count > 1)
+                    {
+                        List<ContextMenuEntry> subMenus = [];
+
+                        foreach (var gearset in gearsets)
+                        {
+                            subMenus.Add
+                            (
+                                new ContextMenuEntryInfo
+                                (
+                                    nameof(OptimizedCharacterClass),
+                                    _ => new()
+                                    {
+                                        Name = Lang.Get
+                                        (
+                                            "OptimizedCharacterClass-SetSetForClassJob-Sub",
+                                            new Dictionary<string, object>
+                                            {
+                                                ["index"] = gearset.Id + 1,
+                                                ["name"]  = gearset.NameString
+                                            }
+                                        ),
+                                        Priority = gearset.Id,
+                                        OnClicked = _ =>
+                                        {
+                                            config.ClassJobGearsets.TryAdd(LocalPlayerState.ContentID, []);
+                                            config.ClassJobGearsets[LocalPlayerState.ContentID][LocalPlayerState.ClassJob] = gearset.Id;
+                                            config.Save(this);
+                                        }
+                                    }
+                                )
+                            );
+                        }
+                    
+                        ContextMenuManager.Instance().Open
+                        (
+                            new()
+                            {
+                                Addon = addon
+                            },
+                            [
+                                new ContextMenuEntryInfo
+                                (
+                                    nameof(OptimizedCharacterClass),
+                                    _ => new ContextMenuItem
+                                    {
+                                        Name = Lang.Get
+                                        (
+                                            "OptimizedCharacterClass-SetSetForClassJob"
+                                        ),
+                                        Submenu = new()
+                                        {
+                                            Title   = Lang.Get("OptimizedCharacterClass-SetSetForClassJob"),
+                                            Entries = subMenus
+                                        }
+                                    }
+                                )
+                            ]
+                        );
+                    }
+                    
+                    return;
+                }
+                
+                var toUseGearset = gearsets[0];
+                
+                if (config.ClassJobGearsets.TryGetValue(LocalPlayerState.ContentID, out var classJobGearsets) &&
+                    classJobGearsets.TryGetValue(hoveredClassJobID, out var classJobGearset)                  &&
+                    gearsets.FirstOrDefault(x => x.Id == classJobGearset) is var configGearset                &&
+                    configGearset.Id == classJobGearset)
+                    toUseGearset = configGearset;
+                
+                LocalPlayerState.SwitchGearset(toUseGearset.Id);
                 UIGlobals.PlaySoundEffect(1);
             }
         );
@@ -261,7 +344,7 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
             rented.AppendIcon((uint)classJob.ToBitmapFontIcon())
                   .Append(CultureInfo.InvariantCulture, $"{classJob.Name}");
         }
-        else if (!TryFindClassJobGearset(hoveredClassJobID, out var gearset, out var isMultiple))
+        else if (!TryFindClassJobGearset(hoveredClassJobID, out var gearsets))
         {
             rented.AppendIcon(BitmapFontIcon.Warning)
                   .Append
@@ -281,7 +364,16 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
             rented.AppendIcon((uint)classJob.ToBitmapFontIcon())
                   .Append(CultureInfo.InvariantCulture, $"{classJob.Name}");
 
-            if (isMultiple)
+            if (gearsets.Count > 1)
+            {
+                var toUseGearset = gearsets[0];
+                
+                if (config.ClassJobGearsets.TryGetValue(LocalPlayerState.ContentID, out var classJobGearsets) &&
+                    classJobGearsets.TryGetValue(hoveredClassJobID, out var classJobGearset)                  &&
+                    gearsets.FirstOrDefault(x => x.Id == classJobGearset) is var configGearset                &&
+                    configGearset.Id == classJobGearset)
+                    toUseGearset = configGearset;
+                
                 rented.AppendNewLine()
                       .Append
                       (
@@ -290,11 +382,12 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
                               "OptimizedCharacterClass-Gearset",
                               new Dictionary<string, object>
                               {
-                                  ["index"] = gearset.Id + 1,
-                                  ["name"]  = gearset.NameString
+                                  ["index"] = toUseGearset.Id + 1,
+                                  ["name"]  = toUseGearset.NameString
                               }
                           )
                       );
+            }
         }
 
         var component = addon->GetComponentNodeById(hoveredNodeID)->Component;
@@ -414,17 +507,14 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
     
     public static unsafe bool TryFindClassJobGearset
     (
-        uint                                  classJobID,
-        out RaptureGearsetModule.GearsetEntry gearsetData,
-        out bool                              isMultiple
+        uint                                        classJobID,
+        out List<RaptureGearsetModule.GearsetEntry> gearsets
     )
     {
-        gearsetData = default;
-        isMultiple  = false;
+        gearsets   = [];
 
         var gearsetModule = RaptureGearsetModule.Instance();
 
-        var found = false;
         for (var i = 0; i < 100; i++)
         {
             var gearset = gearsetModule->GetGearset(i);
@@ -434,18 +524,17 @@ internal unsafe class OptimizedCharacterClass : ModuleBase
                 gearset->Id       != i                                                   ||
                 gearset->ClassJob != classJobID)
                 continue;
-            
-            if (found)
-            {
-                isMultiple = true;
-                return true;
-            }
 
-            gearsetData = *gearset;
-            found       = true;
+            gearsets.Add(*gearset);
         }
         
-        return found;
+        return gearsets.Count > 0;
+    }
+
+    private class Config : ModuleConfig
+    {
+        // CID - ClassJob - GearSet
+        public Dictionary<ulong, Dictionary<uint, int>> ClassJobGearsets = [];
     }
     
     #region 常量
