@@ -14,6 +14,7 @@ using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using KamiToolKit.Nodes.Simplified;
 using KamiToolKit.Timelines;
+using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
@@ -384,7 +385,8 @@ public unsafe class OptimizedContentsFinder : ModuleBase
         }
 
         var content = agent->ContentList[(int)contentIndex - 1].Value;
-        var rewardReceived = content->ID.ContentType == ContentsType.Roulette &&
+        var rewardReceived = content->ID.ContentType                                                         == ContentsType.Roulette &&
+                             LuminaGetter.GetRowOrDefault<ContentRoulette>(content->ID.ID).ContentType.RowId == 1                     &&
                              UIInstanceContent.Instance()->IsRouletteComplete((byte)content->ID.ID);
 
         if (content->UnavailableReasons != 0 && !rewardReceived)
