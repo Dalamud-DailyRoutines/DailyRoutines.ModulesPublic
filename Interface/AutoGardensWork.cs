@@ -1,4 +1,5 @@
 using System.Numerics;
+using DailyRoutines.Common.Extensions;
 using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
@@ -7,16 +8,17 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Data;
 using OmenTools.Info.Game.Packets.Upstream;
 using OmenTools.Info.Lumina;
 using OmenTools.Info.Lumina.ExtraSheets;
 using OmenTools.Interop.Game.AddonEvent;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Action = System.Action;
-using ObjectKind = FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind;
+using DObjectKind = Dalamud.Game.ClientState.Objects.Enums.ObjectKind;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -34,14 +36,27 @@ internal unsafe class AutoGardensWork : ModuleBase
 
     private Config config = null!;
 
-    private string searchSeed      = string.Empty;
-    private string searchSoil      = string.Empty;
-    private string searchFertilize = string.Empty;
+    private ItemSelectCombo seedSelectCombo       = null!;
+    private ItemSelectCombo soilSelectCombo       = null!;
+    private ItemSelectCombo fertilizerSelectCombo = null!;
 
     protected override void Init()
     {
         config     =   Config.Load(this) ?? new();
         TaskHelper ??= new() { TimeoutMS = 10_000 };
+
+        seedSelectCombo = new("SeedSelectCombo", Sheets.Seeds.Values)
+        {
+            SelectedID = config.SeedSelected
+        };
+        soilSelectCombo = new("SoilSelectCombo", Sheets.Soils.Values)
+        {
+            SelectedID = config.SoilSelected
+        };
+        fertilizerSelectCombo = new("FertilizersSelectCombo", Sheets.Fertilizers.Values)
+        {
+            SelectedID = config.FertilizerSelected
+        };
 
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostSetup, "HousingGardening", OnAddon);
 
@@ -58,26 +73,17 @@ internal unsafe class AutoGardensWork : ModuleBase
     {
         DrawAutoPlant();
 
-        ImGui.NewLine();
-
         DrawAutoGather();
 
-        ImGui.NewLine();
-
         DrawAutoFertilize();
-
-        ImGui.NewLine();
 
         DrawAutoTend();
     }
 
     private void DrawAutoPlant()
     {
-        using var id = ImRaii.PushId("AutoPlant");
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoGardensWork-AutoPlant")}");
-
-        using var indent = ImRaii.PushIndent();
+        using var id      = ImRaii.PushId("AutoPlant");
+        using var heading = ImRaii.Heading1(Lang.Get("AutoGardensWork-AutoPlant"));
 
         using (ImRaii.Disabled(TaskHelper?.IsBusy ?? true))
         {
@@ -92,68 +98,22 @@ internal unsafe class AutoGardensWork : ModuleBase
         ImGui.Spacing();
 
         ImGui.SetNextItemWidth(300f * GlobalUIScale);
-        if (ImGuiOm.SingleSelectCombo
-            (
-                "SeedSelectCombo",
-                Sheets.Seeds,
-                ref config.SeedSelected,
-                ref searchSeed,
-                x => $"{x.Name.ToString()} ({x.RowId})",
-                [new(LuminaWrapper.GetAddonText(6412), ImGuiTableColumnFlags.WidthStretch, 0)],
-                [
-                    x => () =>
-                    {
-                        var icon = ImageHelper.GetGameIcon(x.Icon);
-                        if (ImGuiOm.SelectableImageWithText
-                            (
-                                icon.Handle,
-                                new(ImGui.GetTextLineHeightWithSpacing()),
-                                x.Name.ToString(),
-                                x.RowId == config.SeedSelected,
-                                ImGuiSelectableFlags.DontClosePopups | ImGuiSelectableFlags.SpanAllColumns
-                            ))
-                            config.SeedSelected = x.RowId;
-                    }
-                ],
-                [x => x.Name.ToString(), x => x.RowId.ToString()],
-                true
-            ))
+
+        if (seedSelectCombo.DrawRadio())
+        {
+            config.SeedSelected = seedSelectCombo.SelectedID;
             config.Save(this);
+        }
 
         ImGui.SameLine();
         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(6412));
 
         ImGui.SetNextItemWidth(300f * GlobalUIScale);
 
-        using (ImRaii.PushId("SoilSelectCombo"))
+        if (soilSelectCombo.DrawRadio())
         {
-            if (ImGuiOm.SingleSelectCombo
-                (
-                    "SoilSelectCombo",
-                    Sheets.Soils,
-                    ref config.SoilSelected,
-                    ref searchSoil,
-                    x => $"{x.Name.ToString()} ({x.RowId})",
-                    [new(LuminaWrapper.GetAddonText(6411), ImGuiTableColumnFlags.WidthStretch, 0)],
-                    [
-                        x => () =>
-                        {
-                            var icon = ImageHelper.GetGameIcon(x.Icon);
-                            if (ImGuiOm.SelectableImageWithText
-                                (
-                                    icon.Handle,
-                                    new(ImGui.GetTextLineHeightWithSpacing()),
-                                    x.Name.ToString(),
-                                    x.RowId == config.SeedSelected,
-                                    ImGuiSelectableFlags.DontClosePopups
-                                ))
-                                config.SoilSelected = x.RowId;
-                        }
-                    ],
-                    [x => x.Name.ToString(), x => x.RowId.ToString()],
-                    true
-                ))
-                config.Save(this);
+            config.SoilSelected = soilSelectCombo.SelectedID;
+            config.Save(this);
         }
 
         ImGui.SameLine();
@@ -162,11 +122,8 @@ internal unsafe class AutoGardensWork : ModuleBase
 
     private void DrawAutoGather()
     {
-        using var id = ImRaii.PushId("AutoGather");
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoGardensWork-AutoGather")}");
-
-        using var indent = ImRaii.PushIndent();
+        using var id      = ImRaii.PushId("AutoGather");
+        using var heading = ImRaii.Heading1(Lang.Get("AutoGardensWork-AutoGather"));
 
         using (ImRaii.Disabled(TaskHelper?.IsBusy ?? true))
         {
@@ -181,11 +138,8 @@ internal unsafe class AutoGardensWork : ModuleBase
 
     private void DrawAutoFertilize()
     {
-        using var id = ImRaii.PushId("AutoFertilize");
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoGardensWork-AutoFertilize")}");
-
-        using var indent = ImRaii.PushIndent();
+        using var id      = ImRaii.PushId("AutoFertilize");
+        using var heading = ImRaii.Heading1(Lang.Get("AutoGardensWork-AutoFertilize"));
 
         using (ImRaii.Disabled(TaskHelper?.IsBusy ?? true))
         {
@@ -200,32 +154,12 @@ internal unsafe class AutoGardensWork : ModuleBase
         ImGui.Spacing();
 
         ImGui.SetNextItemWidth(300f * GlobalUIScale);
-        if (ImGuiOm.SingleSelectCombo
-            (
-                "FertilizersSelectCombo",
-                Sheets.Fertilizers,
-                ref config.FertilizerSelected,
-                ref searchFertilize,
-                x => $"{x.Name.ToString()} ({x.RowId})",
-                [new(LuminaWrapper.GetAddonText(6417), ImGuiTableColumnFlags.WidthStretch, 0)],
-                [
-                    x => () =>
-                    {
-                        if (ImGuiOm.SelectableImageWithText
-                            (
-                                ImageHelper.GetGameIcon(x.Icon).Handle,
-                                new(ImGui.GetTextLineHeightWithSpacing()),
-                                x.Name.ToString(),
-                                x.RowId == config.SeedSelected,
-                                ImGuiSelectableFlags.DontClosePopups | ImGuiSelectableFlags.SpanAllColumns
-                            ))
-                            config.FertilizerSelected = x.RowId;
-                    }
-                ],
-                [x => x.Name.ToString(), x => x.RowId.ToString()],
-                true
-            ))
+
+        if (fertilizerSelectCombo.DrawRadio())
+        {
+            config.FertilizerSelected = fertilizerSelectCombo.SelectedID;
             config.Save(this);
+        }
 
         ImGui.SameLine();
         ImGui.TextUnformatted(LuminaWrapper.GetAddonText(6417));
@@ -233,11 +167,8 @@ internal unsafe class AutoGardensWork : ModuleBase
 
     private void DrawAutoTend()
     {
-        using var id = ImRaii.PushId("AutoTend");
-
-        ImGui.TextColored(KnownColor.LightSkyBlue.ToVector4(), $"{Lang.Get("AutoGardensWork-AutoTend")}");
-
-        using var indent = ImRaii.PushIndent();
+        using var id      = ImRaii.PushId("AutoTend");
+        using var heading = ImRaii.Heading1(Lang.Get("AutoGardensWork-AutoTend"));
 
         using (ImRaii.Disabled(TaskHelper?.IsBusy ?? true))
         {
@@ -310,7 +241,7 @@ internal unsafe class AutoGardensWork : ModuleBase
                 ToggleOverlayConfig(false);
                 break;
 
-            case { ObjectKind: Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj, DataID: 2003757 }:
+            case { ObjectKind: DObjectKind.EventObj, DataID: 2003757 }:
                 ToggleOverlayConfig(true);
                 break;
 
@@ -330,7 +261,8 @@ internal unsafe class AutoGardensWork : ModuleBase
         Action extraAction = null
     )
     {
-        if (!IsEnvironmentValid(out var objectIDs)) return;
+        if (!IsEnvironmentValid(out var objectIDs))
+            return;
 
         TaskHelper.Enqueue(() => TargetManager.Target = null, "移除当前目标");
 
@@ -378,14 +310,17 @@ internal unsafe class AutoGardensWork : ModuleBase
         if (IObjectTable.Instance().LocalPlayer == null) return false;
 
         var manager = HousingManager.Instance();
-        if (manager == null) return false;
+        if (manager == null)
+            return false;
 
         // 不在房区里
         var outdoorZone = manager->OutdoorTerritory;
-        if (outdoorZone == null) return false;
+        if (outdoorZone == null)
+            return false;
 
         var houseID = (ulong)manager->GetCurrentHouseId();
-        if (houseID == 0) return false;
+        if (houseID == 0)
+            return false;
 
         // 在自己有权限的房子院子里
         // 具体怎么个有权限法不想测了
@@ -424,31 +359,40 @@ internal unsafe class AutoGardensWork : ModuleBase
         objectIDs = [];
 
         var outdoorZone = HousingManager.Instance()->OutdoorTerritory;
-        if (outdoorZone == null) return false;
+        if (outdoorZone == null)
+            return false;
 
         // 找一下有没有园圃
         List<(ulong GameObjectID, Vector3 Position)> gardenCenters = [];
 
         foreach (var housingObj in outdoorZone->FurnitureManager.ObjectManager.ObjectArray.Objects)
         {
-            if (housingObj == null || housingObj.Value == null) continue;
-            if (housingObj.Value->ObjectKind                              != ObjectKind.HousingEventObject) continue;
-            if (housingObj.Value->BaseId                                  != 131128) continue;
-            if (LocalPlayerState.DistanceTo3D(housingObj.Value->Position) > 10) continue;
+            if (housingObj == null || housingObj.Value == null)
+                continue;
+            if (housingObj.Value->ObjectKind != ObjectKind.HousingEventObject)
+                continue;
+            if (housingObj.Value->BaseId != 131128)
+                continue;
+            if (LocalPlayerState.DistanceTo3D(housingObj.Value->Position) > 10)
+                continue;
 
-            gardenCenters.Add(new(housingObj.Value->GetGameObjectId(), housingObj.Value->Position));
+            gardenCenters.Add((housingObj.Value->GetGameObjectId(), housingObj.Value->Position));
         }
 
         if (gardenCenters.Count == 0) return false;
 
         // 园圃家具周围绕一圈的那个实际可交互的坑位
-        objectIDs = IObjectTable.Instance()
-                                .Where
-                                (x => x is { ObjectKind: Dalamud.Game.ClientState.Objects.Enums.ObjectKind.EventObj, DataID: 2003757 } &&
-                                      gardenCenters.Any(g => Vector3.DistanceSquared(x.Position, g.Position) <= 25)
-                                )
-                                .Select(x => x.GameObjectID)
-                                .ToList();
+        objectIDs =
+        [
+            .. IObjectTable.Instance()
+                           .SearchObjects
+                           (
+                               x => x is { ObjectKind: DObjectKind.EventObj, DataID: 2003757 } &&
+                                    gardenCenters.Any(g => Vector3.DistanceSquared(x.Position, g.Position) <= 25),
+                               IObjectTable.EventRange
+                           )
+                           .Select(x => x.GameObjectID)
+        ];
         return objectIDs.Count > 0;
     }
 
@@ -464,8 +408,10 @@ internal unsafe class AutoGardensWork : ModuleBase
 
     private bool ClickFertilizer()
     {
-        if (SelectString != null) return false;
-        if (!ICondition.Instance()[ConditionFlag.OccupiedInQuestEvent]) return true;
+        if (SelectString != null)
+            return false;
+        if (!ICondition.Instance()[ConditionFlag.OccupiedInQuestEvent])
+            return true;
 
         if (config.FertilizerSelected == 0 ||
             !Inventories.Player.TryGetFirstItem(x => x.ItemId == config.FertilizerSelected, out var fertilizerItem))
@@ -474,8 +420,7 @@ internal unsafe class AutoGardensWork : ModuleBase
             return true;
         }
 
-        AgentInventoryContext.Instance()->
-            OpenForItemSlot
+        AgentInventoryContext.Instance()->OpenForItemSlot
         (
             fertilizerItem->Container,
             fertilizerItem->Slot,
