@@ -34,6 +34,10 @@ internal partial class UnifiedGlamourManager
         public bool EnableLivePreview { get; set; }
         public bool IsPreviewPending  { get; set; }
 
+        public uint                       ContextMenuItemID  { get; set; }
+        public bool                       OpenItemSearchMenu { get; set; }
+        public Dictionary<string, string> ItemSearchOptions  { get; set; } = [];
+
         public List<(Stain Stain, string Name)>           Stains    { get; } = [];
         public List<PresetItemCandidate>                  Items     { get; } = [];
         public Dictionary<int, List<PresetItemCandidate>> SlotItems { get; } = [];
@@ -57,12 +61,14 @@ internal partial class UnifiedGlamourManager
 
         public void End()
         {
-            IsPreviewPending = false;
-            IsOpen           = false;
-            Draft            = null;
-            baseline         = null;
-            OriginalPreset   = null;
-            FocusTitle       = false;
+            IsPreviewPending   = false;
+            IsOpen             = false;
+            Draft              = null;
+            baseline           = null;
+            OriginalPreset     = null;
+            FocusTitle         = false;
+            OpenItemSearchMenu = false;
+            ItemSearchOptions  = [];
         }
 
         public void SelectSlot
