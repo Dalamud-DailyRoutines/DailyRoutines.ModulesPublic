@@ -174,7 +174,7 @@ internal unsafe class AutoPlayerCommend : ModuleBase
         var playersToCommend = partyMembers
                                .Where
                                (x => !config.AutoIgnoreBlacklistPlayers ||
-                                     InfoProxyBlacklist.Instance()->GetBlockResultType(x.Key.ContentID, 0) == InfoProxyBlacklist.BlockResultType.NotBlocked
+                                     InfoProxyBlacklist.Instance()->GetBlockResultType(0, x.Key.ContentID) == InfoProxyBlacklist.BlockResultType.NotBlocked
                                )
                                // 优先已指定、职业相同或职能相同
                                .OrderByDescending
