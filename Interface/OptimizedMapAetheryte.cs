@@ -57,6 +57,10 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
 
     private bool isHoveringAetheryte;
 
+    private readonly Dictionary<uint, uint> enabledMapMarkers = [];
+
+    private nint enabledMapMarkerMemory;
+
     protected override void Init()
     {
         config = LoadConfig<Config>() ?? new();
@@ -97,12 +101,21 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreHide,          "AreaMap", OnAreaMap);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreClose,         "AreaMap", OnAreaMap);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,      "AreaMap", OnAreaMap);
+
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRequestedUpdate,  "AreaMap", OnAreaMapMarkerUpdate);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PostRequestedUpdate, "AreaMap", OnAreaMapMarkerUpdate);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreRefresh,          "AreaMap", OnAreaMapMarkerUpdate);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreHide,             "AreaMap", OnAreaMapMarkerUpdate);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreClose,            "AreaMap", OnAreaMapMarkerUpdate);
+        IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,         "AreaMap", OnAreaMapMarkerUpdate);
     }
 
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAreaMap);
+        IAddonLifecycle.Instance().UnregisterListener(OnAreaMapMarkerUpdate);
         ResetAetheryteCursor();
+        RestoreMapMarkers((AddonAreaMap*)AreaMap);
         UpdateExtraMapMarkers(AgentMap.Instance(), false);
 
         teleportConfirmation?.Dispose();
@@ -131,7 +144,11 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
     private void OnAreaMap(AddonEvent type, AddonArgs args)
     {
         if (ShouldSkip())
+        {
+            ResetAetheryteCursor();
+            RestoreMapMarkers((AddonAreaMap*)args.Addon.Address);
             return;
+        }
 
         if (args is not AddonReceiveEventArgs receiveEventArgs                    ||
             (AtkEventType)receiveEventArgs.AtkEventType != AtkEventType.MouseMove ||
@@ -196,6 +213,64 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
 
         cursor->IsTypeLocked = true;
         isHoveringAetheryte  = true;
+    }
+
+    private void OnAreaMapMarkerUpdate(AddonEvent type, AddonArgs args)
+    {
+        var addon = (AddonAreaMap*)args.Addon.Address;
+
+        if (type != AddonEvent.PostRequestedUpdate)
+        {
+            RestoreMapMarkers(addon);
+            return;
+        }
+
+        if (ShouldSkip() ||
+            addon == null ||
+            !((AtkUnitBase*)addon)->IsAddonAndNodesReady())
+            return;
+
+        var agent = AgentMap.Instance();
+        if (agent == null)
+            return;
+
+        enabledMapMarkerMemory = (nint)addon->AreaMap.MarkerMemory;
+        if (enabledMapMarkerMemory == 0)
+            return;
+
+        for (uint markerIndex = 0; markerIndex < addon->AreaMap.MarkerMemorySize; markerIndex++)
+        {
+            var marker = (AddonAreaMap.MapMarker*)addon->AreaMap.GetMarker(markerIndex);
+            if (marker->InteractionFlags != 0 || marker->TooltipContext >> 24 != 2)
+                continue;
+
+            var index = (int)(marker->TooltipContext & 0xFFFFFF);
+            if (index >= agent->MapMarkerCount)
+                continue;
+
+            var mapMarker = agent->MapMarkers[index];
+            if (mapMarker.DataType != 4 || FindRecord(mapMarker) is not { } record || !record.IsUnlocked())
+                continue;
+
+            enabledMapMarkers[markerIndex] = marker->TooltipContext;
+            marker->InteractionFlags      = 2;
+        }
+    }
+
+    private void RestoreMapMarkers(AddonAreaMap* addon)
+    {
+        if (addon != null && enabledMapMarkerMemory == (nint)addon->AreaMap.MarkerMemory)
+        {
+            foreach (var (index, context) in enabledMapMarkers)
+            {
+                var marker = (AddonAreaMap.MapMarker*)addon->AreaMap.GetMarker(index);
+                if (marker != null && marker->TooltipContext == context && marker->InteractionFlags == 2)
+                    marker->InteractionFlags = 0;
+            }
+        }
+
+        enabledMapMarkers.Clear();
+        enabledMapMarkerMemory = 0;
     }
 
     private void ResetAetheryteCursor()
