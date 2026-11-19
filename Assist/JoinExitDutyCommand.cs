@@ -1,4 +1,3 @@
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Command;
@@ -6,10 +5,8 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 using Lumina.Excel.Sheets;
-using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -80,19 +77,12 @@ internal unsafe class JoinExitDutyCommand : ModuleBase
         bool isExplorerMode
     )
     {
+        var option = ContentsFinderOption.Default;
+        option.ExplorerMode      = isExplorerMode;
+        option.UnrestrictedParty = true;
+        
         TaskHelper.Enqueue(CheckAndSwitchJob);
-        TaskHelper.Enqueue
-        (() => ContentsFinderHelper.RequestDutyNormal
-         (
-             targetContent,
-             new()
-             {
-                 Config817to820    = true,
-                 UnrestrictedParty = true,
-                 ExplorerMode      = isExplorerMode
-             }
-         )
-        );
+        TaskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(targetContent, option));
         TaskHelper.Enqueue(() => ExitDuty(targetContent));
     }
 

@@ -259,7 +259,7 @@ internal unsafe class AutoEliminateFishAwareness : ModuleBase
                     );
                     TaskHelper.Enqueue
                     (
-                        () => ContentsFinderHelper.RequestDutyNormal(TARGET_CONTENT, ContentsFinderHelper.DefaultOption),
+                        () => ContentsFinderHelper.RequestDutyNormal(TARGET_CONTENT, ContentsFinderOption.Default),
                         "申请目标副本"
                     );
                     TaskHelper.Enqueue

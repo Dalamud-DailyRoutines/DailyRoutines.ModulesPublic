@@ -200,7 +200,7 @@ internal unsafe class InstantLogout : ModuleBase
         TaskHelper taskHelper
     )
     {
-        taskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(167, ContentsFinderHelper.DefaultOption));
+        taskHelper.Enqueue(() => ContentsFinderHelper.RequestDutyNormal(167, ContentsFinderOption.Default));
 
         // 避免那边修改不到
         taskHelper.DelayNext(500);
