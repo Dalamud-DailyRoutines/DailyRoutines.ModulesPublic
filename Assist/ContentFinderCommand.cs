@@ -6,6 +6,7 @@ using DailyRoutines.Extensions;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.ModulesPublic;

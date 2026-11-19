@@ -13,6 +13,7 @@ using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Info.Game.Enums;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
+using OmenTools.Interop.Game.Models;
 using OmenTools.OmenService;
 using OmenTools.Threading;
 
