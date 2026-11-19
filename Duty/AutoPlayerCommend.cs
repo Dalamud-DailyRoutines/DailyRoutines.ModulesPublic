@@ -195,7 +195,7 @@ internal unsafe class AutoPlayerCommend : ModuleBase
 
         return GetPlayerRole(selfJob) switch
         {
-            // 坦克：同职能 > 治疗 > 近战 > 远程物理 > 远程魔法
+            // 防护：同职能 > 治疗 > 近战 > 远程物理 > 远程魔法
             PlayerRole.Tank => FindRole
             (
                 candidates,
@@ -207,19 +207,19 @@ internal unsafe class AutoPlayerCommend : ModuleBase
                 PlayerRole.MagicalRanged
             ),
 
-            // 治疗：同职能 > 坦克 > 近战 > 远程物理 > 远程魔法
+            // 治疗：同职能 > 防护 > 远程魔法 > 近战 > 远程物理
             PlayerRole.Healer => FindRole
             (
                 candidates,
                 jobCounts,
                 PlayerRole.Healer,
                 PlayerRole.Tank,
-                PlayerRole.Melee,
+                PlayerRole.MagicalRanged,
                 PlayerRole.PhysicalRanged,
-                PlayerRole.MagicalRanged
+                PlayerRole.Melee
             ),
 
-            // 近战：同职能 > 远程物理 > 远程魔法 > 治疗 > 坦克
+            // 近战：同职能 > 远程物理 > 远程魔法 > 防护 > 治疗
             PlayerRole.Melee => FindRole
             (
                 candidates,
@@ -227,11 +227,11 @@ internal unsafe class AutoPlayerCommend : ModuleBase
                 PlayerRole.Melee,
                 PlayerRole.PhysicalRanged,
                 PlayerRole.MagicalRanged,
-                PlayerRole.Healer,
-                PlayerRole.Tank
+                PlayerRole.Tank,
+                PlayerRole.Healer
             ),
 
-            // 远程物理：同职能 > 远程魔法 > 近战 > 治疗 > 坦克
+            // 远程物理：同职能 > 远程魔法 > 近战 > 治疗 > 防护
             PlayerRole.PhysicalRanged => FindRole
             (
                 candidates,
@@ -243,7 +243,7 @@ internal unsafe class AutoPlayerCommend : ModuleBase
                 PlayerRole.Tank
             ),
 
-            // 远程魔法：同职能 > 远程物理 > 近战 > 治疗 > 坦克
+            // 远程魔法：同职能 > 远程物理 > 近战 > 治疗 > 防护
             PlayerRole.MagicalRanged => FindRole
             (
                 candidates,
