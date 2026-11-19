@@ -1,13 +1,11 @@
 using System.Collections.Frozen;
 using System.Numerics;
-using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Lumina.Excel.Sheets;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using ContentsFinder = FFXIVClientStructs.FFXIV.Client.Game.UI.ContentsFinder;
 
 namespace DailyRoutines.ModulesPublic;
@@ -95,14 +93,16 @@ internal class ContentFinderCommand : ModuleBase
         if (!DutyTypes.TryGetValue(arguments[0], out var dutyType))
             return;
 
-        if (!TryParseContent(arguments[1], dutyType.dutyType, out var contentIds))
+        if (!TryParseContent(arguments[1], dutyType.dutyType, out var contentIDs))
             return;
 
-        var options = new ContentsFinderOption { Config817to820 = true };
-        if (dutyType.dutyType == DutyType.Normal && arguments.Length == 3 && !TryParseContentSettings(arguments[2], ref options))
+        var options = ContentsFinderOption.Default;
+        if (dutyType.dutyType == DutyType.Normal &&
+            arguments.Length  == 3               &&
+            !TryParseContentSettings(arguments[2], ref options))
             return;
 
-        ExecuteDutyRequest(dutyType.dutyType, contentIds, options);
+        ExecuteDutyRequest(dutyType.dutyType, contentIDs, options);
     }
 
     private static void ExecuteDutyRequest
