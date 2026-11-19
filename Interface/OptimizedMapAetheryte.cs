@@ -10,7 +10,6 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using FFXIVClientStructs.Interop;
 using Lumina.Excel.Sheets;
 using Lumina.Text.ReadOnly;
 using OmenTools.Info.Game.AetheryteRecord;
@@ -45,6 +44,8 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
 
     private Hook<AgentMap.Delegates.BuildMapMarkers> BuildMapMarkersHook;
 
+    private Hook<AgentMap.Delegates.BuildMapMarkerInteractionData> BuildMapMarkerInteractionDataHook;
+
     private Hook<AgentReceiveEventDelegate> AgentMapReceiveEventHook;
 
     private Hook<AgentMap.Delegates.CreateTooltip> AgentMapCreateTooltipHook;
@@ -76,6 +77,14 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         );
         BuildMapMarkersHook.Enable();
 
+        BuildMapMarkerInteractionDataHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(AgentMap.MemberFunctionPointers),
+            nameof(AgentMap.BuildMapMarkerInteractionData),
+            (AgentMap.Delegates.BuildMapMarkerInteractionData)BuildMapMarkerInteractionDataDetour
+        );
+        BuildMapMarkerInteractionDataHook.Enable();
+
         AgentMapReceiveEventHook = AgentMap.Instance()->VirtualTable->HookVFuncFromName
         (
             "ReceiveEvent",
@@ -97,13 +106,18 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreHide,          "AreaMap", OnAreaMap);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreClose,         "AreaMap", OnAreaMap);
         IAddonLifecycle.Instance().RegisterListener(AddonEvent.PreFinalize,      "AreaMap", OnAreaMap);
+
+        AgentMap.Instance()->UpdateFlags |= MAP_MARKER_REFRESH_FLAGS;
     }
 
     protected override void Uninit()
     {
         IAddonLifecycle.Instance().UnregisterListener(OnAreaMap);
         ResetAetheryteCursor();
-        UpdateExtraMapMarkers(AgentMap.Instance(), false);
+
+        var agent = AgentMap.Instance();
+        UpdateExtraMapMarkers(agent, false);
+        agent->UpdateFlags |= MAP_MARKER_REFRESH_FLAGS;
 
         teleportConfirmation?.Dispose();
         teleportConfirmation = null;
@@ -116,7 +130,11 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
                 Lang.Get("OptimizedMapAetheryte-NotDisplayInParty"),
                 ref config.NoDisplayWhenInParty
             ))
+        {
             config.Save(this);
+            AgentMap.Instance()->UpdateFlags |= MAP_MARKER_REFRESH_FLAGS;
+        }
+
         ImGuiOm.TextDisabledWrapped(Lang.Get("OptimizedMapAetheryte-NotDisplayInParty-Help"));
 
         if (ImGui.Checkbox
@@ -130,70 +148,35 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
 
     private void OnAreaMap(AddonEvent type, AddonArgs args)
     {
-        if (ShouldSkip())
-            return;
+        ResetAetheryteCursor();
 
-        if (args is not AddonReceiveEventArgs receiveEventArgs                    ||
+        if (type != AddonEvent.PostReceiveEvent                                   ||
+            ShouldSkip()                                                          ||
+            args is not AddonReceiveEventArgs receiveEventArgs                    ||
             (AtkEventType)receiveEventArgs.AtkEventType != AtkEventType.MouseMove ||
             (ushort)receiveEventArgs.EventParam         != 20)
-        {
-            ResetAetheryteCursor();
-            return;
-        }
-
-        if (type != AddonEvent.PostReceiveEvent)
             return;
 
         var addon = (AddonAreaMap*)args.Addon.Address;
         var stage = AtkStage.Instance();
-
-        if (!((AtkUnitBase*)addon)->IsAddonAndNodesReady() ||
-            addon->NumBlockingAddons != 0                  ||
-            addon->IsUsingController                       ||
-            addon->IsDraggingMap                           ||
-            addon->IsResizingMap                           ||
+        if (!addon->AtkUnitBase.IsAddonAndNodesReady() ||
+            addon->NumBlockingAddons != 0              ||
+            addon->IsUsingController                   ||
+            addon->IsDraggingMap                       ||
+            addon->IsResizingMap                       ||
             stage->AtkCollisionManager->IntersectingAddon != (AtkUnitBase*)addon)
-        {
-            ResetAetheryteCursor();
             return;
-        }
 
         var marker = (AddonAreaMap.MapMarker*)addon->AreaMap.GetMarker((uint)addon->HoveredMarkerIndex);
-
-        if (marker                       == null ||
-            marker->InteractionFlags     == 0    ||
-            marker->TooltipContext >> 24 != 2)
-        {
-            ResetAetheryteCursor();
-            return;
-        }
-
-        var agent = AgentMap.Instance();
-        var index = (int)(marker->TooltipContext & 0xFFFFFF);
-
-        if (index >= agent->MapMarkerCount)
-        {
-            ResetAetheryteCursor();
-            return;
-        }
-
-        var record = FindRecord(agent->MapMarkers[index]);
-
-        if (record == null ||
+        if (marker                   == null                                          ||
+            marker->InteractionFlags == 0                                             ||
+            FindRecord(AgentMap.Instance(), marker->TooltipContext) is not { } record ||
             !record.IsUnlocked())
-        {
-            ResetAetheryteCursor();
             return;
-        }
 
         var cursor = (AtkCursor*)&stage->AtkCursor;
-
-        if (cursor->Type != CursorType.Clickable)
-        {
-            cursor->IsTypeLocked = false;
-            cursor->SetCursorType(CursorType.Clickable, true);
-        }
-
+        cursor->IsTypeLocked = false;
+        cursor->SetCursorType(CursorType.Clickable, true);
         cursor->IsTypeLocked = true;
         isHoveringAetheryte  = true;
     }
@@ -220,9 +203,10 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         bool             onlyAetherytes
     )
     {
-        UpdateExtraMapMarkers(agent, !ShouldSkip());
+        var shouldSkip = ShouldSkip();
+        UpdateExtraMapMarkers(agent, !shouldSkip);
 
-        if (ShouldSkip())
+        if (shouldSkip)
             return BuildMapMarkersHook.Original(agent, array, omitAetherytes, onlyAetherytes);
 
         Span<ushort> markerTypes = stackalloc ushort[agent->MapMarkerCount];
@@ -244,6 +228,30 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         {
             for (var index = 0; index < markerTypes.Length; index++)
                 agent->MapMarkers[index].DataType = markerTypes[index];
+        }
+    }
+
+    private void BuildMapMarkerInteractionDataDetour(AgentMap* agent, NumberArrayData* numbers, ExtendArrayData* markers)
+    {
+        BuildMapMarkerInteractionDataHook.Original(agent, numbers, markers);
+
+        if (ShouldSkip())
+            return;
+
+        for (var markerIndex = 0; markerIndex < agent->RenderedMapMarkerCount; markerIndex++)
+        {
+            var interactionIndex = MAP_MARKER_INTERACTION_OFFSET + (markerIndex * MAP_MARKER_INTERACTION_STRIDE);
+            var interactionFlags = numbers->IntArray[interactionIndex];
+            if ((interactionFlags & MAP_MARKER_INTERACTION_MASK) != 0)
+                continue;
+
+            var marker = (MapMarkerBase*)markers->DataArray[markerIndex];
+            if (marker == null                                              ||
+                FindRecord(agent, marker->TooltipContext) is not { } record ||
+                !record.IsUnlocked())
+                continue;
+
+            numbers->SetValue(interactionIndex, interactionFlags | MAP_MARKER_TELEPORT_INTERACTION);
         }
     }
 
@@ -309,46 +317,25 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         ulong           eventKind
     )
     {
-        if (!ShouldSkip()             &&
-            eventKind            == 0 &&
-            valueCount           >= 2 &&
-            values[0].GetInt()   == 7 &&
-            values[1].UInt >> 24 == 2)
+        if (!ShouldSkip()                                              &&
+            eventKind          == 0                                    &&
+            valueCount         >= 2                                    &&
+            values[0].GetInt() == 7                                    &&
+            FindRecord((AgentMap*)agent, values[1].UInt) is { } record &&
+            AreaMap->IsAddonAndNodesReady()                            &&
+            AreaMap->NumBlockingAddons == 0)
         {
-            var mapAgent = (AgentMap*)agent;
-            var index    = (int)(values[1].UInt & 0xFFFFFF);
-
-            if (index < mapAgent->MapMarkerCount)
+            if (config.SkipConfirmation)
+                Teleport(record);
+            else
+                OpenTeleportConfirmation(record, AreaMap);
+            
+            *returnValues = new AtkValue
             {
-                var marker = mapAgent->MapMarkers[index];
-                var record = FindRecord(marker);
-
-                if (record != null)
-                {
-                    if (AreaMap->IsAddonAndNodesReady() &&
-                        AreaMap->NumBlockingAddons == 0)
-                    {
-                        if (!config.SkipConfirmation)
-                            OpenTeleportConfirmation(record, AreaMap);
-                        else
-                        {
-                            if (record.TeleportTo())
-                            {
-                                AgentMap.Instance()->Hide();
-                                IAddonEventManager.Instance().ResetCursor();
-                            }
-                        }
-
-                        using var rented = new RentedAtkValues(1);
-                        rented[0] = new AtkValue
-                        {
-                            Type = AtkValueType.Bool,
-                            Bool = false
-                        };
-                        return rented;
-                    }
-                }
-            }
+                Type = AtkValueType.Bool,
+                Bool = false
+            };
+            return returnValues;
         }
 
         return AgentMapReceiveEventHook.Original(agent, returnValues, values, valueCount, eventKind);
@@ -356,24 +343,15 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
 
     private bool AgentMapCreateTooltipDetour(AgentMap* agent, Utf8String* tooltipString, uint tooltipContext)
     {
-        var index = (int)(tooltipContext & 0xFFFFFF);
-        var isExtraMarker = tooltipContext >> 24              == 2                    &&
-                            index                             < agent->MapMarkerCount &&
-                            agent->MapMarkers[index].DataType == EXTRA_MARKER_TYPE;
-        var result = isExtraMarker || AgentMapCreateTooltipHook.Original(agent, tooltipString, tooltipContext);
+        var record        = FindRecord(agent, tooltipContext);
+        var isExtraMarker = record is { Group: EXTRA_RECORD_GROUP };
+        var result        = isExtraMarker || AgentMapCreateTooltipHook.Original(agent, tooltipString, tooltipContext);
 
         if (ShouldSkip())
             return !isExtraMarker && result;
 
-        if (!result ||
-            tooltipContext >> 24 != 2)
-            return result;
-
-        if (index >= agent->MapMarkerCount)
-            return result;
-
-        var record = FindRecord(agent->MapMarkers[index]);
-        if (record == null ||
+        if (!result        ||
+            record == null ||
             !record.IsUnlocked())
             return result;
 
@@ -381,23 +359,41 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
         return result;
     }
 
-    private static AetheryteRecord? FindRecord(MapMarkerInfo marker) => marker.DataType switch
+    private static AetheryteRecord? FindRecord(AgentMap* agent, uint tooltipContext)
     {
-        EXTRA_MARKER_TYPE => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
-        (x => x.Group  == EXTRA_RECORD_GROUP &&
-              x.ZoneID == marker.DataKey
-        ),
-        3 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
-        (x => x is { Group: < 252, IsHouse: false, IsAetheryte: true } &&
-              x.RowID == marker.DataKey
-        ),
-        4 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
-        (x => x is { Group: < 252, IsHouse: false, IsAetheryte: false } &&
-              LuminaGetter.TryGetRow<Aetheryte>(x.RowID, out var data)  &&
-              data.AethernetName.RowId == marker.DataKey
-        ),
-        _ => null
-    };
+        var index = (int)(tooltipContext & 0xFFFFFF);
+        if (tooltipContext >> 24 != 2 ||
+            index                >= agent->MapMarkerCount)
+            return null;
+
+        var marker = agent->MapMarkers[index];
+        return marker.DataType switch
+        {
+            EXTRA_MARKER_TYPE => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+            (x => x.Group  == EXTRA_RECORD_GROUP &&
+                  x.ZoneID == marker.DataKey
+            ),
+            3 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+            (x => x is { RowID: > 0, IsHouse: false, IsAetheryte: true } &&
+                  x.RowID == marker.DataKey
+            ),
+            4 => AetheryteRecordManager.Instance().AllRecords.FirstOrDefault
+            (x => x is { RowID: > 0, IsHouse: false, IsAetheryte: false }  &&
+                  LuminaGetter.TryGetRow<Aetheryte>(x.RowID, out var data) &&
+                  data.AethernetName.RowId == marker.DataKey
+            ),
+            _ => null
+        };
+    }
+
+    private static void Teleport(AetheryteRecord record)
+    {
+        if (!record.TeleportTo())
+            return;
+
+        AgentMap.Instance()->Hide();
+        IAddonEventManager.Instance().ResetCursor();
+    }
 
     private static uint GetTeleportCost(AetheryteRecord record)
     {
@@ -464,14 +460,8 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
                 {
                     teleportConfirmation = null;
 
-                    if (result != SelectYesnoAddonResult.Yes)
-                        return;
-
-                    if (record.TeleportTo())
-                    {
-                        AgentMap.Instance()->Hide();
-                        IAddonEventManager.Instance().ResetCursor();
-                    }
+                    if (result == SelectYesnoAddonResult.Yes)
+                        Teleport(record);
                 },
                 Position = new
                 (
@@ -497,11 +487,16 @@ internal unsafe class OptimizedMapAetheryte : ModuleBase
 
     #region 常量
 
-    private const ushort EXTRA_MARKER_TYPE       = ushort.MaxValue;
-    private const byte   EXTRA_RECORD_GROUP      = 252;
-    private const uint   AETHERNET_ICON_ID       = 60430;
-    private const uint   MAP_MARKER_CONTEXT      = 2U << 24;
-    private const ushort EXTRA_MARKER_ICON_FLAGS = 0x4002;
+    private const ushort EXTRA_MARKER_TYPE               = ushort.MaxValue;
+    private const byte   EXTRA_RECORD_GROUP              = 252;
+    private const uint   AETHERNET_ICON_ID               = 60430;
+    private const uint   MAP_MARKER_CONTEXT              = 2U << 24;
+    private const ushort EXTRA_MARKER_ICON_FLAGS         = 0x4002;
+    private const int    MAP_MARKER_INTERACTION_OFFSET   = 34;
+    private const int    MAP_MARKER_INTERACTION_STRIDE   = 3;
+    private const int    MAP_MARKER_INTERACTION_MASK     = 0xF;
+    private const int    MAP_MARKER_TELEPORT_INTERACTION = 2;
+    private const uint   MAP_MARKER_REFRESH_FLAGS        = 0x44;
 
     #endregion
 }
