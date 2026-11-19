@@ -12,7 +12,6 @@ using Lumina.Text.ReadOnly;
 using OmenTools.ImGuiOm.Widgets.Combos;
 using OmenTools.Interop.Game.Helpers;
 using OmenTools.Interop.Game.Lumina;
-using OmenTools.OmenService;
 using Control = FFXIVClientStructs.FFXIV.Client.Game.Control.Control;
 
 namespace DailyRoutines.ModulesPublic;
@@ -125,8 +124,10 @@ internal unsafe class AutoPlayerCommend : ModuleBase
 
     private bool EnqueueCommendation()
     {
-        if (!VoteMvp->IsAddonAndNodesReady()) return false;
-        if (!AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentsMvp)->IsAgentActive()) return false;
+        if (!VoteMvp->IsAddonAndNodesReady()) 
+            return false;
+        if (!AgentModule.Instance()->GetAgentByInternalId(AgentId.ContentsMvp)->IsAgentActive()) 
+            return false;
 
         if (assignedContentID == LocalPlayerState.ContentID)
             return true;
@@ -135,30 +136,45 @@ internal unsafe class AutoPlayerCommend : ModuleBase
         if (localPlayer == null) return false;
 
         var hudMembers = AgentHUD.Instance()->PartyMembers.ToArray();
-        Dictionary<(string Name, uint HomeWorld, uint ClassJob, uint ClassJobCategory, byte RoleRaw, PlayerRole Role, ulong ContentID), int> partyMembers = [];
+        Dictionary<(string Name, uint HomeWorld, uint ClassJob, uint ClassJobCategory, byte RoleRaw, PlayerRole Role, ulong ContentID, ulong AccountID), int>
+            partyMembers = [];
 
-        foreach (var member in IPartyList.Instance())
+        for (var i = 0; i < hudMembers.Length; i++)
         {
-            if (member.ContentId == LocalPlayerState.ContentID) continue;
+            var member = hudMembers[i];
+            if (member.ContentId == LocalPlayerState.ContentID)
+                continue;
 
-            var index = Math.Clamp(hudMembers.IndexOf(x => x.ContentId == member.ContentId) - 1, 0, 6);
+            var memberObject = member.Object;
+            if (memberObject == null)
+                continue;
 
-            var rawRole = member.ClassJob.Value.Role;
+            var classJobRef = memberObject->ClassJob.ToLuminaRowRef<ClassJob>();
+            if (!classJobRef.IsValid ||
+                classJobRef.RowId == 0)
+                continue;
+            
+            // 因为要排除自己。
+            var index = Math.Clamp(i - 1, 0, 6);
+
+            var rawRole = classJobRef.Value.Role;
             partyMembers
             [
                 (
                     member.Name.ToString(),
-                    member.World.RowId,
-                    member.ClassJob.RowId,
-                    member.ClassJob.Value.ClassJobCategory.RowId,
+                    memberObject->HomeWorld,
+                    classJobRef.RowId,
+                    classJobRef.Value.ClassJobCategory.RowId,
                     rawRole,
                     GetCharacterJobRole(rawRole),
-                    member.ContentId
+                    member.ContentId,
+                    memberObject->AccountId
                 )
             ] = index;
         }
 
-        if (partyMembers.Count == 0) return true;
+        if (partyMembers.Count == 0) 
+            return true;
 
         // 获取玩家自身职业和职能信息
         var selfRole     = GetCharacterJobRole(LocalPlayerState.ClassJobData.Role);
@@ -174,7 +190,8 @@ internal unsafe class AutoPlayerCommend : ModuleBase
         var playersToCommend = partyMembers
                                .Where
                                (x => !config.AutoIgnoreBlacklistPlayers ||
-                                     InfoProxyBlacklist.Instance()->GetBlockResultType(0, x.Key.ContentID) == InfoProxyBlacklist.BlockResultType.NotBlocked
+                                     InfoProxyBlacklist.Instance()->GetBlockResultType(x.Key.AccountID, x.Key.ContentID) == 
+                                     InfoProxyBlacklist.BlockResultType.NotBlocked
                                )
                                // 优先已指定、职业相同或职能相同
                                .OrderByDescending
@@ -259,8 +276,10 @@ internal unsafe class AutoPlayerCommend : ModuleBase
 
         foreach (var memberInfo in playersToCommend)
         {
-            if (!TryFindPlayerIndex(memberInfo.Name, memberInfo.ClassJob, out var playerIndex)) continue;
-            if (!LuminaGetter.TryGetRow<ClassJob>(memberInfo.ClassJob, out var job)) continue;
+            if (!TryFindPlayerIndex(memberInfo.Name, memberInfo.ClassJob, out var playerIndex))
+                continue;
+            if (!LuminaGetter.TryGetRow<ClassJob>(memberInfo.ClassJob, out var job))
+                continue;
 
             AgentId.ContentsMvp.SendEvent(0, 0, playerIndex);
 
