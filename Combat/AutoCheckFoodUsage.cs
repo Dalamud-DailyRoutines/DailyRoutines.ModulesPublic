@@ -271,7 +271,7 @@ internal class AutoCheckFoodUsage : ModuleBase
         using var combo = ImRaii.Combo
         (
             Lang.Get(label),
-            Lang.Get("AutoCheckFoodUsage-SelectedAmount", new Dictionary<string, object> { ["count"] = selectedConditions.Count }),
+            Lang.Get("AutoCheckFoodUsage-SelectedCount", new Dictionary<string, object> { ["count"] = selectedConditions.Count }),
             ImGuiComboFlags.HeightLarge
         );
         if (!combo)
