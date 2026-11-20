@@ -368,7 +368,7 @@ internal class AutoCheckFoodUsage : ModuleBase
         (
             Lang.GetSe
             (
-                "AutoCheckFoodUsage-NoticeMessage",
+                "AutoCheckFoodUsage-Notification",
                 new Dictionary<string, object>
                 {
                     ["item"] = ReadOnlySeString.CreateItemLink(actionID % HQ_ITEM_OFFSET, actionID >= HQ_ITEM_OFFSET)
