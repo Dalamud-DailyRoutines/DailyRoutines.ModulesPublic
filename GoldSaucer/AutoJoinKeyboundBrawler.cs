@@ -5,7 +5,7 @@ using DailyRoutines.Extensions;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Game.ClientState.Conditions;
-using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Addon;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.Game.Group;
 using Lumina.Excel.Sheets;

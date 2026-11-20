@@ -6,7 +6,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
 using Dalamud.Hooking;
-using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Addon;
 using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Component.GUI;

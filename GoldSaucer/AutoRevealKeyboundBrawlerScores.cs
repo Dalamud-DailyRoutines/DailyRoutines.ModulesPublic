@@ -3,7 +3,7 @@ using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using FFXIVClientStructs.Expansion.FFXIV.Client.UI;
+using FFXIVClientStructs.Expansion.FFXIV.Client.UI.Addon;
 
 namespace DailyRoutines.ModulesPublic;
 

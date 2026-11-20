@@ -39,7 +39,7 @@ using OmenTools.Interop.Game.Lumina;
 using OmenTools.Interop.Game.Models;
 using OmenTools.KamiToolKit.Nodes.CircleButton;
 using OmenTools.Utils.FuzzyMatcher;
-using RecipeSearchContextEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.RecipeSearchContext;
+using RecipeSearchContextEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.RecipeSearchContext;
 using AgentId = Dalamud.Game.Agent.AgentId;
 using AgentRecipeNoteEx = FFXIVClientStructs.Expansion.FFXIV.Client.UI.Agent.AgentRecipeNote;
 
