@@ -155,7 +155,7 @@ internal partial class AutoMarksFinder
                             }
                         );
                         NotifyHelper.Instance().Chat(message);
-                        NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinderTitle"));
+                        NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinder-AutoBroadcastStarting-TrayTitle"));
                         NotifyHelper.Toast(message);
                         departureNotified = true;
 
@@ -312,7 +312,7 @@ internal partial class AutoMarksFinder
                     Stop();
                     var completedMessage = Lang.Get("AutoMarksFinder-AutoBroadcastCompleted");
                     NotifyHelper.Instance().Chat(completedMessage);
-                    NotifyHelper.Instance().TrayInfo(completedMessage, Lang.Get("AutoMarksFinderTitle"));
+                    NotifyHelper.Instance().TrayInfo(completedMessage, Lang.Get("AutoMarksFinder-AutoBroadcastCompleted-TrayTitle"));
                     NotifyHelper.Toast(completedMessage);
                     break;
             }

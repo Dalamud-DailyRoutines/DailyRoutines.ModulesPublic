@@ -370,7 +370,7 @@ internal partial class AutoMarksFinder
 
             var message = Lang.Get("AutoMarksFinder-NavigationInterrupted");
             NotifyHelper.ToastError(message);
-            NotifyHelper.Instance().TrayError(message, Lang.Get("AutoMarksFinderTitle"));
+            NotifyHelper.Instance().TrayError(message, Lang.Get("AutoMarksFinder-NavigationInterrupted-TrayTitle"));
             NotifyHelper.Instance().ChatError(message);
         }
 

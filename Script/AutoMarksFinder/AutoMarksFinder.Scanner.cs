@@ -688,7 +688,7 @@ internal partial class AutoMarksFinder
                     }
                 );
                 NotifyHelper.Instance().Chat(message);
-                NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinderTitle"));
+                NotifyHelper.Instance().TrayInfo(message, Lang.Get("AutoMarksFinder-ScanCompleted-TrayTitle"));
                 NotifyHelper.Toast(message);
                 return;
             }
@@ -780,7 +780,7 @@ internal partial class AutoMarksFinder
         {
             var message = Lang.Get(key);
             NotifyHelper.ToastError(message);
-            NotifyHelper.Instance().TrayError(message, Lang.Get("AutoMarksFinderTitle"));
+            NotifyHelper.Instance().TrayError(message, Lang.Get("AutoMarksFinder-ScanError-TrayTitle"));
             NotifyHelper.Instance().ChatError(message);
 
             Dispose();
