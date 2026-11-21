@@ -2,16 +2,13 @@ using DailyRoutines.Common.Module.Abstractions;
 using DailyRoutines.Common.Module.Enums;
 using DailyRoutines.Common.Module.Models;
 using DailyRoutines.Extensions;
-using DailyRoutines.Manager;
 using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Hooking;
+using Dalamud.Utility;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using OmenTools.Info.Game.Enums;
-using OmenTools.Interop.Game;
-using OmenTools.Interop.Game.Models;
-using OmenTools.OmenService;
+using OmenTools.Info.Game.AetheryteRecord;
 
 namespace DailyRoutines.ModulesPublic;
 
@@ -28,90 +25,92 @@ internal unsafe class QueueCombatTeleport : ModuleBase
 
     public override ModuleBehaviour Behaviour { get; } = new()
     {
-        NeedAuth = true
+        AllDefaultEnabled = true
     };
 
-    private static readonly CompSig CanUseTeleportSig =
-        new("84 C0 0F 84 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0 0F 84 ?? ?? ?? ?? 48 89 5C 24");
+    private Hook<Conditions.Delegates.HasPermission> HasPermissionHook = null!;
+    private Hook<Telepo.Delegates.Teleport>          TeleportHook      = null!;
 
-    // test al, al → mov al, 1
-    private MemoryPatch canUseTeleportPatch = null!;
+    private Config config = null!;
 
-    private static readonly CompSig CanUseTeleportMapSig =
-        new("84 C0 0F 44 CA 8B C1 48 83 C4 ?? C3 CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC");
-
-    // test → or, cmovz → nop
-    private MemoryPatch canUseTeleportMapPatch = null!;
-
-    private Config? config;
-
-    private (uint ID, uint SubID)? queuedTeleport;
+    private TeleportRequest? queuedTeleport;
+    private uint?            cancelLinkID;
+    private int              queueVersion;
 
     protected override void Init()
     {
-        canUseTeleportPatch    =   new(CanUseTeleportSig.Get(), [0xB0, 0x01]);
-        canUseTeleportMapPatch =   new(CanUseTeleportMapSig.Get(), [0x08, 0xC0, 0x90, 0x90, 0x90]);
-        config                 =   Config.Load(this) ?? new();
-        TaskHelper             ??= new() { TimeoutMS = 60_000 };
+        config       = Config.Load(this) ?? new();
+        config.Delay = Math.Max(0, config.Delay);
 
-        canUseTeleportPatch.Enable();
-        canUseTeleportMapPatch.Enable();
+        TaskHelper ??= new()
+        {
+            TimeoutMS       = 0,
+            RetryIntervalMS = 250
+        };
 
-        UseActionManager.Instance().RegPreUseAction(OnPreUseAction);
+        HasPermissionHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(Conditions.MemberFunctionPointers),
+            nameof(Conditions.HasPermission),
+            (Conditions.Delegates.HasPermission)HasPermissionDetour
+        );
+        HasPermissionHook.Enable();
+
+        TeleportHook = IGameInteropProvider.Instance().HookFromMemberFunction
+        (
+            typeof(Telepo.MemberFunctionPointers),
+            nameof(Telepo.Teleport),
+            (Telepo.Delegates.Teleport)TeleportDetour
+        );
+        TeleportHook.Enable();
+
         ExecuteCommandManager.Instance().RegPre(OnPreUseCommand);
-        ICondition.Instance().ConditionChange += OnConditionChanged;
+        ICondition.Instance().ConditionChange    += OnConditionChanged;
+        IClientState.Instance().TerritoryChanged += OnTerritoryChanged;
+        GameState.Instance().Logout              += OnLogout;
     }
 
     protected override void Uninit()
     {
-        ICondition.Instance().ConditionChange -= OnConditionChanged;
+        GameState.Instance().Logout              -= OnLogout;
+        IClientState.Instance().TerritoryChanged -= OnTerritoryChanged;
+        ICondition.Instance().ConditionChange    -= OnConditionChanged;
         ExecuteCommandManager.Instance().Unreg(OnPreUseCommand);
-        UseActionManager.Instance().Unreg(OnPreUseAction);
 
-        queuedTeleport = null;
+        ClearQueuedTeleport();
     }
 
     protected override void ConfigUI()
     {
-        if (ImGui.Checkbox(Lang.Get("SendNotification"), ref config.SendNotification))
-            config.Save(this);
-
-        ImGui.SameLine();
-        if (ImGui.Checkbox(Lang.Get("SendChat"), ref config.SendChat))
-            config.Save(this);
-
-        ImGui.SetNextItemWidth(100f * GlobalUIScale);
-        if (ImGui.InputInt(Lang.Get("Delay"), ref config.Delay))
+        ImGui.SetNextItemWidth(200f * GlobalUIScale);
+        if (ImGui.InputInt(Lang.Get("QueueCombatTeleport-Delay"), ref config.Delay))
             config.Delay = Math.Max(0, config.Delay);
         if (ImGui.IsItemDeactivatedAfterEdit())
             config.Save(this);
+
+        ImGuiOm.TextDisabledWrapped(Lang.Get("QueueCombatTeleport-Delay-Help"));
+
+        if (ImGui.Checkbox(Lang.Get("QueueCombatTeleport-WaitForFateEnd"), ref config.WaitForFateEnd))
+            config.Save(this);
+        ImGuiOm.TextDisabledWrapped(Lang.Get("QueueCombatTeleport-WaitForFateEnd-Help"));
     }
 
-    // 直接导向传送界面
-    private static void OnPreUseAction
-    (
-        ref bool                        isPrevented,
-        ref ActionType                  actionType,
-        ref uint                        actionID,
-        ref ulong                       targetID,
-        ref uint                        extraParam,
-        ref ActionManager.UseActionMode queueState,
-        ref uint                        comboRouteID
-    )
+    private bool HasPermissionDetour(Conditions* conditions, uint permissionID, int excludedCondition1, int excludedCondition2)
     {
-        if (actionType != ActionType.GeneralAction || actionID != 7) return;
-        if (GameMain.Instance()->CurrentContentFinderConditionId != 0) return;
-        if (!ICondition.Instance()[ConditionFlag.InCombat]) return;
-        if (ModuleManager.Instance().IsModuleEnabled("BetterTeleport") ?? false) return;
+        if (permissionID == TELEPORT_PERMISSION_ID &&
+            GameState.IsLoggedIn                   &&
+            GameState.ContentFinderCondition == 0  &&
+            conditions->InCombat)
+        {
+            if (excludedCondition1 == 0)
+                excludedCondition1 = (int)ConditionFlag.InCombat;
+            else if (excludedCondition2 == 0)
+                excludedCondition2 = (int)ConditionFlag.InCombat;
+        }
 
-        var agent = AgentTeleport.Instance();
-        if (agent == null) return;
-
-        isPrevented = true;
-        agent->Show();
+        return HasPermissionHook.Original(conditions, permissionID, excludedCondition1, excludedCondition2);
     }
 
-    // 实际存储
     private void OnPreUseCommand
     (
         ref bool               isPrevented,
@@ -122,106 +121,274 @@ internal unsafe class QueueCombatTeleport : ModuleBase
         ref uint               param4
     )
     {
-        if (command != ExecuteCommandFlag.Teleport || isPrevented || !ICondition.Instance()[ConditionFlag.InCombat]) return;
-        isPrevented    = true;
-        queuedTeleport = new(param1, param3);
-        Notify(QueueTeleportNotifyType.Save);
+        if (isPrevented ||
+            command != ExecuteCommandFlag.Teleport)
+            return;
+
+        if (!ICondition.Instance()[ConditionFlag.InCombat])
+        {
+            ClearQueuedTeleport();
+            return;
+        }
+
+        if (!GameState.IsLoggedIn || GameState.ContentFinderCondition != 0 || ICondition.Instance().IsBetweenAreas)
+            return;
+
+        var aetheryteID = param1;
+        var subIndex    = param3;
+        var destination = AetheryteRecordManager.Instance().GameRecords.FirstOrDefault
+        (record => record.IsAetheryte             &&
+                   record.RowID    == aetheryteID &&
+                   record.SubIndex == subIndex
+        );
+        if (destination == null)
+            return;
+
+        isPrevented = true;
+        SaveTeleportRequest(destination, param2, param4);
     }
 
-    // 实际执行传送
-    private void OnConditionChanged
-    (
-        ConditionFlag flag,
-        bool          value
-    )
+    private bool TeleportDetour(Telepo* telepo, uint aetheryteID, byte subIndex)
     {
-        if (flag != ConditionFlag.InCombat || value || queuedTeleport == null) return;
-        var currentFate = FateManager.Instance()->CurrentFate;
-        if (currentFate != null && currentFate->Progress < 80) return;
+        if (!GameState.IsLoggedIn                          ||
+            GameState.ContentFinderCondition != 0          ||
+            !ICondition.Instance()[ConditionFlag.InCombat] ||
+            ICondition.Instance().IsBetweenAreas)
+            return TeleportHook.Original(telepo, aetheryteID, subIndex);
 
-        if (currentFate != null)
-            TaskHelper.Enqueue(() => FateManager.Instance()->CurrentFate == null);
-        TaskHelper.Enqueue(() => !ICondition.Instance()[ConditionFlag.InCombat]);
+        var destination = AetheryteRecordManager.Instance().GameRecords.FirstOrDefault
+        (record => record.IsAetheryte             &&
+                   record.RowID    == aetheryteID &&
+                   record.SubIndex == subIndex
+        );
+        if (destination == null)
+            return TeleportHook.Original(telepo, aetheryteID, subIndex);
 
-        if (config.Delay > 0)
+        SaveTeleportRequest(destination, null, 0);
+        return true;
+    }
+
+    private void SaveTeleportRequest(AetheryteRecord destination, uint? useTicket, uint extraParam)
+    {
+        ClearQueuedTeleport();
+        queuedTeleport = new(destination, useTicket, extraParam);
+        var cancelLink = LinkPayloadManager.Instance().Reg
+        (
+            (_, _) => ClearQueuedTeleport("QueueCombatTeleport-RequestCancelled"),
+            out var linkID
+        );
+        cancelLinkID = linkID;
+
+        using var rented = new RentedSeStringBuilder();
+        var message = rented.Builder
+                            .Append
+                            (
+                                Lang.Get
+                                (
+                                    "QueueCombatTeleport-RequestSaved",
+                                    new Dictionary<string, object>
+                                    {
+                                        ["destination"] = destination.Name
+                                    }
+                                )
+                            )
+                            .AppendNewLine()
+                            .AppendDalamudSeString(cancelLink)
+                            .Append(CANCEL_LINK_PREFIX)
+                            .Append(Lang.Get("QueueCombatTeleport-CancelRequest"))
+                            .PopLink()
+                            .ToReadOnlySeString();
+        NotifyHelper.Instance().Chat(message);
+    }
+
+    private void OnConditionChanged(ConditionFlag flag, bool value)
+    {
+        if (flag == ConditionFlag.Unconscious && value)
         {
-            TaskHelper.Enqueue(() => NotifyHelper.Instance().NotificationInfo(Lang.Get("QueueCombatTeleport-Notice-Waiting", config.Delay)));
-            TaskHelper.DelayNext(config.Delay);
+            ClearQueuedTeleport("QueueCombatTeleport-RequestCancelled");
+            return;
+        }
+
+        if (flag != ConditionFlag.InCombat)
+            return;
+
+        queueVersion++;
+        TaskHelper.Abort();
+
+        if (!value && queuedTeleport != null)
+            ScheduleTeleport();
+    }
+
+    private void OnTerritoryChanged(uint territory) =>
+        ClearQueuedTeleport();
+
+    private void OnLogout() =>
+        ClearQueuedTeleport();
+
+    private void ScheduleTeleport()
+    {
+        var request = queuedTeleport;
+        var version = queueVersion;
+        var fate    = FateManager.Instance()->CurrentFate;
+        var fateID = fate == null ?
+                         (ushort)0 :
+                         fate->FateId;
+
+        var onTimeout = () =>
+        {
+            if (version == queueVersion)
+                ClearQueuedTeleport("QueueCombatTeleport-RequestTimedOut");
+        };
+
+        TaskHelper.Enqueue
+        (
+            () =>
+            {
+                if (version != queueVersion ||
+                    !config.WaitForFateEnd  ||
+                    fateID == 0)
+                    return true;
+
+                var currentFate = FateManager.Instance()->CurrentFate;
+                return currentFate         == null   ||
+                       currentFate->FateId != fateID ||
+                       currentFate->State is FateState.Ended or FateState.Failed;
+            },
+            timeoutMS: REQUEST_TIMEOUT_MS,
+            timeoutAction: onTimeout,
+            exceptionAction: onTimeout
+        );
+
+        var delay = config.Delay;
+
+        if (delay > 0)
+        {
+            TaskHelper.Enqueue
+            (() =>
+                {
+                    if (version != queueVersion)
+                        return;
+
+                    NotifyHelper.Instance().Chat
+                    (
+                        Lang.Get
+                        (
+                            "QueueCombatTeleport-RequestWaiting",
+                            new Dictionary<string, object>
+                            {
+                                ["delay"]       = delay,
+                                ["destination"] = request.Destination.Name
+                            }
+                        )
+                    );
+                }
+            );
+            TaskHelper.DelayNext(delay);
         }
 
         TaskHelper.Enqueue
-        (() =>
-            {
-                Telepo.Instance()->Teleport(queuedTeleport.Value.ID, (byte)queuedTeleport.Value.SubID);
-                Notify(QueueTeleportNotifyType.Execute);
-                queuedTeleport = null;
-
-                return true;
-            }
+        (
+            () => TryExecuteTeleport(request, version),
+            timeoutMS: REQUEST_TIMEOUT_MS,
+            timeoutAction: onTimeout,
+            exceptionAction: onTimeout
         );
     }
 
-    private void Notify
-    (
-        QueueTeleportNotifyType type
-    )
+    private bool TryExecuteTeleport(TeleportRequest request, int version)
     {
-        if (!config.SendChat && !config.SendNotification) return;
+        if (version != queueVersion)
+            return true;
 
-        var message = string.Empty;
-
-        switch (type)
+        if (!GameState.IsLoggedIn                            ||
+            GameState.ContentFinderCondition != 0            ||
+            ICondition.Instance()[ConditionFlag.Unconscious] ||
+            ICondition.Instance().IsBetweenAreas)
         {
-            case QueueTeleportNotifyType.Save when queuedTeleport != null:
-                var qualifiedAetheryteSaved =
-                    IAetheryteList.Instance().FirstOrDefault
-                    (x => x.AetheryteID == queuedTeleport.Value.ID &&
-                          x.SubIndex    == queuedTeleport.Value.SubID
-                    );
-                if (qualifiedAetheryteSaved == null) return;
-                message = Lang.Get
-                (
-                    "QueueCombatTeleport-Notice-Saved",
-                    qualifiedAetheryteSaved.AetheryteData.Value.PlaceName.Value.Name.ToString()
-                );
-                break;
-            case QueueTeleportNotifyType.Execute when queuedTeleport != null:
-                var qualifiedAetheryteExecuted =
-                    IAetheryteList.Instance().FirstOrDefault
-                    (x => x.AetheryteID == queuedTeleport.Value.ID &&
-                          x.SubIndex    == queuedTeleport.Value.SubID
-                    );
-                if (qualifiedAetheryteExecuted == null) return;
-                message = Lang.Get
-                (
-                    "QueueCombatTeleport-Notice-Executed",
-                    qualifiedAetheryteExecuted.AetheryteData.Value.PlaceName.Value.Name.ToString()
-                );
-                break;
-            case QueueTeleportNotifyType.Clear:
-                message = Lang.Get("QueueCombatTeleport-Notice-Cleared");
-                break;
+            ClearQueuedTeleport("QueueCombatTeleport-RequestCancelled");
+            return true;
         }
 
-        if (string.IsNullOrWhiteSpace(message)) return;
-        if (config.SendChat)
-            NotifyHelper.Instance().Chat(message);
-        if (config.SendNotification)
-            NotifyHelper.Instance().NotificationInfo(message);
+        if (ICondition.Instance()[ConditionFlag.InCombat] || ActionManager.Instance()->GetActionStatus(ActionType.Action, TELEPORT_ACTION_ID) != 0)
+            return false;
+
+        var destination = request.Destination;
+        ClearQueuedTeleport();
+
+        if (request.UseTicket is { } useTicket)
+        {
+            ExecuteCommandManager.Instance().ExecuteCommand
+            (
+                ExecuteCommandFlag.Teleport,
+                destination.RowID,
+                useTicket,
+                destination.SubIndex,
+                request.ExtraParam
+            );
+        }
+        else
+            TeleportHook.Original(Telepo.Instance(), destination.RowID, destination.SubIndex);
+
+        var message = Lang.Get
+        (
+            "QueueCombatTeleport-RequestSubmitted",
+            new Dictionary<string, object>
+            {
+                ["destination"] = destination.Name
+            }
+        );
+        NotifyHelper.Instance().Chat(message);
+
+        return true;
     }
+
+    private void ClearQueuedTeleport(string? messageKey = null)
+    {
+        var request = queuedTeleport;
+        queuedTeleport = null;
+        queueVersion++;
+        TaskHelper.Abort();
+
+        if (cancelLinkID is { } linkID)
+        {
+            LinkPayloadManager.Instance().Unreg(linkID);
+            cancelLinkID = null;
+        }
+
+        if (request != null && messageKey != null)
+            NotifyHelper.Instance().ChatError
+            (
+                Lang.Get
+                (
+                    messageKey,
+                    new Dictionary<string, object>
+                    {
+                        ["destination"] = request.Destination.Name
+                    }
+                )
+            );
+    }
+
+    private sealed record TeleportRequest
+    (
+        AetheryteRecord Destination,
+        uint?           UseTicket,
+        uint            ExtraParam
+    );
 
     private class Config : ModuleConfig
     {
-        public int  Delay    = 500;
-        public bool SendChat = true;
-
-        public bool SendNotification = true;
+        public int  Delay          = 500;
+        public bool WaitForFateEnd = true;
     }
 
-    private enum QueueTeleportNotifyType
-    {
-        Save,
-        Execute,
-        Clear
-    }
+    #region 常量
+
+    private const uint TELEPORT_PERMISSION_ID = 142;
+    private const uint TELEPORT_ACTION_ID     = 5;
+    private const int  REQUEST_TIMEOUT_MS     = 300_000;
+
+    private const string CANCEL_LINK_PREFIX = "  \ue06f ";
+
+    #endregion
 }
